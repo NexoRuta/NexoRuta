@@ -1,0 +1,147 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: nexoruta-postgres
+    environment:
+      POSTGRES_DB: nexoruta
+      POSTGRES_USER: nexoruta
+      POSTGRES_PASSWORD: nexoruta_dev
+      PGDATA: /var/lib/postgresql/18/docker
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexoruta -d nexoruta"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8-alpine
+    container_name: nexoruta-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: nexoruta-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: nexoruta
+      RABBITMQ_DEFAULT_PASS: nexoruta_dev
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        PROJECT: src/NexoRuta.Api/NexoRuta.Api.csproj
+        RUNTIME_IMAGE: mcr.microsoft.com/dotnet/aspnet:10.0
+    container_name: nexoruta-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta;Password=nexoruta_dev
+      ConnectionStrings__Redis: redis:6379
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: 5672
+      RabbitMQ__Username: nexoruta
+      RabbitMQ__Password: nexoruta_dev
+    ports:
+      - "5000:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        PROJECT: src/NexoRuta.Worker/NexoRuta.Worker.csproj
+        RUNTIME_IMAGE: mcr.microsoft.com/dotnet/runtime:10.0
+    container_name: nexoruta-worker
+    entrypoint: ["dotnet", "NexoRuta.Worker.dll"]
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta;Password=nexoruta_dev
+      ConnectionStrings__Redis: redis:6379
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: 5672
+      RabbitMQ__Username: nexoruta
+      RabbitMQ__Password: nexoruta_dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  backoffice:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        PROJECT: NexoRuta.Backoffice
+    container_name: nexoruta-backoffice
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    ports:
+      - "5101:8080"
+    depends_on:
+      - api
+
+  commerce:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        PROJECT: NexoRuta.Commerce
+    container_name: nexoruta-commerce
+    entrypoint: ["dotnet", "NexoRuta.Commerce.dll"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    ports:
+      - "5102:8080"
+    depends_on:
+      - api
+
+  tracking:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        PROJECT: NexoRuta.Tracking
+    container_name: nexoruta-tracking
+    entrypoint: ["dotnet", "NexoRuta.Tracking.dll"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    ports:
+      - "5103:8080"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
