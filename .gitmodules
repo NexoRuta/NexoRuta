@@ -1,0 +1,9 @@
+[submodule "backend"]
+	path = backend
+	url = https://github.com/NexoRuta/NexoRuta-Backend.git
+[submodule "frontend"]
+	path = frontend
+	url = https://github.com/NexoRuta/NexoRuta-Frontend.git
+[submodule "mobile"]
+	path = mobile
+	url = https://github.com/NexoRuta/NexoRuta-Mobile.git
