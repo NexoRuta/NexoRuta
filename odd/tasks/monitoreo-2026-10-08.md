@@ -22,7 +22,7 @@ Demostrar en el entorno local Compose el alta individual de un envío en el port
 - Resultado esperado: los casos CU-01, CU-07, CU-08 y condiciones T-01/T-02/T-03 quedan reproducibles con evidencia local; la CI remota no se considera ejecutada ni publicada.
 - Ruta de implementación: directa en línea, por instrucción explícita del usuario de no delegar.
 - Evidencia: `dotnet test NexoRuta.sln --configuration Release` pasó con 2 unitarias y 1 integración contra PostgreSQL efímero limpio; las compilaciones Release de backend/frontend pasaron; `docker compose config --quiet`, `docker compose build`, `docker compose up -d` y `actionlint` sobre el workflow CI pasaron. Chrome headless envió el formulario real del portal; el mismo ID se confirmó por `GET /api/envios` y en el HTML de Backoffice; portal y dashboard respondieron HTTP 200.
-- CI: workflows propios en `backend/.github/workflows/ci.yml` y `frontend/.github/workflows/ci.yml`, activados únicamente al cerrar un PR hacia `main`; el job exige que esté fusionado, que venga de `develop` en el mismo repositorio y hace checkout de `main`. La raíz y mobile no tienen pipeline. `actionlint`, builds y pruebas locales pasaron; la CI remota todavía no se ejecutó.
+- CI: workflows propios en `backend/.github/workflows/ci.yml` y `frontend/.github/workflows/ci.yml`, activados al abrir, reabrir o actualizar un PR hacia `main`. Un paso falla si el origen no es `develop` del mismo repositorio. El checkout prueba el merge propuesto por el PR. La raíz y mobile no tienen pipeline. `actionlint`, builds y pruebas locales pasaron; la CI remota todavía no se ejecutó.
 - Limitaciones: el alta usa identidad demo fija en ambiente Development; sin autenticación ni autorización real. Worker, RabbitMQ y Redis están presentes en Compose pero no integrados al flujo; no se implementaron RLS ni multitenencia; no se validó MAUI.
 - Estado: implementación y verificaciones locales completadas; la primera ejecución remota queda pendiente de publicar las ramas y seguir el flujo de promoción indicado abajo.
 
@@ -30,9 +30,9 @@ Demostrar en el entorno local Compose el alta individual de un envío en el port
 
 1. En cada repositorio de código (`backend` y `frontend`), publicar `feature/monitoreo-2026-10-08` y abrir su PR hacia `develop`. Ese PR no ejecuta CI.
 2. Fusionar cada PR de feature en `develop`; los pushes a `develop` tampoco ejecutan CI.
-3. Abrir un PR de `develop` hacia `main` en cada repositorio. Mientras siga abierto, CI no se ejecuta.
-4. Al fusionar cada PR hacia `main`, GitHub emite `pull_request: closed`; el job continúa solo si `merged == true`, la rama de origen es `develop` y el repositorio de origen es el mismo. Hace checkout explícito de `main`, restaura y compila; backend además ejecuta sus pruebas contra un PostgreSQL limpio.
-5. Observar el resultado en la pestaña **Actions** de los repositorios backend y frontend. La raíz (`NexoRuta`) no tiene workflow; Compose se valida localmente. Mobile no tiene CI porque no se modificó.
+3. Abrir un PR de `develop` hacia `main` en cada repositorio. Al abrirlo y en cada actualización/reapertura, CI ejecuta restore y build; backend además ejecuta las pruebas contra un PostgreSQL limpio. El checkout usa el merge propuesto por el PR.
+4. Configurar como checks obligatorios en las reglas de `main` el job `build-and-test` del workflow **Backend CI** y el job `build` del workflow **Frontend CI**, respectivamente. No fusionar el PR hasta que el check correspondiente pase. El paso `Validate PR source` falla si el origen no es `develop` del mismo repositorio.
+5. Observar los checks en el PR y la ejecución en la pestaña **Actions** de backend y frontend. La raíz (`NexoRuta`) no tiene workflow; Compose se valida localmente. Mobile no tiene CI porque no se modificó. La CI remota sigue pendiente de publicar los workflows y observar la primera ejecución.
 
 
 ## Resultado por requisito
@@ -44,7 +44,7 @@ Demostrar en el entorno local Compose el alta individual de un envío en el port
 | **CU-08 — Bulto** | El formulario exige código, peso positivo y largo, ancho y alto positivos. El bulto queda asociado al envío en PostgreSQL. | Implementado para uno o más bultos; la demo solicita uno. |
 | **T-01 — Compose** | Agregué healthcheck de readiness para API y Aspire Dashboard con exportación OTLP. `docker compose config --quiet`, `docker compose build` y `docker compose up -d` finalizaron bien. Los nueve servicios quedaron levantados; API, PostgreSQL, Redis y RabbitMQ reportaron saludables, y Dashboard respondió HTTP 200. | URLs: Comercio `http://localhost:5102`, Backoffice `:5101`, API `:5000`, Dashboard `:18888`, RabbitMQ Management `:15672`, PostgreSQL `:5432`, RabbitMQ `:5672`, Tracking `:5103`. Redis solo es interno en `6379`. Dashboard está **sin autenticación**, solo para uso local. |
 | **T-02 — Backoffice** | Backoffice consulta la API y muestra el mismo ID, operador, comercio, usuario, destinatario, dirección, estado y bulto. Verifiqué el ID creado desde el portal en su HTML. | Comprobado en Compose. |
-| **T-03 — CI** | Workflows separados en backend y frontend, solo para PR cerrado contra `main`; los jobs exigen PR fusionado desde `develop` del mismo repositorio y hacen checkout explícito de `main`. Backend ejecuta restauración, build, pruebas unitarias e integración con PostgreSQL limpio; frontend restaura y compila. Compose se valida localmente, fuera de CI. | `actionlint`, builds y pruebas locales pasaron. **La CI remota todavía no se ejecutó**: falta publicar los workflows/código, completar la promoción feature → develop → main y observar la ejecución posterior al merge. |
+| **T-03 — CI** | Workflows separados en backend y frontend para PR abierto/reabierto/actualizado hacia `main`; un paso falla si el origen no es `develop` del mismo repositorio. El checkout prueba el merge propuesto. Backend restaura, compila y ejecuta pruebas unitarias e integración con PostgreSQL limpio; frontend restaura y compila. Compose se valida localmente, fuera de CI. | `actionlint`, builds y pruebas locales pasaron. **La CI remota todavía no se ejecutó**: falta publicar los workflows/código, completar la promoción feature → develop y abrir el PR develop → main; los checks obligatorios deben pasar antes de fusionarlo. |
 
 ## Pruebas y limitaciones
 
@@ -71,7 +71,7 @@ Raíz, backend y frontend están en `feature/monitoreo-2026-10-08`. Mobile qued�
 4. Abrir `http://localhost:5101` y actualizar. Confirmar que aparece ese ID y los datos del envío y bulto.
 5. Evidencia complementaria: consultar `http://localhost:5000/api/envios`, readiness en `http://localhost:5000/health/ready` y observabilidad en `http://localhost:18888`.
 
-Para repetir también las pruebas en Windows con una base limpia, iniciar PostgreSQL efímero en el puerto `55432`, establecer `NEXORUTA_TEST_POSTGRES` a `Host=127.0.0.1;Port=55432;Database=nexoruta;Username=nexoruta;Password=nexoruta_dev`, correr `dotnet test backend/NexoRuta.sln --configuration Release` y detener el contenedor efímero. La CI remota no se ejecuta hasta fusionar los PR de `develop` hacia `main` en cada repositorio de código.
+Para repetir también las pruebas en Windows con una base limpia, iniciar PostgreSQL efímero en el puerto `55432`, establecer `NEXORUTA_TEST_POSTGRES` a `Host=127.0.0.1;Port=55432;Database=nexoruta;Username=nexoruta;Password=nexoruta_dev`, correr `dotnet test backend/NexoRuta.sln --configuration Release` y detener el contenedor efímero. La CI remota está pendiente de publicación: se ejecutará al abrir, reabrir o actualizar el PR `develop` → `main`, y sus checks deben pasar antes del merge.
 
 ## Key Learnings:
 
