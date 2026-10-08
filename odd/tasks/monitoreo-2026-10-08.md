@@ -1,5 +1,29 @@
 # Monitoreo NexoRuta 08/10/2026
 
+## Cuentas propias y operador por envío — 08/10/2026
+
+Se revisó `docs/alcance/Laboratorio__NET_2026.pdf`: §3.3, página 2, permite que un comercio trabaje con más de un operador; §5.1 define comercios clientes y sus usuarios. Se conserva `OperadorComercio` como relación comercial, y se separa de la pertenencia de las cuentas. La cuenta del dueño pertenece al comercio; la cuenta del operador pertenece al operador. El ingreso selecciona una cuenta y el formulario del envío elige el operador disponible; la API valida la relación antes de guardar. No se implementaron CRUD ni perfiles laborales nuevos.
+
+La migración conservó los IDs de usuarios/cuentas y los envíos anteriores. Pasaron 8 pruebas unitarias y 7 de integración PostgreSQL del backend y 26 del frontend, contra OpenAPI actual y su copia. Chrome confirmó cuentas separadas, rechazos cruzados, elección obligatoria del operador, sesiones independientes y el envío `01a11cc7-b482-7700-9b9b-e25615daab04` con su bulto en Backoffice. La integración también comprobó dos operadores elegibles para la misma cuenta del comercio y la migración/reversión conservando datos.
+
+La implementación vigente se describe en [CU-01](../../backend/docs/cu/CU-01-comercios-usuarios.md) y [CU-07](../../backend/docs/cu/CU-07-alta-envios.md). La selección sigue sin credenciales para el primer monitoreo; la CI remota no se ejecutó. Los apartados inferiores conservan evidencia histórica.
+
+## Selección de usuario y revisión de actores — 08/10/2026
+
+El alcance sigue limitado a CU-01, CU-07 y CU-08 del Excel. Commerce y Backoffice presentan un dropdown leído desde PostgreSQL, con accesos de comercio e internos del operador respectivamente. La selección usa el ID del vínculo, cookies independientes y la declaración de ámbito `nexoruta:tipo_acceso`; no representa un perfil laboral. Se agregaron el usuario interno inicial y una migración que admite acceso al operador sin comercio, conservando los datos anteriores.
+
+La revisión de la letra distingue tenant, comercio, usuario y datos del destinatario. `OperadorComercio` y los accesos permiten que un mismo comercio y usuario trabajen con dos operadores sin duplicar su identidad. No se implementaron perfiles de administrador/despachador/repartidor/depósito, CRUD, RLS ni otros CU. El detalle vigente está en [CU-01](../../backend/docs/cu/CU-01-comercios-usuarios.md).
+
+Pasaron 6 pruebas unitarias, 8 de integración PostgreSQL y 23 de frontend, incluidos contratos contra OpenAPI actual. Chrome comprobó entrada por ámbito, selección manual incompatible rechazada, sesiones independientes, antiforgery y cambio de usuario. El envío `01a11c7a-7cbc-7d1c-ba7f-99699a89c07e` se creó con el usuario del comercio y apareció con su bulto en Backoffice con el usuario del operador. La selección no verifica identidad por credenciales y se limita al monitoreo. La CI remota de estos cambios no se ejecutó; las revisiones inferiores son históricas.
+
+## Revisión del acceso inicial — 08/10/2026
+
+El recorte del Excel se implementa como los primeros casos de uso del proyecto. `IUsuarioActual` resuelve la identidad y sus vínculos persistidos mediante el adaptador de acceso directo; el repositorio de envíos ya no conoce el seeder ni selecciona un usuario por un correo hardcodeado. Los nombres configurados se usan solo para inicializar datos. `DatosInicialesSeeder` reutiliza los IDs anteriores, completa vínculos faltantes y evita duplicados; el portal y Backoffice consultan `GET /api/usuarios/actual`.
+
+Se documentaron [CU-01](../../backend/docs/cu/CU-01-comercios-usuarios.md), [CU-07](../../backend/docs/cu/CU-07-alta-envios.md) y [CU-08](../../backend/docs/cu/CU-08-bultos.md). Pasaron 4 pruebas unitarias, 5 de integración PostgreSQL y 17 de frontend. Se comprobó con Chrome el envío `01a11c48-1859-79d1-96dd-3b77741d6421`, creado desde el formulario real y consultado en Backoffice con su bulto y propietarios. Los IDs iniciales se conservaron al actualizar el entorno. También se probó la API en modo Production con otra configuración de acceso y las respuestas 503 al retirar el vínculo en una base temporal.
+
+El acceso sigue siendo directo y con un único vínculo por usuario; no se agregaron login, CRUD, perfiles ni RLS. La CI remota de estos cambios no se ejecutó. Los apartados siguientes conservan la evidencia e instrucciones de la implementación anterior.
+
 ## Objetivo
 
 Demostrar en el entorno local Compose el alta individual de un envío en el portal, su persistencia en PostgreSQL con operador/comercio/usuario de prueba y bulto, su consulta en Backoffice y una ejecución local de CI.
