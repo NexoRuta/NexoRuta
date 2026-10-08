@@ -46,6 +46,16 @@ services:
       timeout: 5s
       retries: 10
 
+  dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    container_name: nexoruta-dashboard
+    environment:
+      ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+    ports:
+      - "18888:18888"
+      - "4317:18889"
+      - "4318:18890"
+
   api:
     build:
       context: ./backend
@@ -53,6 +63,7 @@ services:
       args:
         PROJECT: src/NexoRuta.Api/NexoRuta.Api.csproj
         RUNTIME_IMAGE: mcr.microsoft.com/dotnet/aspnet:10.0
+        RUNTIME_TOOLS: "true"
     container_name: nexoruta-api
     environment:
       ASPNETCORE_ENVIRONMENT: Development
@@ -62,8 +73,17 @@ services:
       RabbitMQ__Port: 5672
       RabbitMQ__Username: nexoruta
       RabbitMQ__Password: nexoruta_dev
+      OpenTelemetry__Enabled: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://dashboard:18889
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
     ports:
       - "5000:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,6 +91,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      dashboard:
+        condition: service_started
 
   worker:
     build:
@@ -106,10 +128,12 @@ services:
     container_name: nexoruta-backoffice
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+      Api__BaseAddress: http://api:8080/
     ports:
       - "5101:8080"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   commerce:
     build:
@@ -121,10 +145,12 @@ services:
     entrypoint: ["dotnet", "NexoRuta.Commerce.dll"]
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+      Api__BaseAddress: http://api:8080/
     ports:
       - "5102:8080"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   tracking:
     build:

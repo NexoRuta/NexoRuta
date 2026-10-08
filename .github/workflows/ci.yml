@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: nexoruta
+          POSTGRES_USER: nexoruta
+          POSTGRES_PASSWORD: nexoruta_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexoruta -d nexoruta"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NEXORUTA_TEST_POSTGRES: Host=localhost;Port=5432;Database=nexoruta;Username=nexoruta;Password=nexoruta_dev
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore backend
+        run: dotnet restore backend/NexoRuta.sln
+      - name: Build backend
+        run: dotnet build backend/NexoRuta.sln --no-restore --configuration Release
+      - name: Test backend (unit and PostgreSQL integration)
+        run: dotnet test backend/NexoRuta.sln --no-build --configuration Release --logger "console;verbosity=normal"
+      - name: Restore frontend
+        run: dotnet restore frontend/NexoRuta.sln
+      - name: Build frontend
+        run: dotnet build frontend/NexoRuta.sln --no-restore --configuration Release
+      - name: Validate local Compose configuration
+        run: docker compose config --quiet
