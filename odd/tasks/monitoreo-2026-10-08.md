@@ -1,5 +1,51 @@
 # Monitoreo NexoRuta 08/10/2026
 
+## Catálogo global y coherencia del código — 08/10/2026
+
+Se publica `GET /api/operadores` para el catálogo compartido por todos los comercios; la ruta anterior devuelve 404. Cliente HTTP, contrato OpenAPI, pruebas y documentación usan la ruta nueva. La autorización sigue admitiendo las cuentas del comercio.
+
+La revisión de los flujos implementados corrigió el mensaje que exigía pertenecer a operador y comercio a la vez, la excepción de operador inexistente, textos y nombres que confundían empresas con cuentas, el ejemplo HTTP de plantilla que devolvía 404 y el desacople entre Development de las webs (antes API 5000) y el perfil local del backend (5041). Las webs en Development usan 5041; Compose inyecta `http://api:8080/` y mantiene sus URLs y PostgreSQL 5432. Arquitectura distingue ahora estado vigente y evidencia histórica, y sus módulos coinciden con el Excel rector.
+
+Pasaron 60 pruebas: 8 unitarias, 22 de integración y 30 del frontend contra copia y API actual. Las soluciones compilan; las tres advertencias EF Core de Worker son preexistentes. Una API y una base temporales comprobaron que dos comercios sin envíos ven el mismo catálogo, crean con un operador nuevo y consultan solo sus envíos; un empleado no propietario pudo crear y el servidor resolvió comercio/usuario desde su cuenta incluso con otros IDs en el JSON. Chrome confirmó login, selector, alta y el mismo ID/bulto/comercio en Backoffice con Development apuntando a la API 5041.
+
+La API y las webs de Compose se reconstruyeron, responden HTTP 200 y OpenAPI coincide con el contrato del frontend. Los nueve servicios continúan activos. No se agregaron funcionalidades ni se migró/borró la base persistente. Los datos de interfaz se guardaron en una base temporal de revisión. MAUI en dispositivos, CI y despliegue remoto no se ejecutaron.
+
+## Separación de repositorios de cuentas y empresas — 08/10/2026
+
+`IAccesosUsuarioRepository` conserva la consulta de cuentas y pertenencias. Las consultas generales de operadores pasan a `IOperadoresRepository`/`EfOperadoresRepository`; el controlador de operadores disponibles y el alta de envíos consumen ese contrato. Se agrega `IComerciosRepository`/`EfComerciosRepository` con consultas de lista ordenada y por ID, registrado por scope y probado con PostgreSQL. Las empresas se consultan independientemente de sus usuarios y envíos. El login sigue mostrando cuentas con su organización en una sola consulta.
+
+Antes del cambio pasaron 57 pruebas. Después pasaron 59: 8 unitarias, 22 de integración y 29 del frontend contra OpenAPI actual. Los nuevos escenarios comprueban empresas sin usuarios ni envíos, DI, orden, consulta por ID, inexistencia y cancelación. La compilación del backend pasó con las tres advertencias EF Core preexistentes de Worker. Se reconstruyó la API local y se verificaron cuentas, selector, filtros y estados HTTP 200/401/403/400, sin duplicar la consulta del acceso.
+
+OpenAPI coincide con el contrato del frontend; los nueve servicios están activos y PostgreSQL sigue en 5432. Este cambio agrega los repositorios internos y actualiza sus consumidores, sin nuevas pantallas, endpoints, migraciones ni consulta de comercios atendidos por operador. La CI remota no se ejecutó.
+
+## Consulta única por petición y cancelación de Blazor — 08/10/2026
+
+Se reutiliza en `HttpContext.Items` el `ContextoUsuario` validado por `AccesoSeleccionadoHandler`; `UsuarioActualHttp` comprueba que corresponda al principal y lo devuelve sin otra consulta. Cada petición nueva vuelve a consultar y validar su cuenta. La prueba previa reprodujo tres consultas al autenticar y leer dos veces el contexto; con el cambio se hace una. La API desplegada también confirmó una sola consulta para `GET /api/usuarios/actual`.
+
+El componente `Home` de Commerce pasa su token a la obtención del usuario, la lista de operadores y el alta. `Dispose` cancela y libera el token source; la cancelación al salir del componente no muestra un error. No se agregan endpoints ni cambian los contratos HTTP.
+
+Pasaron 57 pruebas: 8 unitarias y 20 de integración del backend, y 29 del frontend. Las regresiones comprueban una consulta por petición, separación de usuarios y peticiones, rechazo de acceso inválido y contexto incompatible con el principal, y cancelación del acceso actual y de las llamadas HTTP del cliente. Chrome navegó fuera del formulario durante una consulta y un alta pendientes; un proxy temporal registró la cancelación de ambos HTTP y la navegación continuó sin error del circuito. El proxy retuvo el POST antes de enviarlo a la API, por lo que no se creó un envío de prueba.
+
+API y Commerce locales se reconstruyeron; las cuentas y respuestas 200/401/403 siguen correctas, las aplicaciones responden HTTP 200 y los nueve servicios continúan activos. PostgreSQL mantiene 5432. Cancelar una petición no revierte un envío ya confirmado. La CI remota no se ejecutó.
+
+## Arranque Compose con el puerto original — 08/10/2026
+
+Se reprodujo el conflicto de `5432`, ocupado por PostgreSQL 16 instalado mediante Snap. Por instrucción del usuario se detuvo esa instancia con cierre ordenado y se mantuvo `5432:5432` en Compose. La configuración de Development, las pruebas y la documentación conservan el puerto original; se revirtió el cambio provisional a 5433.
+
+La reconstrucción también mostró que `frontend/Dockerfile` rechazaba `NexoRuta.Tracking`; se agregó a la lista de los tres proyectos permitidos. `docker compose up -d --build` completó correctamente. Los nueve servicios están activos, con API/PostgreSQL/Redis/RabbitMQ saludables. API, OpenAPI, Backoffice, Commerce, Tracking, Dashboard y RabbitMQ Management respondieron HTTP 200. Las 13 pruebas de integración del backend pasaron usando la conexión por defecto en 5432, con una base temporal por escenario. La migración `ShipmentCommerce` está aplicada en la base de Compose. No se borraron volúmenes ni datos.
+
+## Eliminación del vínculo operador–comercio — 08/10/2026
+
+Por solicitud del equipo se elimina `OperadorComercio` del modelo vigente. Cada envío conserva `OperadorId` y `ComercioId` directamente; el comercio elige cualquier operador registrado sin un vínculo previo. Se mantienen el ingreso por tipo de cuenta, el alta individual con bulto y la consulta de envíos filtrada por comercio/operador. El listado de comercios atendidos por un operador queda fuera de este cambio.
+
+`ShipmentCommerce` obtiene el comercio de los vínculos anteriores antes de eliminar la tabla. Su reversión reconstruye los pares que tienen envíos, con nuevos IDs de vínculo; no restaura vínculos sin envíos. Se actualizaron DTOs, OpenAPI, selector y Backoffice. Las migraciones históricas se conservan para actualizar bases existentes.
+
+Verificación local con SDK .NET 10.0.401 y PostgreSQL 18 temporal: 8 pruebas unitarias y 13 de integración del backend, y 26 del frontend contra OpenAPI actual y su copia. La integración comprueba migración, reversión, reaplicación y conservación de cuentas, envíos y bultos, incluidos varios envíos del mismo par operador/comercio. EF Core no detecta cambios de modelo pendientes. Ambas soluciones compilan; frontend sin advertencias y backend con tres advertencias MSB3277 de versiones EF Core en Worker, reproducidas también al compilar el commit anterior sin los cambios.
+
+La API confirmó 401/403 según cuenta, 400 para operador ausente/vacío/inexistente y 201 para un alta válida; comercio y usuario creador se resuelven desde la cuenta aunque el cliente envíe otros IDs. Chrome creó el envío `01a11dce-3e41-7e41-bd97-0c6bdb8b2f60` desde el portal eligiendo un operador nuevo sin vínculo previo; Backoffice mostró el mismo ID, comercio y bulto, y mantuvo el filtro por operador.
+
+Solo se migraron bases temporales de validación; no se modificó la base persistente de Compose. Backend y frontend deben actualizarse juntos por el reemplazo de `operadorComercioId` por `comercioId`. La CI remota no se ejecutó. Los apartados siguientes conservan evidencia histórica; el comportamiento vigente está en [CU-01](../../backend/docs/cu/CU-01-comercios-usuarios.md) y [CU-07](../../backend/docs/cu/CU-07-alta-envios.md).
+
 ## Cuentas propias y operador por envío — 08/10/2026
 
 Se revisó `docs/alcance/Laboratorio__NET_2026.pdf`: §3.3, página 2, permite que un comercio trabaje con más de un operador; §5.1 define comercios clientes y sus usuarios. Se conserva `OperadorComercio` como relación comercial, y se separa de la pertenencia de las cuentas. La cuenta del dueño pertenece al comercio; la cuenta del operador pertenece al operador. El ingreso selecciona una cuenta y el formulario del envío elige el operador disponible; la API valida la relación antes de guardar. No se implementaron CRUD ni perfiles laborales nuevos.

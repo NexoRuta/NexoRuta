@@ -36,7 +36,7 @@ docker compose up -d
 docker compose ps
 ```
 
-El Compose inicia nueve servicios. Para el primer monitoreo del 8 de octubre de 2026 se verificó el alta de un envío desde el portal, su persistencia con bulto en PostgreSQL y la consulta del mismo ID en Backoffice. Se inicializan un operador, un comercio, su relación comercial, una cuenta del dueño y una cuenta del operador. El ingreso al portal selecciona la cuenta del comercio, y el operador se elige al crear cada envío. Backoffice solo admite cuentas del operador. El selector es sin credenciales; no se implementaron CRUD ni perfiles laborales.
+El Compose inicia nueve servicios. Para el primer monitoreo del 8 de octubre de 2026 se verificó el alta de un envío desde el portal, su persistencia con bulto en PostgreSQL y la consulta del mismo ID en Backoffice. Se inicializan un operador, un comercio, una cuenta del dueño y una cuenta del operador. El comercio puede elegir cualquier operador registrado, sin un vínculo previo; cada envío conserva `OperadorId` y `ComercioId`. El ingreso al portal selecciona la cuenta del comercio, y el operador se elige al crear cada envío. Backoffice solo admite cuentas del operador. El selector es sin credenciales; no se implementaron CRUD ni perfiles laborales.
 
 Para detener los servicios sin borrar los volúmenes de datos:
 
@@ -48,7 +48,7 @@ docker compose down
 
 | Servicio | Dirección local | Uso y límites |
 | --- | --- | --- |
-| API | `http://localhost:5000` | Cuentas en `GET /api/accesos?tipo=Comercio|Operador`; operadores disponibles en `GET /api/comercio/operadores`. Usuario actual, operadores y envíos requieren `X-NexoRuta-Acceso`. Salud en `/health/live` y `/health/ready`; OpenAPI en [`/openapi/v1.json`](http://localhost:5000/openapi/v1.json). |
+| API | `http://localhost:5000` | Cuentas en `GET /api/accesos?tipo=Comercio|Operador`; operadores disponibles en `GET /api/operadores`. Usuario actual, operadores y envíos requieren `X-NexoRuta-Acceso`. Salud en `/health/live` y `/health/ready`; OpenAPI en [`/openapi/v1.json`](http://localhost:5000/openapi/v1.json). |
 | Backoffice | `http://localhost:5101` | Consulta de envíos persistidos y sus bultos en Razor Pages. |
 | Commerce | `http://localhost:5102` | Alta individual de envío y bulto en Blazor Server. |
 | Tracking | `http://localhost:5103` | Plantilla Blazor Server. |
@@ -79,9 +79,9 @@ NexoRuta/
 ## Estado actual
 
 - Backend y frontend compilan con .NET 10. La compilación de Worker presenta advertencias por versiones distintas de EF Core; no se modificaron sus dependencias en esta revisión. La última compilación de mobile corresponde al 7 de octubre de 2026.
-- Pasaron **15 pruebas de backend** (8 unitarias y 7 de integración PostgreSQL) y **26 de frontend** (cliente HTTP, selección y contratos). ArchitectureTests todavía no contiene pruebas; no se validó MAUI en dispositivos.
+- Pasaron **30 pruebas de backend** (8 unitarias y 22 de integración PostgreSQL) y **30 de frontend** (cliente HTTP, selección y contratos). ArchitectureTests todavía no contiene pruebas; no se validó MAUI en dispositivos.
 - Los nueve servicios de Compose arrancan. Se comprobó el formulario real del portal, el bulto persistido y el mismo envío en Backoffice.
-- Están implementados los recortes de [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md), [CU-07](backend/docs/cu/CU-07-alta-envios.md) y [CU-08](backend/docs/cu/CU-08-bultos.md) del primer monitoreo. Autenticación, RLS, CRUD de administración y mensajería funcional quedan pendientes.
+- Están implementados los recortes de [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md), [CU-07](backend/docs/cu/CU-07-alta-envios.md) y [CU-08](backend/docs/cu/CU-08-bultos.md) del primer monitoreo. Autenticación por credenciales, RLS, CRUD de administración y mensajería funcional quedan pendientes.
 - Backend y frontend tienen workflows de CI. Compilación y pruebas se verificaron localmente; no se ejecutó CI remota para estos cambios ni se verificó despliegue remoto.
 
 Para conocer el estado y los comandos de cada componente, consultá [Backend](backend/README.md), [Frontend](frontend/README.md) y [Mobile](mobile/README.md).
