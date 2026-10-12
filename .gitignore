@@ -1,1 +1,6 @@
 .codex/
+odd/
+# Local infrastructure secrets (never version real values).
+.env
+.env.*
+secrets/
