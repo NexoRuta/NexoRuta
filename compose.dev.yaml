@@ -1,0 +1,26 @@
+# Local frontend development only; merge with compose.yaml.
+x-frontend-dev: &frontend-dev
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  working_dir: /workspace
+  entrypoint: ["dotnet", "watch", "--non-interactive", "--artifacts-path", "/tmp/nexoruta-artifacts"]
+  environment:
+    ASPNETCORE_URLS: http://0.0.0.0:8080
+    DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    DOTNET_WATCH_RESTART_ON_RUDE_EDIT: "true"
+  # Build outputs stay in /tmp per container, not in Windows bin/obj folders.
+  volumes:
+    - ./frontend:/workspace
+
+services:
+  backoffice:
+    <<: *frontend-dev
+    build: !reset null
+    command: ["--project", "src/NexoRuta.Backoffice/NexoRuta.Backoffice.csproj", "run", "--no-launch-profile"]
+  commerce:
+    <<: *frontend-dev
+    build: !reset null
+    command: ["--project", "src/NexoRuta.Commerce/NexoRuta.Commerce.csproj", "run", "--no-launch-profile"]
+  tracking:
+    <<: *frontend-dev
+    build: !reset null
+    command: ["--project", "src/NexoRuta.Tracking/NexoRuta.Tracking.csproj", "run", "--no-launch-profile"]
