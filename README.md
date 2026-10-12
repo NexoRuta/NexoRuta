@@ -19,6 +19,18 @@ git submodule update --init --recursive
 
 Los submódulos configurados en `.gitmodules` son [backend](backend/), [frontend](frontend/) y [mobile](mobile/). Cada uno tiene un README independiente con su estructura, requisitos y comandos locales.
 
+## Ramas y versiones de integración
+
+La rama local `develop` de la raíz se prepara como manifiesto de integración desde `origin/main` (`df5fa86817dbaf4a84a8fff16473cf408984a87a`). La rama `feature/sync-feature-first-submodules` fija estas versiones, integradas en los `develop` de los componentes y verificadas en ARQ-09:
+
+| Submódulo | Commit fijado |
+| --- | --- |
+| backend | `8a8e0db2d56dd0accc2109ca073eff6d9ee41397` |
+| frontend | `bb29d036231f3e51b4b398f4c78e89ec5f394e43` |
+| mobile | `da537ecf60c188e7b2adbf67d4b70097cad9e8d9` (sin cambios) |
+
+Esta preparación es local: no crea `develop` remoto ni modifica `main`. Los commits fijados de backend y frontend todavía no están integrados en sus respectivos `main`. Publicar la rama de integración raíz y abrir un PR contra ella requiere autorización separada. La promoción del manifiesto a `main` debe coordinarse con las releases de los componentes; sus pushes a `main` pueden disparar despliegues. No actualizar los submódulos con `--remote` para sustituir estas versiones verificadas por otros HEAD.
+
 ## Requisitos de desarrollo
 
 - Docker Desktop con Compose (o Docker Engine/Compose) para ejecutar el entorno local.
@@ -36,7 +48,7 @@ docker compose up -d
 docker compose ps
 ```
 
-El Compose inicia nueve servicios. Para el primer monitoreo del 8 de octubre de 2026 se verificó el alta de un envío desde el portal, su persistencia con bulto en PostgreSQL y la consulta del mismo ID en Backoffice. Se inicializan un operador, un comercio, su relación comercial, una cuenta del dueño y una cuenta del operador. El ingreso al portal selecciona la cuenta del comercio, y el operador se elige al crear cada envío. Backoffice solo admite cuentas del operador. El selector es sin credenciales; no se implementaron CRUD ni perfiles laborales.
+El Compose inicia nueve servicios. Para el primer monitoreo del 8 de octubre de 2026 se verificó el alta de un envío desde el portal, su persistencia con bulto en PostgreSQL y la consulta del mismo ID en Backoffice. Se inicializan un operador, un comercio, una cuenta del dueño y una cuenta del operador. El comercio puede elegir cualquier operador registrado, sin un vínculo previo; cada envío conserva `OperadorId` y `ComercioId`. El ingreso al portal selecciona la cuenta del comercio, y el operador se elige al crear cada envío. Backoffice solo admite cuentas del operador. El selector es sin credenciales; no se implementaron CRUD ni perfiles laborales.
 
 Para detener los servicios sin borrar los volúmenes de datos:
 
@@ -48,7 +60,7 @@ docker compose down
 
 | Servicio | Dirección local | Uso y límites |
 | --- | --- | --- |
-| API | `http://localhost:5000` | Cuentas en `GET /api/accesos?tipo=Comercio|Operador`; operadores disponibles en `GET /api/comercio/operadores`. Usuario actual, operadores y envíos requieren `X-NexoRuta-Acceso`. Salud en `/health/live` y `/health/ready`; OpenAPI en [`/openapi/v1.json`](http://localhost:5000/openapi/v1.json). |
+| API | `http://localhost:5000` | Cuentas en `GET /api/accesos?tipo=Comercio\|Operador`; operadores disponibles en `GET /api/comercio/operadores`. Usuario actual, operadores y envíos requieren `X-NexoRuta-Acceso`. Salud en `/health/live` y `/health/ready`; OpenAPI en [`/openapi/v1.json`](http://localhost:5000/openapi/v1.json). |
 | Backoffice | `http://localhost:5101` | Consulta de envíos persistidos y sus bultos en Razor Pages. |
 | Commerce | `http://localhost:5102` | Alta individual de envío y bulto en Blazor Server. |
 | Tracking | `http://localhost:5103` | Plantilla Blazor Server. |
@@ -59,7 +71,7 @@ docker compose down
 | Redis | Sin puerto publicado en el host | Disponible para otros contenedores en `redis:6379` dentro de la red Compose. |
 | Worker | Sin puerto HTTP publicado | Proceso de plantilla que registra actividad periódica. |
 
-Las credenciales del archivo Compose son públicas y no deben reutilizarse fuera del entorno local. EF Core/PostgreSQL persiste los envíos; Redis, RabbitMQ y Worker todavía no participan del flujo. La configuración de `AccesoInicial` y su alcance se describen en [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md).
+Las credenciales del archivo Compose son públicas y no deben reutilizarse fuera del entorno local. EF Core/PostgreSQL persiste los envíos; Redis, RabbitMQ y Worker todavía no participan del flujo. El bootstrap conserva `AccesoInicial` y `DatosInicialesSeeder`, con cuatro valores explícitos requeridos: `AccesoInicial:UsuarioEmail`, `AccesoInicial:OperadorNombre`, `AccesoInicial:ComercioNombre` y `AccesoInicial:OperadorUsuarioEmail`. `Demo:Enabled` y las transformaciones históricas por nombres Demo fueron eliminados; no se borraron registros existentes. La configuración y su alcance se describen en [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md).
 
 ## Estructura del repositorio
 
@@ -78,10 +90,11 @@ NexoRuta/
 
 ## Estado actual
 
-- Backend y frontend compilan con .NET 10. La compilación de Worker presenta advertencias por versiones distintas de EF Core; no se modificaron sus dependencias en esta revisión. La última compilación de mobile corresponde al 7 de octubre de 2026.
-- Pasaron **15 pruebas de backend** (8 unitarias y 7 de integración PostgreSQL) y **26 de frontend** (cliente HTTP, selección y contratos). ArchitectureTests todavía no contiene pruebas; no se validó MAUI en dispositivos.
-- Los nueve servicios de Compose arrancan. Se comprobó el formulario real del portal, el bulto persistido y el mismo envío en Backoffice.
-- Están implementados los recortes de [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md), [CU-07](backend/docs/cu/CU-07-alta-envios.md) y [CU-08](backend/docs/cu/CU-08-bultos.md) del primer monitoreo. Autenticación, RLS, CRUD de administración y mensajería funcional quedan pendientes.
+- Application, API, Infrastructure, ApiClient y presentación web están organizados por funcionalidad y responsabilidad. Las vistas Razor Pages conservan sus ubicaciones para mantener routing; sus PageModels están agrupados por feature. Tracking sigue siendo una plantilla.
+- Baseline histórico ARQ-06: backend con 19 unitarias, 3 de arquitectura y 42 de integración; frontend con 53 pruebas, incluidas 7 de contratos OpenAPI. Las 17 de configuración/DI están incluidas en las 42 de integración. Backend y frontend compilaron sin errores ni advertencias; frontend en Debug y Release. Las 46 comprobaciones HTTP de presentación usaron un backend simulado.
+- ARQ-09 (9 de octubre de 2026) verificó los commits de la tabla anterior con Chrome, Commerce, API, PostgreSQL 18 temporal aislado y Backoffice reales, sin mocks: el mismo envío se creó, persistió y visualizó. También se verificaron rechazos por sesión, cuenta y datos inválidos. No se encontraron ejecuciones de CI para esos commits integrados.
+- ARQ-10 solo sincroniza gitlinks y documentación: no reejecuta suites, E2E ni Compose. El arranque de nueve servicios Compose corresponde al monitoreo anterior; no acredita un nuevo despliegue de estas versiones. La última compilación de mobile corresponde al 7 de octubre; no se validó MAUI en dispositivos.
+- Están implementados los recortes de [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md), [CU-07](backend/docs/cu/CU-07-alta-envios.md) y [CU-08](backend/docs/cu/CU-08-bultos.md) del primer monitoreo. Autenticación por credenciales, RLS, CRUD de administración y mensajería funcional quedan pendientes.
 - Backend y frontend tienen workflows de CI. Compilación y pruebas se verificaron localmente; no se ejecutó CI remota para estos cambios ni se verificó despliegue remoto.
 
 Para conocer el estado y los comandos de cada componente, consultá [Backend](backend/README.md), [Frontend](frontend/README.md) y [Mobile](mobile/README.md).
