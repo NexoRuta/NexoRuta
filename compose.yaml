@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${NEXORUTA_POSTGRES_PASSWORD:?Set existing development password in .env}
       PGDATA: /var/lib/postgresql/18/docker
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:55433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:
@@ -80,6 +80,9 @@ services:
       OpenTelemetry__Enabled: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://dashboard:18889
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      AccesoInicial__UsuarioPassword: ${NEXORUTA_COMERCIO_PASSWORD:?Falta contraseña del comercio}
+      AccesoInicial__OperadorUsuarioPassword: ${NEXORUTA_OPERADOR_PASSWORD:?Falta contraseña del operador}
+      Jwt__SigningKeyBase64: ${NEXORUTA_JWT_KEY_BASE64:?Falta clave JWT}
     ports:
       - "5000:8080"
     healthcheck:
