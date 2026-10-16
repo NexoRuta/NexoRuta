@@ -233,6 +233,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       Api__BaseAddress: http://api:8080/
+      Portales__BackofficeLoginUrl: http://localhost:5101/ingresar
+      Portales__AdminLoginUrl: http://localhost:5104/ingresar
       Tracking__BaseAddress: http://localhost:5103/
     ports:
       - "5102:8080"

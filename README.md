@@ -125,3 +125,5 @@ NexoRuta/
 - Backend y frontend tienen workflows de CI. Compilación y pruebas se verificaron localmente; no se ejecutó CI remota para estos cambios ni se verificó despliegue remoto.
 
 Para conocer el estado y los comandos de cada componente, consultá [Backend](backend/README.md), [Frontend](frontend/README.md) y [Mobile](mobile/README.md).
+
+Self-service registration and organization onboarding is the habitual entry point; see [the onboarding guide](docs/registro-alta-propia.md). Platform Admin remains available for support. CU-01 is not closed.
