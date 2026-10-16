@@ -48,6 +48,26 @@ docker compose up -d
 docker compose ps
 ```
 
+Para API y portales, la configuración local ignorada por Git (`.env`) debe mantener `NEXORUTA_POSTGRES_CONNECTION` apuntando al servicio Compose `postgres` (`nexoruta:5432`), `NEXORUTA_APPLY_MIGRATIONS=false` y `NEXORUTA_SEED_DATA=false`. Arranque habitual en PowerShell:
+
+```powershell
+docker compose config --quiet
+docker compose up -d --build postgres api backoffice commerce
+docker compose ps
+```
+
+Aplicar una migración local es una operación administrativa separada: revisar previamente el SQL y confirmar que el destino es el PostgreSQL de este Compose. Sin cambiar `NEXORUTA_SEED_DATA=false`, habilitar solo la migración para el primer arranque de API y después volver a la configuración protegida:
+
+```powershell
+$env:NEXORUTA_APPLY_MIGRATIONS = 'true'
+docker compose up -d --no-deps --force-recreate api
+docker compose ps api  # esperar a que la API quede healthy
+Remove-Item Env:NEXORUTA_APPLY_MIGRATIONS
+docker compose up -d --no-deps --force-recreate api
+```
+
+No dejar el override de proceso habilitado luego de la aplicación. No se versionan credenciales ni cadenas de conexión; `.env` permanece local e ignorado.
+
 El Compose inicia nueve servicios. Para el primer monitoreo del 8 de octubre de 2026 se verificó el alta de un envío desde el portal, su persistencia con bulto en PostgreSQL y la consulta del mismo ID en Backoffice. Se inicializan un operador, un comercio, una cuenta del dueño y una cuenta del operador. El comercio puede elegir cualquier operador registrado, sin un vínculo previo; cada envío conserva `OperadorId` y `ComercioId`. El ingreso al portal selecciona la cuenta del comercio, y el operador se elige al crear cada envío. Backoffice solo admite cuentas del operador. El selector es sin credenciales; no se implementaron CRUD ni perfiles laborales.
 
 Para detener los servicios sin borrar los volúmenes de datos:

@@ -39,8 +39,7 @@ services:
       RABBITMQ_DEFAULT_USER: ${NEXORUTA_RABBITMQ_USERNAME:?Set existing development user in .env}
       RABBITMQ_DEFAULT_PASS: ${NEXORUTA_RABBITMQ_PASSWORD:?Set existing development password in .env}
     ports:
-      - "127.0.0.1:5672:5672"
-      - "127.0.0.1:15672:15672"
+      - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
