@@ -75,6 +75,9 @@ services:
       Tracking__PublicBaseUrl: http://localhost:5000
       DatabaseInitialization__ApplyMigrations: "${NEXORUTA_APPLY_MIGRATIONS:-false}"
       DatabaseInitialization__SeedData: "${NEXORUTA_SEED_DATA:-false}"
+      PlatformInitialization__Enabled: "${NEXORUTA_PLATFORM_BOOTSTRAP:-false}"
+      PlatformInitialization__Email: "${NEXORUTA_ADMIN_MAIL:-}"
+      PlatformInitialization__Password: "${NEXORUTA_ADMIN_PASSWORD:-}"
       ConnectionStrings__Redis: redis:6379
       OpenTelemetry__Enabled: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://dashboard:18889
@@ -186,6 +189,22 @@ services:
         kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists
         --topic nexoruta.envios.creados.v1 --partitions 3 --replication-factor 1
         --config min.insync.replicas=1 --config retention.ms=604800000
+
+  admin:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        PROJECT: NexoRuta.Admin
+    container_name: nexoruta-admin
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Api__BaseAddress: http://api:8080/
+    ports:
+      - "127.0.0.1:5104:8080"
+    depends_on:
+      api:
+        condition: service_healthy
 
   backoffice:
     build:
