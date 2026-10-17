@@ -48,7 +48,27 @@ docker compose up -d
 docker compose ps
 ```
 
-El Compose inicia nueve servicios. Para el primer monitoreo del 8 de octubre de 2026 se verificó el alta de un envío desde el portal, su persistencia con bulto en PostgreSQL y la consulta del mismo ID en Backoffice. Se inicializan un operador, un comercio, una cuenta del dueño y una cuenta del operador. El comercio puede elegir cualquier operador registrado, sin un vínculo previo; cada envío conserva `OperadorId` y `ComercioId`. El ingreso al portal selecciona la cuenta del comercio, y el operador se elige al crear cada envío. Backoffice solo admite cuentas del operador. El selector es sin credenciales; no se implementaron CRUD ni perfiles laborales.
+Para API y portales, la configuración local ignorada por Git (`.env`) debe mantener `NEXORUTA_POSTGRES_CONNECTION` apuntando al servicio Compose `postgres` (`nexoruta:5432`), `NEXORUTA_APPLY_MIGRATIONS=false` y `NEXORUTA_SEED_DATA=false`. Arranque habitual en PowerShell:
+
+```powershell
+docker compose config --quiet
+docker compose up -d --build postgres api backoffice commerce
+docker compose ps
+```
+
+Aplicar una migración local es una operación administrativa separada: revisar previamente el SQL y confirmar que el destino es el PostgreSQL de este Compose. Sin cambiar `NEXORUTA_SEED_DATA=false`, habilitar solo la migración para el primer arranque de API y después volver a la configuración protegida:
+
+```powershell
+$env:NEXORUTA_APPLY_MIGRATIONS = 'true'
+docker compose up -d --no-deps --force-recreate api
+docker compose ps api  # esperar a que la API quede healthy
+Remove-Item Env:NEXORUTA_APPLY_MIGRATIONS
+docker compose up -d --no-deps --force-recreate api
+```
+
+No dejar el override de proceso habilitado luego de la aplicación. No se versionan credenciales ni cadenas de conexión; `.env` permanece local e ignorado.
+
+El Compose inicia diez servicios. Para el primer monitoreo del 8 de octubre de 2026 se verificó el alta de un envío desde el portal, su persistencia con bulto en PostgreSQL y la consulta del mismo ID en Backoffice. Se inicializan un operador, un comercio, una cuenta del dueño y una cuenta del operador. El comercio puede elegir cualquier operador registrado, sin un vínculo previo; cada envío conserva `OperadorId` y `ComercioId`. El ingreso al portal selecciona la cuenta del comercio, y el operador se elige al crear cada envío. Backoffice solo admite cuentas del operador. El selector es sin credenciales; no se implementaron CRUD ni perfiles laborales.
 
 Para detener los servicios sin borrar los volúmenes de datos:
 
@@ -62,6 +82,7 @@ docker compose down
 | --- | --- | --- |
 | API | `http://localhost:5000` | Cuentas en `GET /api/accesos?tipo=Comercio\|Operador`; operadores disponibles en `GET /api/comercio/operadores`. Usuario actual, operadores y envíos requieren `X-NexoRuta-Acceso`. Salud en `/health/live` y `/health/ready`; OpenAPI en [`/openapi/v1.json`](http://localhost:5000/openapi/v1.json). |
 | Backoffice | `http://localhost:5101` | Consulta de envíos persistidos y sus bultos en Razor Pages. |
+| Admin | `http://localhost:5104` | Administración exclusiva de plataforma: listado, detalle y alta de operadores/comercios con su primer administrador. Ver [preparación local pendiente](frontend/docs/admin.md). |
 | Commerce | `http://localhost:5102` | Alta individual de envío y bulto en Blazor Server. |
 | Tracking | `http://localhost:5103` | Plantilla Blazor Server. |
 | Aspire Dashboard | `http://localhost:18888` | Observabilidad local; recibe telemetría de la API. |
@@ -73,12 +94,18 @@ docker compose down
 
 Las credenciales del archivo Compose son públicas y no deben reutilizarse fuera del entorno local. EF Core/PostgreSQL persiste los envíos; Redis, RabbitMQ y Worker todavía no participan del flujo. El bootstrap conserva `AccesoInicial` y `DatosInicialesSeeder`, con cuatro valores explícitos requeridos: `AccesoInicial:UsuarioEmail`, `AccesoInicial:OperadorNombre`, `AccesoInicial:ComercioNombre` y `AccesoInicial:OperadorUsuarioEmail`. `Demo:Enabled` y las transformaciones históricas por nombres Demo fueron eliminados; no se borraron registros existentes. La configuración y su alcance se describen en [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md).
 
+### Initial platform administrator (local Compose)
+
+Admin is available at `http://localhost:5104`. The API maps the ignored `.env` keys `NEXORUTA_ADMIN_MAIL` and `NEXORUTA_ADMIN_PASSWORD` to `PlatformInitialization__Email/Password`. Only `NEXORUTA_PLATFORM_BOOTSTRAP=true` enables platform initialization; it defaults to false and is independent of demonstration data. Keep habitual `NEXORUTA_APPLY_MIGRATIONS=false` and `NEXORUTA_SEED_DATA=false`.
+
+Review/apply pending additive migrations explicitly to the confirmed local Compose PostgreSQL **before** recreating the updated API. Do not delete volumes or reset data. API startup creates the account atomically, or validates an existing compatible account without replacing its password. No manual `platform-admin create` is required in this configured local flow. See the [backend procedure](backend/docs/workflow/platform-administration.md).
+
 ## Estructura del repositorio
 
 ```text
 NexoRuta/
   backend/       # API, Worker y proyectos de capas .NET
-  frontend/      # Backoffice, Commerce y Tracking
+  frontend/      # Admin, Backoffice, Commerce y Tracking
   mobile/        # aplicación .NET MAUI
   architecture.md
   compose.yaml
@@ -98,3 +125,5 @@ NexoRuta/
 - Backend y frontend tienen workflows de CI. Compilación y pruebas se verificaron localmente; no se ejecutó CI remota para estos cambios ni se verificó despliegue remoto.
 
 Para conocer el estado y los comandos de cada componente, consultá [Backend](backend/README.md), [Frontend](frontend/README.md) y [Mobile](mobile/README.md).
+
+Self-service registration and organization onboarding is the habitual entry point; see [the onboarding guide](docs/registro-alta-propia.md). Platform Admin remains available for support. CU-01 is not closed.

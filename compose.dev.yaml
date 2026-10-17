@@ -12,6 +12,10 @@ x-frontend-dev: &frontend-dev
     - ./frontend:/workspace
 
 services:
+  admin:
+    <<: *frontend-dev
+    build: !reset null
+    command: ["--project", "src/NexoRuta.Admin/NexoRuta.Admin.csproj", "run", "--no-launch-profile"]
   backoffice:
     <<: *frontend-dev
     build: !reset null
