@@ -75,15 +75,29 @@ services:
       Tracking__PublicBaseUrl: http://localhost:5000
       DatabaseInitialization__ApplyMigrations: "${NEXORUTA_APPLY_MIGRATIONS:-false}"
       DatabaseInitialization__SeedData: "${NEXORUTA_SEED_DATA:-false}"
-      PlatformInitialization__Enabled: "${NEXORUTA_PLATFORM_BOOTSTRAP:-false}"
+      PlatformInitialization__Enabled: "${NEXORUTA_PLATFORM_BOOTSTRAP:?NEXORUTA_PLATFORM_BOOTSTRAP es obligatorio}"
       PlatformInitialization__Email: "${NEXORUTA_ADMIN_MAIL:-}"
       PlatformInitialization__Password: "${NEXORUTA_ADMIN_PASSWORD:-}"
       ConnectionStrings__Redis: redis:6379
       OpenTelemetry__Enabled: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://dashboard:18889
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
-      AccesoInicial__UsuarioPassword: ${NEXORUTA_COMERCIO_PASSWORD:?Falta contraseña del comercio}
-      AccesoInicial__OperadorUsuarioPassword: ${NEXORUTA_OPERADOR_PASSWORD:?Falta contraseña del operador}
+      AccesoInicial__UsuarioEmail: ${NEXORUTA_COMERCIO_MAIL:?Falta NEXORUTA_COMERCIO_MAIL}
+      AccesoInicial__UsuarioPassword: ${NEXORUTA_COMERCIO_PASSWORD:?Falta NEXORUTA_COMERCIO_PASSWORD}
+      AccesoInicial__OperadorUsuarioEmail: ${NEXORUTA_OPERADOR_MAIL:?Falta NEXORUTA_OPERADOR_MAIL}
+      AccesoInicial__OperadorUsuarioPassword: ${NEXORUTA_OPERADOR_PASSWORD:?Falta NEXORUTA_OPERADOR_PASSWORD}
+      AccesoInicial__ComercioNombre: "Comercio NexoRuta"
+      AccesoInicial__OperadorNombre: "Operador NexoRuta"
+      AccesoInicial__ComercioId: "0be3d0f2-1ae2-4dd7-a15b-9fd464031270"
+      AccesoInicial__OperadorId: "1b41be96-6f3e-42b9-99d0-f2e9b3c7c52a"
+      AccesoInicial__ComercioRolCodigo: propietario_comercio
+      AccesoInicial__OperadorRolCodigo: propietario_operador
+      Bootstrap__Roles__0__Codigo: propietario_comercio
+      Bootstrap__Roles__0__Nombre: Owner
+      Bootstrap__Roles__0__ComercioId: "0be3d0f2-1ae2-4dd7-a15b-9fd464031270"
+      Bootstrap__Roles__1__Codigo: propietario_operador
+      Bootstrap__Roles__1__Nombre: Owner
+      Bootstrap__Roles__1__OperadorId: "1b41be96-6f3e-42b9-99d0-f2e9b3c7c52a"
       Jwt__SigningKeyBase64: ${NEXORUTA_JWT_KEY_BASE64:?Falta clave JWT}
     ports:
       - "5000:8080"
