@@ -73,6 +73,14 @@ services:
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_api_runtime;Password=${NEXORUTA_API_DB_PASSWORD:?Set the local restricted API role password in .env}"
       Seguimiento__EncryptionKey: ${NEXORUTA_SEGUIMIENTO_ENCRYPTION_KEY:?Set existing development key in .env}
       Tracking__PublicBaseUrl: http://localhost:5000
+      PasswordRecovery__ResetPageUrl: http://localhost:5102/restablecer-contrasena
+      PasswordRecovery__TokenLifespanSeconds: "900"
+      DataProtection__KeysDirectory: /var/nexoruta/data-protection-keys
+      Email__Smtp__Host: mailpit
+      Email__Smtp__Port: "1025"
+      Email__Smtp__UseSsl: "false"
+      Email__Smtp__FromAddress: noreply@nexoruta.local
+      Email__Smtp__FromName: NexoRuta
       DatabaseInitialization__ApplyMigrations: "false"
       DatabaseInitialization__SeedData: "false"
       ConnectionStrings__Redis: redis:6379
@@ -82,6 +90,8 @@ services:
       Jwt__SigningKeyBase64: ${NEXORUTA_JWT_KEY_BASE64:?Falta clave JWT}
     ports:
       - "5000:8080"
+    volumes:
+      - api_dataprotection_keys:/var/nexoruta/data-protection-keys
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health/ready || exit 1"]
       interval: 10s
@@ -93,6 +103,16 @@ services:
         condition: service_healthy
       dashboard:
         condition: service_started
+      mailpit:
+        condition: service_started
+
+  # Development-only SMTP sink. Production uses an explicitly configured SMTP relay.
+  mailpit:
+    image: axllent/mailpit:v1.31.5
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
 
   worker:
     image: nexoruta-worker:local
@@ -328,6 +348,7 @@ services:
 
 volumes:
   postgres_data:
+  api_dataprotection_keys:
   redis_data:
   rabbitmq_data:
   kafka_data:
