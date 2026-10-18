@@ -70,34 +70,15 @@ services:
     container_name: nexoruta-api
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Postgres: ${NEXORUTA_POSTGRES_CONNECTION:?Set existing development connection in .env}
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_api_runtime;Password=${NEXORUTA_API_DB_PASSWORD:?Set the local restricted API role password in .env}"
       Seguimiento__EncryptionKey: ${NEXORUTA_SEGUIMIENTO_ENCRYPTION_KEY:?Set existing development key in .env}
       Tracking__PublicBaseUrl: http://localhost:5000
-      DatabaseInitialization__ApplyMigrations: "${NEXORUTA_APPLY_MIGRATIONS:-false}"
-      DatabaseInitialization__SeedData: "${NEXORUTA_SEED_DATA:-false}"
-      PlatformInitialization__Enabled: "${NEXORUTA_PLATFORM_BOOTSTRAP:?NEXORUTA_PLATFORM_BOOTSTRAP es obligatorio}"
-      PlatformInitialization__Email: "${NEXORUTA_ADMIN_MAIL:-}"
-      PlatformInitialization__Password: "${NEXORUTA_ADMIN_PASSWORD:-}"
+      DatabaseInitialization__ApplyMigrations: "false"
+      DatabaseInitialization__SeedData: "false"
       ConnectionStrings__Redis: redis:6379
       OpenTelemetry__Enabled: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://dashboard:18889
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
-      AccesoInicial__UsuarioEmail: ${NEXORUTA_COMERCIO_MAIL:?Falta NEXORUTA_COMERCIO_MAIL}
-      AccesoInicial__UsuarioPassword: ${NEXORUTA_COMERCIO_PASSWORD:?Falta NEXORUTA_COMERCIO_PASSWORD}
-      AccesoInicial__OperadorUsuarioEmail: ${NEXORUTA_OPERADOR_MAIL:?Falta NEXORUTA_OPERADOR_MAIL}
-      AccesoInicial__OperadorUsuarioPassword: ${NEXORUTA_OPERADOR_PASSWORD:?Falta NEXORUTA_OPERADOR_PASSWORD}
-      AccesoInicial__ComercioNombre: "Comercio NexoRuta"
-      AccesoInicial__OperadorNombre: "Operador NexoRuta"
-      AccesoInicial__ComercioId: "0be3d0f2-1ae2-4dd7-a15b-9fd464031270"
-      AccesoInicial__OperadorId: "1b41be96-6f3e-42b9-99d0-f2e9b3c7c52a"
-      AccesoInicial__ComercioRolCodigo: propietario_comercio
-      AccesoInicial__OperadorRolCodigo: propietario_operador
-      Bootstrap__Roles__0__Codigo: propietario_comercio
-      Bootstrap__Roles__0__Nombre: Owner
-      Bootstrap__Roles__0__ComercioId: "0be3d0f2-1ae2-4dd7-a15b-9fd464031270"
-      Bootstrap__Roles__1__Codigo: propietario_operador
-      Bootstrap__Roles__1__Nombre: Owner
-      Bootstrap__Roles__1__OperadorId: "1b41be96-6f3e-42b9-99d0-f2e9b3c7c52a"
       Jwt__SigningKeyBase64: ${NEXORUTA_JWT_KEY_BASE64:?Falta clave JWT}
     ports:
       - "5000:8080"
@@ -127,7 +108,7 @@ services:
     environment:
       DOTNET_ENVIRONMENT: Development
       Messaging__Transport: RabbitMq
-      ConnectionStrings__Postgres: ${NEXORUTA_POSTGRES_CONNECTION:?Set existing development connection in .env}
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_worker_runtime;Password=${NEXORUTA_WORKER_DB_PASSWORD:?Set the local restricted worker role password in .env}"
       Seguimiento__EncryptionKey: ${NEXORUTA_SEGUIMIENTO_ENCRYPTION_KEY:?Set existing development key in .env}
       RabbitMq__Host: rabbitmq
       RabbitMq__Port: 5672
@@ -137,6 +118,79 @@ services:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+
+  rls-migrator:
+    profiles: ["rls-admin"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        PROJECT: src/NexoRuta.Api/NexoRuta.Api.csproj
+        RUNTIME_IMAGE: mcr.microsoft.com/dotnet/aspnet:10.0
+        RUNTIME_TOOLS: "true"
+    container_name: nexoruta-rls-migrator
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: ${NEXORUTA_POSTGRES_CONNECTION:?Set the local migration connection in .env}
+    command: ["database-migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  rls-role-provisioner:
+    profiles: ["rls-admin"]
+    image: postgres:18-alpine
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: nexoruta
+      PGUSER: nexoruta
+      PGPASSWORD: ${NEXORUTA_POSTGRES_PASSWORD:?Set existing development password in .env}
+      NEXORUTA_API_DB_PASSWORD: ${NEXORUTA_API_DB_PASSWORD:?Set the local restricted API role password in .env}
+      NEXORUTA_WORKER_DB_PASSWORD: ${NEXORUTA_WORKER_DB_PASSWORD:?Set the local restricted worker role password in .env}
+      NEXORUTA_BOOTSTRAP_DB_PASSWORD: ${NEXORUTA_BOOTSTRAP_DB_PASSWORD:?Set the local restricted bootstrap role password in .env}
+    volumes:
+      - ./backend/scripts/provision-rls-runtime-roles.sql:/provision-rls-runtime-roles.sql:ro
+    entrypoint: ["psql", "-v", "ON_ERROR_STOP=1", "-f", "/provision-rls-runtime-roles.sql"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  local-bootstrap:
+    profiles: ["bootstrap"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        PROJECT: src/NexoRuta.Api/NexoRuta.Api.csproj
+        RUNTIME_IMAGE: mcr.microsoft.com/dotnet/aspnet:10.0
+        RUNTIME_TOOLS: "true"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_bootstrap_runtime;Password=${NEXORUTA_BOOTSTRAP_DB_PASSWORD:?Set the local restricted bootstrap role password in .env}"
+      PlatformInitialization__Enabled: "true"
+      PlatformInitialization__Email: ${NEXORUTA_ADMIN_MAIL:?Set local platform mail in .env}
+      PlatformInitialization__Password: ${NEXORUTA_ADMIN_PASSWORD:?Set local platform password in .env}
+      AccesoInicial__UsuarioEmail: ${NEXORUTA_COMERCIO_MAIL:?Falta NEXORUTA_COMERCIO_MAIL}
+      AccesoInicial__UsuarioPassword: ${NEXORUTA_COMERCIO_PASSWORD:?Falta NEXORUTA_COMERCIO_PASSWORD}
+      AccesoInicial__OperadorUsuarioEmail: ${NEXORUTA_OPERADOR_MAIL:?Falta NEXORUTA_OPERADOR_MAIL}
+      AccesoInicial__OperadorUsuarioPassword: ${NEXORUTA_OPERADOR_PASSWORD:?Falta NEXORUTA_OPERADOR_PASSWORD}
+      AccesoInicial__ComercioNombre: "Comercio NexoRuta"
+      AccesoInicial__OperadorNombre: "Operador NexoRuta"
+      AccesoInicial__ComercioId: "0be3d0f2-1ae2-4dd7-a15b-9fd464031270"
+      AccesoInicial__OperadorId: "1b41be96-6f3e-42b9-99d0-f2e9b3c7c52a"
+      AccesoInicial__ComercioRolCodigo: propietario_comercio
+      AccesoInicial__OperadorRolCodigo: propietario_operador
+      Bootstrap__Roles__0__Codigo: propietario_comercio
+      Bootstrap__Roles__0__Nombre: Owner
+      Bootstrap__Roles__0__ComercioId: "0be3d0f2-1ae2-4dd7-a15b-9fd464031270"
+      Bootstrap__Roles__1__Codigo: propietario_operador
+      Bootstrap__Roles__1__Nombre: Owner
+      Bootstrap__Roles__1__OperadorId: "1b41be96-6f3e-42b9-99d0-f2e9b3c7c52a"
+    command: ["local-bootstrap"]
+    depends_on:
+      postgres:
         condition: service_healthy
 
   worker-kafka:
@@ -149,7 +203,7 @@ services:
     environment:
       DOTNET_ENVIRONMENT: Development
       Messaging__Transport: Kafka
-      ConnectionStrings__Postgres: ${NEXORUTA_POSTGRES_CONNECTION:?Set existing development connection in .env}
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_worker_runtime;Password=${NEXORUTA_WORKER_DB_PASSWORD:?Set the local restricted worker role password in .env}"
       Kafka__BootstrapServers: kafka:9092
       Kafka__SecurityProtocol: Plaintext
     depends_on:
