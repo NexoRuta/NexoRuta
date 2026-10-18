@@ -1,6 +1,6 @@
 # Self-service registration and organization onboarding
 
-Self-service is the normal onboarding path. A platform administrator is only needed for support or explicitly administrative provisioning. CU-01 is **not complete**.
+Self-service is the normal onboarding path; Admin is reserved for support or explicitly administrative provisioning. Current CU-01 behavior and its traceability matrix are documented in [the CU-01 audit](../backend/docs/cu/CU-01-comercios-usuarios.md). The workshop's literal Backoffice/operator responsibility differs from the adopted Commerce self-service model; academic acceptance remains with the team/instructor.
 
 ## User journey
 
@@ -53,7 +53,7 @@ Creation does not refresh tokens implicitly: the previous JWT immediately become
 
 ## Reused implementation and atomicity
 
-- `ValidacionCredenciales`, `Usuario`, `IGeneradorPasswordHash` and the existing password verifier retain credential normalization, validation and hashing.
+- ASP.NET Core Identity's `UserManager<Usuario>` and its standard EF Core store own account creation, password hashing/verification, normalized email and email updates. The API continues issuing the existing JWT; Identity does not create global NexoRuta roles.
 - Existing normalized email uniqueness (`IX_Usuarios_EmailNormalizado`) translates concurrent registration conflicts to 409.
 - `EfPlataformaRepository` shares its organization initializer with the new `IAltaPropiaRepository` entry point. Administrative creation still creates an explicitly requested new identity under platform authorization; self-service reuses the authenticated identity unchanged.
 - Every organization, protected role, scope permission/catalog row and active `AccesoUsuario` is created inside one PostgreSQL transaction. The unique `AccesosUsuario.UsuarioId` index remains unchanged and arbitrates same-type and mixed commerce/operator races. Losing transactions roll back all their rows; injected failures after SaveChanges also roll back.
@@ -63,7 +63,7 @@ Creation does not refresh tokens implicitly: the previous JWT immediately become
 
 ## Persistence and compatibility
 
-**No migration is needed or added.** The previous schema already supports `Usuario` without access. Historical migrations and the EF model/snapshot are unchanged. Existing data is neither migrated nor seeded during implementation. Regression tests apply the migration history only to owned PostgreSQL 18 Testcontainers databases; pending-model-change checks verify compatibility. Existing administrative provisioning, session revocation, protected roles and shipment isolation keep their regression tests.
+The current migration history includes AddIdentityUserStore and EnablePostgreSqlRls; they preserve the existing account GUIDs and establish the EF Identity store and restricted tenant policies. Normal startup keeps ApplyMigrations=false and SeedData=false. The current audit did not apply migrations, run seeders or write to persistent PostgreSQL. Regression tests use fixture-owned ephemeral PostgreSQL.
 
 ## Runnable checks
 
@@ -82,11 +82,13 @@ git -C frontend diff --check
 
 Run builds/tests sequentially within each solution on Windows: running another build against a currently executing test assembly can cause MSB3021/MSB3027 file-lock failures. Docker is required for integration and browser checks. The browser check needs Node 22+ and Chromium (`NEXORUTA_BROWSER` overrides the Windows Edge default), no npm packages. It starts owned ephemeral PostgreSQL and local Kestrel hosts, applies migrations only to that container, runs both complete browser journeys, and stops its processes/container. Screenshots/logs are temporary; the browser profile is removed. It is **not** WebApplicationFactory: the frontend HTTP tests use WebApplicationFactory with a fake upstream API, whereas the browser check uses real Kestrel/API/PostgreSQL.
 
-## Remaining scope
+## Fuera del alcance obligatorio documentado
 
-No plans, payments, subscriptions, commercial limits, invitations, automatic email linking or SSO. CU-01 still requires remaining CRUD, identity editing, Identity/OIDC and RLS. This slice does not add email verification, password reset or identity-only token logout revocation; identity-only tokens expire after 15 minutes and are invalidated by successful membership creation. Organizational/platform revocation is unchanged.
+La matriz vigente de CU-01 está en [CU-01](../backend/docs/cu/CU-01-comercios-usuarios.md). Recuperación de contraseña, invitaciones, planes, pagos, suscripciones, límites comerciales, vinculación automática de correos, SSO y borrado físico no se tratan como requisitos obligatorios de CU-01. Identity ya es el almacén de cuentas/credenciales y RLS ya es un límite de filas. Los JWT de identidad sin organización tienen expiración corta y se invalidan cuando se crea una membresía; las sesiones organizacionales/plataforma conservan sus reglas de revocación.
 
-## Observed verification (2026-10-16)
+## Historical verification snapshot (2026-10-16)
+
+Los conteos que siguen corresponden a esa entrega, no a la auditoría actual. Los resultados actuales deben leerse en la sección Verificación de backend/docs/cu/CU-01-comercios-usuarios.md.
 
 - Backend and frontend Release builds: zero warnings and zero errors.
 - Backend: 95 unit, 3 architecture and 220 PostgreSQL-isolated integration tests passed.
@@ -115,6 +117,6 @@ Read-only inspection of the local self-service owner confirmed the four commerce
 
 Real browser verification also found unrelated create-form validation messages after role-grant/employee-assignment posts. The existing shared reload methods now clear creation fields only for non-creation handlers, retaining failed-create validation and password cleanup. No API security or ownership guards changed.
 
-Verification: frontend Release zero warnings/errors, 196 frontend tests; backend Release zero warnings/errors, 95 unit + 3 architecture + 221 isolated integration tests. New regression covers self-service owner's effective configuration permission, role CRUD/assignment, assigned-role deletion conflicts, own/protected-role refusals, foreign commerce/operator scope and operator/platform permission rejection. Real Edge desktop/mobile completes owner → roles → create/rename editable role → scope grants → users → employee creation/assignment → home on owned ephemeral PostgreSQL, including read-only Owner and absence of unrelated validation errors. Only the local Commerce application needs rebuilding/recreation. Organization edit/delete work remains postponed; CU-01 is not closed.
+Verification: frontend Release zero warnings/errors, 196 frontend tests; backend Release zero warnings/errors, 95 unit + 3 architecture + 221 isolated integration tests. New regression covers self-service owner's effective configuration permission, role CRUD/assignment, assigned-role deletion conflicts, own/protected-role refusals, foreign commerce/operator scope and operator/platform permission rejection. Real Edge desktop/mobile completes owner → roles → create/rename editable role → scope grants → users → employee creation/assignment → home on owned ephemeral PostgreSQL, including read-only Owner and absence of unrelated validation errors. Only the local Commerce application needs rebuilding/recreation. At that snapshot, organization profile editing and RLS had not yet landed. They are covered by later source changes; physical deletion is not part of the current CU-01 scope.
 
 Local update completed: only `commerce` was rebuilt/recreated. The published Commerce assembly contains the new navigation partial. API, PostgreSQL and every other service retained their container identities; PostgreSQL mounts and the read-only business-data fingerprint were identical before/after. Migration/seeding flags and platform bootstrap configuration were preserved. `/` returns 200 and direct `/usuarios`/`/roles` keep their authentication requirement; signed-in owners can use the new links at `http://localhost:5102/usuarios` and `http://localhost:5102/roles`. No persistent account was used for test writes.
