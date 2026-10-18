@@ -27,26 +27,30 @@ set "RUNTIME_OVERRIDE=%TEMP%\nexoruta-runtime-%RANDOM%-%RANDOM%.yaml"
 )
 if errorlevel 1 goto failed
 
-echo [1/5] Comprobando Compose y destino local de la migracion...
+echo [1/6] Comprobando Compose y destino local de la migracion...
 docker compose -p nexoruta -f compose.yaml -f compose.dev.yaml -f "%RUNTIME_OVERRIDE%" config --quiet
 if errorlevel 1 goto failed
 docker compose -p nexoruta -f compose.yaml -f compose.dev.yaml -f "%RUNTIME_OVERRIDE%" --profile rls-admin config --format json | powershell.exe -NoProfile -Command "$c = [Console]::In.ReadToEnd() | ConvertFrom-Json; $s = [string]$c.services.'rls-migrator'.environment.ConnectionStrings__Postgres; try { $b = [System.Data.Common.DbConnectionStringBuilder]::new(); $b.set_ConnectionString($s); $h = [string]$b['Host']; $d = [string]$b['Database']; $aliases = @('Server','Data Source','Address','Addr','Network Address','Initial Catalog'); $ambiguous = @($aliases | Where-Object { $b.ContainsKey($_) }).Count -gt 0; if ($h -ne 'postgres' -or $d -ne 'nexoruta' -or $ambiguous) { throw 'La conexion de migracion debe resolverse a Host=postgres;Database=nexoruta' } } catch { Write-Error 'La conexion de migracion debe apuntar solo al PostgreSQL local nexoruta'; exit 1 }"
 if errorlevel 1 goto failed
 
-echo [2/5] Iniciando PostgreSQL local...
+echo [2/6] Iniciando PostgreSQL local...
 docker compose -p nexoruta -f compose.yaml -f compose.dev.yaml -f "%RUNTIME_OVERRIDE%" up -d --wait postgres
 if errorlevel 1 goto failed
 
-echo [3/5] Provisionando roles restringidos de la base local...
-docker compose -p nexoruta -f compose.yaml -f compose.dev.yaml -f "%RUNTIME_OVERRIDE%" --profile rls-admin run --rm --no-deps rls-role-provisioner
-if errorlevel 1 goto failed
-
-echo [4/5] Aplicando migraciones pendientes...
+echo [3/6] Aplicando migraciones a la base local...
 docker compose -p nexoruta -f compose.yaml -f compose.dev.yaml -f "%RUNTIME_OVERRIDE%" --profile rls-admin run --rm --no-deps --build rls-migrator
 if errorlevel 1 goto failed
 
-echo [5/5] Iniciando API, portales, Mailpit, RabbitMQ, Kafka, MongoDB y workers...
-docker compose -p nexoruta -f compose.yaml -f compose.dev.yaml -f "%RUNTIME_OVERRIDE%" --profile kafka up -d --build
+echo [4/6] Provisionando los roles restringidos creados por las migraciones...
+docker compose -p nexoruta -f compose.yaml -f compose.dev.yaml -f "%RUNTIME_OVERRIDE%" --profile rls-admin run --rm --no-deps rls-role-provisioner
+if errorlevel 1 goto failed
+
+echo [5/6] Inicializando las seis cuentas de desarrollo configuradas en .env...
+docker compose -p nexoruta -f compose.yaml -f compose.dev.yaml -f "%RUNTIME_OVERRIDE%" --profile bootstrap run --rm --no-deps local-bootstrap
+if errorlevel 1 goto failed
+
+echo [6/6] Iniciando API, portales, Mailpit, RabbitMQ, Kafka, MongoDB y los dos workers...
+docker compose -p nexoruta -f compose.yaml -f compose.dev.yaml -f "%RUNTIME_OVERRIDE%" --profile kafka up -d --build --remove-orphans
 if errorlevel 1 goto failed
 
 docker compose -p nexoruta -f compose.yaml -f compose.dev.yaml -f "%RUNTIME_OVERRIDE%" --profile kafka ps

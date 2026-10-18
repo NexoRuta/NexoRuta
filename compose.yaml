@@ -125,26 +125,6 @@ services:
       Messaging__Transport: RabbitMq
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_worker_runtime;Password=${NEXORUTA_WORKER_DB_PASSWORD:?Set the local restricted worker role password in .env}"
       Seguimiento__EncryptionKey: ${NEXORUTA_SEGUIMIENTO_ENCRYPTION_KEY:?Set existing development key in .env}
-      RabbitMq__Host: rabbitmq
-      RabbitMq__Port: 5672
-      RabbitMq__Username: ${NEXORUTA_RABBITMQ_USERNAME:?Set existing development user in .env}
-      RabbitMq__Password: ${NEXORUTA_RABBITMQ_PASSWORD:?Set existing development password in .env}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-
-  worker-mail:
-    image: nexoruta-worker:local
-    build: *worker-build
-    container_name: nexoruta-worker-mail
-    entrypoint: ["dotnet", "NexoRuta.Worker.dll"]
-    restart: unless-stopped
-    environment:
-      DOTNET_ENVIRONMENT: Development
-      Messaging__Transport: RabbitMqPasswordRecoveryMail
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_worker_runtime;Password=${NEXORUTA_WORKER_DB_PASSWORD:?Set the local restricted worker role password in .env}"
       DataProtection__KeysDirectory: /var/nexoruta/data-protection-keys
       RabbitMq__Host: rabbitmq
       RabbitMq__Port: 5672
@@ -157,6 +137,12 @@ services:
       Email__Smtp__FromName: NexoRuta
     volumes:
       - api_dataprotection_keys:/var/nexoruta/data-protection-keys:ro
+    healthcheck:
+      test: ["CMD-SHELL", "grep -aq 'NexoRuta.Worker.dll' /proc/1/cmdline"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -251,28 +237,18 @@ services:
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_worker_runtime;Password=${NEXORUTA_WORKER_DB_PASSWORD:?Set the local restricted worker role password in .env}"
       Kafka__BootstrapServers: kafka:9092
       Kafka__SecurityProtocol: Plaintext
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
-
-  worker-mongodb:
-    profiles: ["kafka"]
-    image: nexoruta-worker:local
-    build: *worker-build
-    container_name: nexoruta-worker-mongodb
-    entrypoint: ["dotnet", "NexoRuta.Worker.dll"]
-    restart: unless-stopped
-    environment:
-      DOTNET_ENVIRONMENT: Development
-      Messaging__Transport: KafkaPasswordRecoveryMongo
-      Kafka__BootstrapServers: kafka:9092
-      Kafka__SecurityProtocol: Plaintext
       MongoDb__ConnectionString: "mongodb://${NEXORUTA_MONGODB_USERNAME:-nexoruta_dev}:${NEXORUTA_MONGODB_PASSWORD:-local-dev-only-change-me}@mongodb:27017/?authSource=admin"
       MongoDb__Database: nexoruta_security
       MongoDb__PasswordRecoveryCollection: password_recovery_requested
+    healthcheck:
+      test: ["CMD-SHELL", "grep -aq 'NexoRuta.Worker.dll' /proc/1/cmdline"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
+      postgres:
+        condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
       mongodb:
