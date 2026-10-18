@@ -80,10 +80,10 @@ docker compose down
 
 | Servicio | Dirección local | Uso y límites |
 | --- | --- | --- |
-| API | `http://localhost:5000` | Cuentas en `GET /api/accesos?tipo=Comercio\|Operador`; operadores disponibles en `GET /api/comercio/operadores`. Usuario actual, operadores y envíos requieren `X-NexoRuta-Acceso`. Salud en `/health/live` y `/health/ready`; OpenAPI en [`/openapi/v1.json`](http://localhost:5000/openapi/v1.json). |
-| Backoffice | `http://localhost:5101` | Consulta de envíos persistidos y sus bultos en Razor Pages. |
-| Admin | `http://localhost:5104` | Administración exclusiva de plataforma: listado, detalle y alta de operadores/comercios con su primer administrador. Ver [preparación local pendiente](frontend/docs/admin.md). |
-| Commerce | `http://localhost:5102` | Alta individual de envío y bulto en Blazor Server. |
+| API | `http://localhost:5000` | Login en `POST /api/auth/login`; las rutas privadas usan `Authorization: Bearer`. El comercio selecciona un operador disponible por envío. Salud en `/health/live` y `/health/ready`; OpenAPI en [`/openapi/v1.json`](http://localhost:5000/openapi/v1.json). |
+| Backoffice | `http://localhost:5101` | Portal autenticado del operador: su organización, usuarios/roles propios y envíos asignados. |
+| Admin | `http://localhost:5104` | Operaciones de plataforma: alta/consulta/estado de organizaciones y resolución de solicitudes. Ver [guía de plataforma](backend/docs/workflow/platform-administration.md). |
+| Commerce | `http://localhost:5102` | Registro, alta propia y autogestión de la organización de comercio, usuarios/roles, envíos y consulta. |
 | Tracking | `http://localhost:5103` | Plantilla Blazor Server. |
 | Aspire Dashboard | `http://localhost:18888` | Observabilidad local; recibe telemetría de la API. |
 | RabbitMQ Management | `http://localhost:15672` | Interfaz de administración; credenciales locales de desarrollo: `nexoruta` / `nexoruta_dev`. |
@@ -92,7 +92,7 @@ docker compose down
 | Redis | Sin puerto publicado en el host | Disponible para otros contenedores en `redis:6379` dentro de la red Compose. |
 | Worker | Sin puerto HTTP publicado | Proceso de plantilla que registra actividad periódica. |
 
-Las credenciales del archivo Compose son públicas y no deben reutilizarse fuera del entorno local. EF Core/PostgreSQL persiste los envíos; Redis, RabbitMQ y Worker todavía no participan del flujo. El bootstrap conserva `AccesoInicial` y `DatosInicialesSeeder`, con cuatro valores explícitos requeridos: `AccesoInicial:UsuarioEmail`, `AccesoInicial:OperadorNombre`, `AccesoInicial:ComercioNombre` y `AccesoInicial:OperadorUsuarioEmail`. `Demo:Enabled` y las transformaciones históricas por nombres Demo fueron eliminados; no se borraron registros existentes. La configuración y su alcance se describen en [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md).
+Las credenciales del archivo Compose son públicas y no deben reutilizarse fuera del entorno local. EF Core/PostgreSQL persiste los datos; outbox y workers participan en la publicación de eventos y generación de seguimiento. Redis no define la autorización de CU-01. El bootstrap conserva `AccesoInicial` y `DatosInicialesSeeder`, con cuatro valores explícitos requeridos: `AccesoInicial:UsuarioEmail`, `AccesoInicial:OperadorNombre`, `AccesoInicial:ComercioNombre` y `AccesoInicial:OperadorUsuarioEmail`. `Demo:Enabled` y las transformaciones históricas por nombres Demo fueron eliminados; no se borraron registros existentes. La configuración y su alcance se describen en [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md).
 
 ### Initial platform administrator (local Compose)
 
@@ -121,9 +121,9 @@ NexoRuta/
 - Baseline histórico ARQ-06: backend con 19 unitarias, 3 de arquitectura y 42 de integración; frontend con 53 pruebas, incluidas 7 de contratos OpenAPI. Las 17 de configuración/DI están incluidas en las 42 de integración. Backend y frontend compilaron sin errores ni advertencias; frontend en Debug y Release. Las 46 comprobaciones HTTP de presentación usaron un backend simulado.
 - ARQ-09 (9 de octubre de 2026) verificó los commits de la tabla anterior con Chrome, Commerce, API, PostgreSQL 18 temporal aislado y Backoffice reales, sin mocks: el mismo envío se creó, persistió y visualizó. También se verificaron rechazos por sesión, cuenta y datos inválidos. No se encontraron ejecuciones de CI para esos commits integrados.
 - ARQ-10 solo sincroniza gitlinks y documentación: no reejecuta suites, E2E ni Compose. El arranque de nueve servicios Compose corresponde al monitoreo anterior; no acredita un nuevo despliegue de estas versiones. La última compilación de mobile corresponde al 7 de octubre; no se validó MAUI en dispositivos.
-- Están implementados los recortes de [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md), [CU-07](backend/docs/cu/CU-07-alta-envios.md) y [CU-08](backend/docs/cu/CU-08-bultos.md) del primer monitoreo. Autenticación por credenciales, RLS, CRUD de administración y mensajería funcional quedan pendientes.
+- El estado actual de [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md) incluye alta propia, gestión organizacional, Identity como almacén de cuentas, autorización por tenant y RLS. La diferencia literal entre Backoffice/operador de la planilla y autogestión en Commerce queda pendiente de aceptación académica; no se declara aprobación del equipo/docente.
 - Backend y frontend tienen workflows de CI. Compilación y pruebas se verificaron localmente; no se ejecutó CI remota para estos cambios ni se verificó despliegue remoto.
 
 Para conocer el estado y los comandos de cada componente, consultá [Backend](backend/README.md), [Frontend](frontend/README.md) y [Mobile](mobile/README.md).
 
-Self-service registration and organization onboarding is the habitual entry point; see [the onboarding guide](docs/registro-alta-propia.md). Platform Admin remains available for support. CU-01 is not closed.
+Self-service registration and organization onboarding is the habitual entry point; see [the onboarding guide](docs/registro-alta-propia.md). Platform Admin remains available for support. The current CU-01 matrix and its academic scope difference are documented in [the audit](backend/docs/cu/CU-01-comercios-usuarios.md).

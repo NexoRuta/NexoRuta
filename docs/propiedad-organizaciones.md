@@ -1,6 +1,6 @@
-# Propiedad de organizaciones — etapa de persistencia
+# Propiedad de organizaciones — modelo actual
 
-`AccesoUsuario.EsPropietario` se introdujo históricamente en `AccountOwnerAndShipmentOperator` (2026-10-08) como marca nullable/default-false de accesos a comercios, protegida por una restricción que impedía usarla en operadores. `NormalizeCu01Initialization` la volvió nullable y la conservó para compatibilidad/rollback; el modelo de ejecución solo la mapeaba como propiedad EF sombra, explícitamente fuera de autorización. Por eso la marca anterior no era una fuente completa ni actual para identificar todos los dueños.
+En el modelo actual, `AccesoUsuario.EsPropietario` es una propiedad persistida que usa `EsPropietarioOrganizacionUseCase` para comprobar al dueño por UsuarioId y AccesoId. `EstablishOrganizationOwnership` la hizo explícita y no nula; las altas propia y administrativa crean el acceso dueño en la misma transacción que la organización. La gestión de usuarios y roles rechaza modificar el acceso, correo, rol o permisos del dueño, incluso por el propio dueño. El párrafo siguiente resume sólo la historia anterior a esa migración.
 
 La migración aditiva `EstablishOrganizationOwnership` promueve la marca a propiedad de dominio explícita, no nula, de un acceso. Las altas propia y administrativa crean el acceso dueño en la misma transacción que la organización. La pertenencia única por `AccesosUsuario.UsuarioId` se conserva; un índice parcial adicional limita a un dueño por organización. La consulta de aplicación verifica el `UsuarioId` y `AccesoId` de la sesión autenticada contra el acceso persistido, no el nombre del rol.
 
@@ -38,7 +38,7 @@ Los miembros con una sesión organizacional vigente consultan `GET /api/organiza
 
 Commerce muestra el perfil en `/mi-comercio` mediante Blazor; Backoffice lo muestra en `/mi-operador` mediante Razor Pages. Si no hay dueño registrado, los miembros pueden consultar el nombre y la interfaz explica que la edición queda deshabilitada. No se atribuye propiedad automáticamente.
 
-Las migraciones pendientes son `20261016194611_EstablishOrganizationOwnership` y `20261016202513_UpdateOrganizationNameConcurrency`. La primera conserva únicamente evidencia histórica inequívoca para comercios y deja sin dueño el resto; la segunda agrega `Version bigint NOT NULL DEFAULT 0` a `Comercios` y `Operadores`. Ninguna se ha aplicado a una base persistente durante esta implementación.
+La historia de migraciones contiene `EstablishOrganizationOwnership` y `UpdateOrganizationNameConcurrency`. La primera conserva únicamente evidencia histórica inequívoca para comercios y deja sin dueño el resto; la segunda agrega `Version bigint NOT NULL DEFAULT 0` a `Comercios` y `Operadores`. Esta auditoría no aplicó migraciones ni escribió en la base persistente; el catálogo de una instalación concreta no se comprobó.
 
 Cuando se autorice actualizar una base concreta, desde `backend` ejecutar la actualización contra la cadena de conexión explícita del destino; no habilitar el arranque automático de migraciones o seeders:
 
