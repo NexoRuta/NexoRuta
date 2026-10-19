@@ -84,6 +84,7 @@ docker compose down
 | Backoffice | `http://localhost:5101` | Portal autenticado del operador: su organización, usuarios/roles propios y envíos asignados. |
 | Admin | `http://localhost:5104` | Operaciones de plataforma: alta/consulta/estado de organizaciones y resolución de solicitudes. Ver [guía de plataforma](backend/docs/workflow/platform-administration.md). |
 | Commerce | `http://localhost:5102` | Registro, alta propia y autogestión de la organización de comercio, usuarios/roles, envíos y consulta. |
+| Mailpit | `http://localhost:8025` | Bandeja SMTP local de pruebas, publicada solo en loopback. Ver [guía de recuperación de contraseña](docs/recuperacion-contrasena.md). |
 | Tracking | `http://localhost:5103` | Plantilla Blazor Server. |
 | Aspire Dashboard | `http://localhost:18888` | Observabilidad local; recibe telemetría de la API. |
 | RabbitMQ Management | `http://localhost:15672` | Interfaz de administración; credenciales locales de desarrollo: `nexoruta` / `nexoruta_dev`. |

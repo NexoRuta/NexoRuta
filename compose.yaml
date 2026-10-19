@@ -73,6 +73,9 @@ services:
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_api_runtime;Password=${NEXORUTA_API_DB_PASSWORD:?Set the local restricted API role password in .env}"
       Seguimiento__EncryptionKey: ${NEXORUTA_SEGUIMIENTO_ENCRYPTION_KEY:?Set existing development key in .env}
       Tracking__PublicBaseUrl: http://localhost:5000
+      PasswordRecovery__ResetPageUrl: http://localhost:5102/restablecer-contrasena
+      PasswordRecovery__TokenLifespanSeconds: "900"
+      DataProtection__KeysDirectory: /var/nexoruta/data-protection-keys
       DatabaseInitialization__ApplyMigrations: "false"
       DatabaseInitialization__SeedData: "false"
       ConnectionStrings__Redis: redis:6379
@@ -82,6 +85,8 @@ services:
       Jwt__SigningKeyBase64: ${NEXORUTA_JWT_KEY_BASE64:?Falta clave JWT}
     ports:
       - "5000:8080"
+    volumes:
+      - api_dataprotection_keys:/var/nexoruta/data-protection-keys
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health/ready || exit 1"]
       interval: 10s
@@ -93,6 +98,16 @@ services:
         condition: service_healthy
       dashboard:
         condition: service_started
+      mailpit:
+        condition: service_started
+
+  # Development-only SMTP sink. Production uses an explicitly configured SMTP relay.
+  mailpit:
+    image: axllent/mailpit:v1.31.5
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
 
   worker:
     image: nexoruta-worker:local
@@ -101,7 +116,7 @@ services:
       dockerfile: Dockerfile
       args:
         PROJECT: src/NexoRuta.Worker/NexoRuta.Worker.csproj
-        RUNTIME_IMAGE: mcr.microsoft.com/dotnet/runtime:10.0
+        RUNTIME_IMAGE: mcr.microsoft.com/dotnet/aspnet:10.0
     container_name: nexoruta-worker
     entrypoint: ["dotnet", "NexoRuta.Worker.dll"]
     restart: unless-stopped
@@ -110,15 +125,31 @@ services:
       Messaging__Transport: RabbitMq
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_worker_runtime;Password=${NEXORUTA_WORKER_DB_PASSWORD:?Set the local restricted worker role password in .env}"
       Seguimiento__EncryptionKey: ${NEXORUTA_SEGUIMIENTO_ENCRYPTION_KEY:?Set existing development key in .env}
+      DataProtection__KeysDirectory: /var/nexoruta/data-protection-keys
       RabbitMq__Host: rabbitmq
       RabbitMq__Port: 5672
       RabbitMq__Username: ${NEXORUTA_RABBITMQ_USERNAME:?Set existing development user in .env}
       RabbitMq__Password: ${NEXORUTA_RABBITMQ_PASSWORD:?Set existing development password in .env}
+      Email__Smtp__Host: mailpit
+      Email__Smtp__Port: "1025"
+      Email__Smtp__UseSsl: "false"
+      Email__Smtp__FromAddress: noreply@nexoruta.local
+      Email__Smtp__FromName: NexoRuta
+    volumes:
+      - api_dataprotection_keys:/var/nexoruta/data-protection-keys:ro
+    healthcheck:
+      test: ["CMD-SHELL", "grep -aq 'NexoRuta.Worker.dll' /proc/1/cmdline"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      mailpit:
+        condition: service_started
 
   rls-migrator:
     profiles: ["rls-admin"]
@@ -206,11 +237,40 @@ services:
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_worker_runtime;Password=${NEXORUTA_WORKER_DB_PASSWORD:?Set the local restricted worker role password in .env}"
       Kafka__BootstrapServers: kafka:9092
       Kafka__SecurityProtocol: Plaintext
+      MongoDb__ConnectionString: "mongodb://${NEXORUTA_MONGODB_USERNAME:-nexoruta_dev}:${NEXORUTA_MONGODB_PASSWORD:-local-dev-only-change-me}@mongodb:27017/?authSource=admin"
+      MongoDb__Database: nexoruta_security
+      MongoDb__PasswordRecoveryCollection: password_recovery_requested
+    healthcheck:
+      test: ["CMD-SHELL", "grep -aq 'NexoRuta.Worker.dll' /proc/1/cmdline"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+      mongodb:
+        condition: service_healthy
+
+  mongodb:
+    profiles: ["kafka"]
+    image: mongo:8.0
+    container_name: nexoruta-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${NEXORUTA_MONGODB_USERNAME:-nexoruta_dev}
+      MONGO_INITDB_ROOT_PASSWORD: ${NEXORUTA_MONGODB_PASSWORD:-local-dev-only-change-me}
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --username \"$$MONGO_INITDB_ROOT_USERNAME\" --password \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
 
   kafka:
     profiles: ["kafka"]
@@ -257,6 +317,9 @@ services:
         kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists
         --topic nexoruta.envios.creados.v1 --partitions 3 --replication-factor 1
         --config min.insync.replicas=1 --config retention.ms=604800000
+        && kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists
+        --topic nexoruta.password-recovery.requested.v1 --partitions 1 --replication-factor 1
+        --config min.insync.replicas=1 --config retention.ms=2592000000
 
   admin:
     build:
@@ -328,6 +391,8 @@ services:
 
 volumes:
   postgres_data:
+  api_dataprotection_keys:
   redis_data:
   rabbitmq_data:
   kafka_data:
+  mongodb_data:
