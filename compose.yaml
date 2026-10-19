@@ -1,7 +1,7 @@
 services:
   postgres:
     restart: unless-stopped
-    image: postgres:18-alpine
+    image: postgis/postgis:18-3.6-alpine
     container_name: nexoruta-postgres
     environment:
       POSTGRES_DB: nexoruta
@@ -347,6 +347,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       Api__BaseAddress: http://api:8080/
+      Mapbox__PublicAccessToken: "${Mapbox__PublicAccessToken:-}"
+      Mapbox__StyleUrl: "${Mapbox__StyleUrl:-}"
     ports:
       - "5101:8080"
     depends_on:
