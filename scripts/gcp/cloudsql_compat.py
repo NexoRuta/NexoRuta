@@ -13,6 +13,7 @@ import uuid
 
 import delivery
 import demo_session as session
+import vm_deploy
 
 
 def main():
@@ -58,8 +59,10 @@ def main():
             subprocess.run(["dotnet", str(session.ROOT / "backend/src/NexoRuta.Api/bin/Release/net10.0/NexoRuta.Api.dll"), "database-migrate"],
                            env=env, check=True)
             runtime_env = []
+            runtime_passwords = {}
             for role in ("API", "WORKER", "BOOTSTRAP"):
-                runtime_env.extend(["--env", f"NEXORUTA_{role}_DB_PASSWORD=" + secrets.token_hex(24)])
+                runtime_passwords[role] = secrets.token_hex(24)
+                runtime_env.extend(["--env", f"NEXORUTA_{role}_DB_PASSWORD=" + runtime_passwords[role]])
             # Repeat preflight/provisioning to cover the update path as well.
             for sql in ("runtime-roles.sql", "postflight.sql", "preflight.sql", "runtime-roles.sql", "postflight.sql"):
                 checked = subprocess.run(
@@ -69,7 +72,24 @@ def main():
                 )
                 if checked.returncode:
                     raise RuntimeError(f"Database {sql} failed: " + checked.stderr.replace(password, "***"))
-        print("Migration chain and repeat runtime-role provisioning passed with a non-superuser administrator.")
+            api = str(session.ROOT / "backend/src/NexoRuta.Api/bin/Release/net10.0/NexoRuta.Api.dll")
+            for _ in range(2):
+                subprocess.run(["dotnet", api, "department-catalog-import"], env=env, check=True)
+            runtime = {
+                "passwords": {role: secrets.token_hex(24) for role in ("admin", "operator", "commerce")},
+                "organization_ids": {role: str(uuid.uuid4()) for role in ("operator", "commerce")},
+            }
+            settings = directory / "appsettings.Production.json"
+            settings.write_text(__import__("json").dumps(vm_deploy.bootstrap_config(runtime)), encoding="utf-8")
+            settings.chmod(0o600)
+            bootstrap_env = env.copy()
+            bootstrap_env["ConnectionStrings__Postgres"] = (
+                f"Host=127.0.0.1;Port={port};Database=nexoruta;Username=nexoruta_bootstrap_runtime;"
+                f"Password={runtime_passwords['BOOTSTRAP']};Include Error Detail=true"
+            )
+            for _ in range(2):
+                subprocess.run(["dotnet", api, "local-bootstrap"], env=bootstrap_env, cwd=directory, check=True)
+        print("Managed PostgreSQL migrations, repeat role provisioning, catalog import and bootstrap passed.")
     finally:
         subprocess.run(["docker", "rm", "--force", name], capture_output=True)
 
