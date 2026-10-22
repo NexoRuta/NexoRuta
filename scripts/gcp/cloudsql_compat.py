@@ -53,11 +53,23 @@ def main():
                 raise RuntimeError("Database preflight failed: " + checked.stderr.replace(password, "***"))
             env.update({
                 "ASPNETCORE_ENVIRONMENT": "Production",
-                "ConnectionStrings__Postgres": f"Host=127.0.0.1;Port={port};Database=nexoruta;Username=postgres;Password={password}",
+                "ConnectionStrings__Postgres": f"Host=127.0.0.1;Port={port};Database=nexoruta;Username=postgres;Password={password};Include Error Detail=true",
             })
             subprocess.run(["dotnet", str(session.ROOT / "backend/src/NexoRuta.Api/bin/Release/net10.0/NexoRuta.Api.dll"), "database-migrate"],
                            env=env, check=True)
-        print("Migration chain passed with a non-superuser administrator.")
+            runtime_env = []
+            for role in ("API", "WORKER", "BOOTSTRAP"):
+                runtime_env.extend(["--env", f"NEXORUTA_{role}_DB_PASSWORD=" + secrets.token_hex(24)])
+            # Repeat preflight/provisioning to cover the update path as well.
+            for sql in ("runtime-roles.sql", "postflight.sql", "preflight.sql", "runtime-roles.sql", "postflight.sql"):
+                checked = subprocess.run(
+                    ["docker", "exec", "-i", "--env", "PGPASSWORD=" + password, *runtime_env,
+                     name, "psql", "-h", "127.0.0.1", "-U", "postgres", "-d", "nexoruta", "-v", "ON_ERROR_STOP=1"],
+                    input=(directory / "assets/sql" / sql).read_text(), text=True, capture_output=True,
+                )
+                if checked.returncode:
+                    raise RuntimeError(f"Database {sql} failed: " + checked.stderr.replace(password, "***"))
+        print("Migration chain and repeat runtime-role provisioning passed with a non-superuser administrator.")
     finally:
         subprocess.run(["docker", "rm", "--force", name], capture_output=True)
 

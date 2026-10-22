@@ -43,11 +43,11 @@ jobs:
       - name: Validate GitHub workflows
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
 
-  applications:
+  sources:
     runs-on: ubuntu-latest
     # PR code uses a separate environment without deployment credentials.
     environment: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'nexoruta-demo' || 'nexoruta-ci' }}
-    timeout-minutes: 45
+    timeout-minutes: 5
     outputs:
       sources: ${{ steps.sources.outputs.sources }}
     steps:
@@ -76,6 +76,25 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write('sources=' + json.dumps(json.loads(pathlib.Path('sources.json').read_text())) + '\n')
           PY
+
+  applications:
+    needs: sources
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'nexoruta-demo' || 'nexoruta-ci' }}
+    timeout-minutes: 45
+    outputs:
+      sources: ${{ needs.sources.outputs.sources }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+      - name: Checkout the resolved source commits
+        env:
+          BACKEND_REF: ${{ fromJSON(needs.sources.outputs.sources).backend }}
+          FRONTEND_REF: ${{ fromJSON(needs.sources.outputs.sources).frontend }}
+          MOBILE_REF: ${{ fromJSON(needs.sources.outputs.sources).mobile }}
+        run: python3 scripts/gcp/delivery.py sources
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
@@ -94,5 +113,27 @@ jobs:
           for layer in Core Api Storage Application; do
             dotnet test "mobile/tests/NexoRuta.Mobile.$layer.Tests" -c Release
           done
-      - name: Verify migrations with a non-superuser administrator
+
+  cloudsql:
+    needs: sources
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'nexoruta-demo' || 'nexoruta-ci' }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+      - name: Checkout the resolved source commits
+        env:
+          BACKEND_REF: ${{ fromJSON(needs.sources.outputs.sources).backend }}
+          FRONTEND_REF: ${{ fromJSON(needs.sources.outputs.sources).frontend }}
+          MOBILE_REF: ${{ fromJSON(needs.sources.outputs.sources).mobile }}
+        run: python3 scripts/gcp/delivery.py sources
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+      - name: Build migration command
+        run: dotnet build backend/src/NexoRuta.Api/NexoRuta.Api.csproj -c Release
+      - name: Verify migrations and runtime roles without superuser privileges
         run: python3 scripts/gcp/cloudsql_compat.py
