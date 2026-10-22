@@ -2,6 +2,10 @@
 DO $check$
 BEGIN
     IF EXISTS (
+        SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relrowsecurity AND NOT c.relforcerowsecurity
+    ) THEN RAISE EXCEPTION 'Application row security must remain forced after migrations'; END IF;
+    IF EXISTS (
         SELECT 1 FROM pg_roles
         WHERE rolname IN ('nexoruta_api_runtime', 'nexoruta_worker_runtime', 'nexoruta_bootstrap_runtime')
           AND (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole)
