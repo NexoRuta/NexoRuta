@@ -1,3 +1,13 @@
+# Configuracion publica compartida por los workflows de despliegue y Android.
+# Las variables GCP_* y las credenciales se configuran en GitHub Variables/Secrets.
+x-app-settings:
+  SMTP_HOST: mailpit
+  SMTP_PORT: "1025"
+  SMTP_SSL: "false"
+  SMTP_FROM: demo@nexoruta.test
+  # Token PUBLICO de Mapbox (pk.*) para el APK.
+  MAPBOX_PUBLIC_TOKEN: ""
+
 services:
   postgres:
     image: postgres:18-alpine

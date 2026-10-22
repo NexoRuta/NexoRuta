@@ -1,0 +1,238 @@
+name: NexoRuta - publish images / manual VM controls
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 'start: latest main for 4h / update: latest published images / stop: VM and SQL'
+        required: true
+        default: start
+        type: choice
+        options: [start, update, stop]
+  push:
+    branches: [main]
+  repository_dispatch:
+    types: [nexoruta-source-changed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexoruta-gcp-demo-vm
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name != 'workflow_dispatch' || inputs.operation == 'start')
+    uses: ./.github/workflows/ci.yml
+    with:
+      backend_ref: main
+      frontend_ref: main
+      mobile_ref: main
+    secrets: inherit
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    environment: nexoruta-demo
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      release: ${{ steps.publish.outputs.release }}
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GCP_ZONE: ${{ vars.GCP_ZONE }}
+      GCP_STATE_BUCKET: ${{ vars.GCP_STATE_BUCKET }}
+      GCP_DELIVERY_BUCKET: ${{ vars.GCP_DELIVERY_BUCKET }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      DEMO_OPERATION: update
+      RELEASE_CHANNEL: main
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+      - name: Validate GitHub environment configuration
+        run: python3 scripts/gcp/github_environment.py validate publish
+      - name: Checkout the commits that passed CI
+        env:
+          BACKEND_REF: ${{ fromJSON(needs.verify.outputs.sources).backend }}
+          FRONTEND_REF: ${{ fromJSON(needs.verify.outputs.sources).frontend }}
+          MOBILE_REF: ${{ fromJSON(needs.verify.outputs.sources).mobile }}
+        run: python3 scripts/gcp/delivery.py sources
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        id: auth
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          version: "590.0.0"
+      - name: Build and publish six immutable images in Santiago
+        id: publish
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: python3 scripts/gcp/delivery.py build
+
+  deploy:
+    needs: [verify, publish]
+    if: >-
+      always() && github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      (inputs.operation == 'stop' || inputs.operation == 'update' ||
+       (inputs.operation == 'start' && needs.verify.result == 'success' && needs.publish.result == 'success'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    environment: nexoruta-demo
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      api_origin: ${{ steps.session.outputs.api_origin }}
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GCP_ZONE: ${{ vars.GCP_ZONE }}
+      GCP_STATE_BUCKET: ${{ vars.GCP_STATE_BUCKET }}
+      GCP_DELIVERY_BUCKET: ${{ vars.GCP_DELIVERY_BUCKET }}
+      GCP_BASE_DOMAIN: ${{ vars.GCP_BASE_DOMAIN }}
+      GCP_MANAGE_DNS: ${{ vars.GCP_MANAGE_DNS }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      DEMO_OPERATION: ${{ inputs.operation }}
+      DEMO_RELEASE: ${{ needs.publish.outputs.release }}
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Validate deployment configuration
+        run: |
+          python3 scripts/gcp/github_environment.py validate deploy
+          python3 scripts/gcp/demo_session.py check
+      - name: Load public application settings from Compose
+        run: python3 scripts/gcp/github_environment.py load-app-config
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        id: auth
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          version: "590.0.0"
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2
+        with:
+          tofu_version_file: .opentofu-version
+          tofu_wrapper: false
+      - name: Configure integrations from Compose and GitHub Secrets
+        if: inputs.operation == 'start' || inputs.operation == 'update'
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          GEOAPIFY_API_KEY: ${{ secrets.GEOAPIFY_API_KEY }}
+        run: python3 scripts/gcp/github_environment.py sync-integrations
+      - name: Run the requested manual VM operation
+        id: session
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: python3 scripts/gcp/demo_session.py run
+
+  android:
+    needs: [verify, deploy]
+    if: >-
+      always() && inputs.operation == 'start' &&
+      needs.verify.result == 'success' && needs.deploy.result == 'success' &&
+      needs.deploy.outputs.api_origin != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: nexoruta-demo
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      API_ORIGIN: ${{ needs.deploy.outputs.api_origin }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+      - name: Validate GitHub environment configuration
+        run: python3 scripts/gcp/github_environment.py validate android
+      - name: Load public application settings from Compose
+        run: python3 scripts/gcp/github_environment.py load-app-config
+      - name: Checkout the tested mobile source
+        env:
+          MOBILE_SHA: ${{ fromJSON(needs.verify.outputs.sources).mobile }}
+        run: |
+          git -C mobile fetch --depth=1 origin "$MOBILE_SHA"
+          git -C mobile checkout --detach FETCH_HEAD
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: mobile/global.json
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: microsoft
+          java-version: "21"
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        id: auth
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          version: "590.0.0"
+      - name: Build APK against the deployed HTTPS API
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          gcloud secrets versions access latest --secret=nexoruta-mobile-config --project="$GCP_PROJECT_ID" > "$RUNNER_TEMP/google-services.json"
+          export ANDROID_SIGNING_PASSWORD="$(gcloud secrets versions access latest --secret=nexoruta-mobile-signing-password --project="$GCP_PROJECT_ID")"
+          echo "::add-mask::$ANDROID_SIGNING_PASSWORD"
+          versions="$(gcloud secrets versions list nexoruta-mobile-keystore --project="$GCP_PROJECT_ID" --filter=state:ENABLED --format='value(name)')"
+          if [[ -z "$versions" ]]; then
+            keytool -genkeypair -keystore "$RUNNER_TEMP/demo.keystore" -storetype PKCS12 -alias nexoruta-demo \
+              -keyalg RSA -keysize 2048 -validity 3650 -storepass:env ANDROID_SIGNING_PASSWORD \
+              -keypass:env ANDROID_SIGNING_PASSWORD -dname 'CN=NexoRuta Demo, C=UY'
+            gcloud secrets versions add nexoruta-mobile-keystore --project="$GCP_PROJECT_ID" --data-file="$RUNNER_TEMP/demo.keystore"
+          else
+            gcloud secrets versions access latest --secret=nexoruta-mobile-keystore --project="$GCP_PROJECT_ID" > "$RUNNER_TEMP/demo.keystore"
+          fi
+          dotnet workload install maui-android --skip-manifest-update
+          dotnet build mobile/src/NexoRuta.Mobile/NexoRuta.Mobile.csproj -t:InstallAndroidDependencies -f net10.0-android \
+            -p:AndroidSdkDirectory="$ANDROID_HOME" -p:JavaSdkDirectory="$JAVA_HOME" -p:AcceptAndroidSdkLicenses=true
+          dotnet publish mobile/src/NexoRuta.Mobile/NexoRuta.Mobile.csproj -c Release -f net10.0-android \
+            -p:RuntimeIdentifier=android-arm64 -p:AndroidPackageFormats=apk \
+            -p:ApplicationVersion="$GITHUB_RUN_NUMBER" -p:AndroidKeyStore=true \
+            -p:AndroidSigningKeyStore="$RUNNER_TEMP/demo.keystore" -p:AndroidSigningKeyAlias=nexoruta-demo \
+            -p:AndroidSigningKeyPass=env:ANDROID_SIGNING_PASSWORD -p:AndroidSigningStorePass=env:ANDROID_SIGNING_PASSWORD \
+            -p:NexoRutaApiOrigin="$API_ORIGIN" -p:NexoRutaMapboxPublicToken="$MAPBOX_PUBLIC_TOKEN" \
+            -p:NexoRutaFirebaseAndroidConfig="$RUNNER_TEMP/google-services.json"
+          find mobile/src/NexoRuta.Mobile/bin/Release -name '*-Signed.apk' -exec sha256sum '{}' \; > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nexoruta-demo-android
+          path: |
+            mobile/src/NexoRuta.Mobile/bin/Release/**/*-Signed.apk
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14

@@ -1,1 +1,16 @@
 .codex/
+
+# OpenTofu state, local configuration and credentials.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+!*.tfvars.json.example
+gha-creds-*.json
+__pycache__/
+/sources.json
+/release.json
+infra/gcp/bootstrap/backend.generated.tf

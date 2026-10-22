@@ -19,6 +19,21 @@ git submodule update --init --recursive
 
 Los submódulos configurados en `.gitmodules` son [backend](backend/), [frontend](frontend/) y [mobile](mobile/). Cada uno tiene un README independiente con su estructura, requisitos y comandos locales.
 
+## VM de pruebas en Google Cloud
+
+La [guía de infraestructura y CI/CD](infra/gcp/README.md) documenta OpenTofu,
+Cloud SQL/PostGIS, las seis imágenes .NET, HTTPS, los workers y el APK. La demo usa
+una VM de 16 GiB en Santiago, cercana a Uruguay, con inicio manual por cuatro horas
+y apagado coordinado de VM y base de datos. Los pushes a `main` solo prueban y publican
+imágenes. Iniciar, actualizar contenedores y apagar son operaciones manuales desde
+GitHub Actions; `start` usa lo último de `main` de los tres repos. La preparación
+y operación también se hacen por terminal.
+
+La configuración pública de aplicaciones (SMTP y Mapbox) está en el bloque
+`x-app-settings` de [compose.yaml](compose.yaml), junto con la configuración local.
+Las variables GCP y las credenciales se configuran en el environment de GitHub,
+según la [lista de variables y secrets](infra/gcp/github-environment.md).
+
 ## Requisitos de desarrollo
 
 - Docker Desktop con Compose (o Docker Engine/Compose) para ejecutar el entorno local.
