@@ -14,3 +14,5 @@ __pycache__/
 /sources.json
 /release.json
 infra/gcp/bootstrap/backend.generated.tf
+mobile/google-services.json
+.local/

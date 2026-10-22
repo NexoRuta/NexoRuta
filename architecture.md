@@ -1,25 +1,23 @@
 # NexoRuta — Arquitectura
 
-## Estado
+## Estado actual — 8 de octubre de 2026
 
-La base técnica está implementada como una estructura inicial por capas en .NET 10 y su compilación y arranque local fueron verificados. El monolito modular y sus integraciones siguen siendo la arquitectura objetivo, no funcionalidades ya implementadas.
+Están implementados los recortes del primer monitoreo: cuentas pertenecientes a un operador o a un comercio, catálogo global de operadores para el alta, envíos con `OperadorId` y `ComercioId`, un bulto por alta y lectura por la organización de la cuenta. Las empresas y sus usuarios tienen identidades separadas; el comercio puede enviar con cualquier operador registrado.
 
-Esta fotografía corresponde al diagnóstico de código y a la segunda pasada de ejecución del **7 de octubre de 2026**, en el entorno local de Uruguay. Los resultados siguientes describen esa ejecución; no garantizan el estado actual ni la operación en producción.
-
-| Área | Implementado y verificado | Previsto o pendiente | Evidencia en el repositorio |
+| Área | Implementado y verificado localmente | Previsto o pendiente | Evidencia |
 | --- | --- | --- | --- |
-| Backend .NET 10 y capas | Proyectos Domain, Application, Infrastructure, API y Worker; compilación satisfactoria. Domain no referencia otras capas; Application referencia Domain; Infrastructure referencia Application/Domain; API y Worker referencian Application/Infrastructure. | Módulos y comprobaciones de sus límites. La separación por proyectos no demuestra un monolito modular integrado. | `backend/NexoRuta.sln`, `backend/src/*/*.csproj` |
-| API y Worker separados | Ambos arrancaron; la API sirve OpenAPI sin rutas y el Worker escribe un mensaje periódico. | Endpoints e implementación del procesamiento en segundo plano. | `backend/src/NexoRuta.Api/Program.cs`, `backend/src/NexoRuta.Worker/Program.cs`, `backend/src/NexoRuta.Worker/Worker.cs` |
-| PostgreSQL, EF Core y RLS | Contenedor PostgreSQL iniciado y saludable. | EF Core/Npgsql, DbContext, migraciones, políticas RLS, autenticación y contexto de tenant no implementados; aislamiento sin validar. | `compose.yaml`, `backend/src/NexoRuta.Infrastructure/NexoRuta.Infrastructure.csproj`, `backend/src/NexoRuta.Api/Program.cs` |
-| Redis y RabbitMQ | Contenedores iniciados y saludables; RabbitMQ Management respondió por HTTP. Compose suministra configuración a API y Worker. | Adaptadores de caché/sesiones y publicación/consumo de mensajes no implementados. Configurar conexiones no demuestra utilizarlas. | `compose.yaml`, `backend/src/NexoRuta.Api/Program.cs`, `backend/src/NexoRuta.Worker/Program.cs` |
-| Clientes web y móvil | Plantillas Razor Pages, Blazor interactivo de servidor y MAUI; compilación satisfactoria y HTTP de las tres aplicaciones web. | Clientes HTTP hacia la API no implementados; ejecución móvil en dispositivos y despliegue Apple sin validar. | `frontend/src/NexoRuta.{Backoffice,Commerce,Tracking}/Program.cs`, `mobile/src/NexoRuta.Mobile/MauiProgram.cs`, `mobile/src/NexoRuta.Mobile/MainPage.xaml.cs` |
-| Pruebas | El comando de test terminó sin error en las tres soluciones. | **Cero pruebas ejecutadas**: no hay cobertura demostrada ni comprobaciones funcionales o de aislamiento. | `backend/tests/NexoRuta.{ArchitectureTests,IntegrationTests,UnitTests}/`, `frontend/NexoRuta.sln`, `mobile/NexoRuta.sln` |
-| Observabilidad y disponibilidad | Logging básico y healthchecks de los tres servicios de infraestructura. | Telemetría operativa, correlación API–mensajes, liveness/readiness y checks de dependencias de las aplicaciones no implementados. | `compose.yaml`, `backend/src/NexoRuta.Api/Program.cs`, `backend/src/NexoRuta.Worker/Worker.cs` |
-| Docker Compose y despliegue | Construcción de cinco imágenes de aplicación y arranque de ocho servicios locales. | VPS, HTTPS/Cloudflare y automatización GitHub Actions sin validar en esta revisión; Kafka y NoSQL siguen previstos, no presentes en el Compose actual. | `compose.yaml`, `backend/Dockerfile`, `frontend/Dockerfile` |
+| Backend y persistencia | Capas .NET 10, EF Core/Npgsql, migraciones, inicialización repetible, envíos y bultos persistidos. Repositorios separados de accesos, operadores y comercios. | Límites completos de módulos, concurrencia y capacidades posteriores del laboratorio. | `backend/src/`, `backend/docs/cu/` |
+| Entrada y acceso | `/api/accesos`, `/api/usuarios/actual`, `/api/operadores` y `/api/envios`. Selección de cuenta, ámbito de empresa, filtros por organización y contexto reutilizado en una sola consulta por petición. | Autenticación por credenciales, perfiles laborales y RLS. La selección actual no prueba identidad. | `backend/src/NexoRuta.Api/Controllers/`, `backend/src/NexoRuta.Api/Seguridad/` |
+| Clientes | Commerce crea envíos y elige cualquier operador registrado; Backoffice consulta los de su operador. Cliente HTTP compartido, cookies independientes y cancelación de llamadas al destruir el formulario Blazor. | Tracking y Mobile mantienen plantillas; seguimiento público y operación móvil siguen pendientes. | `frontend/src/`, `mobile/src/` |
+| Pruebas | 30 pruebas del backend: 8 unitarias y 22 de integración. 30 del frontend: cliente, formulario y OpenAPI. Integración con PostgreSQL mediante bases temporales por escenario. | ArchitectureTests sigue sin pruebas. No se ejecutó MAUI en dispositivos. | `backend/tests/`, `frontend/tests/` |
+| Servicios y observabilidad | Nueve servicios Compose; API/PostgreSQL/Redis/RabbitMQ saludables. Salud de API y webs, OpenAPI y exportación OpenTelemetry al Dashboard local. Worker registra actividad. | Redis, RabbitMQ y Worker todavía no participan en envíos; RLS y observabilidad de mensajes quedan pendientes. | `compose.yaml`, `backend/src/NexoRuta.Api/Program.cs` |
+| Construcción y publicación | Soluciones backend/frontend y Docker comprobados localmente. Workflows de CI presentes. Backend mantiene tres advertencias preexistentes de versiones EF Core en Worker. | No se verificaron CI ni despliegue remoto en esta revisión. Kafka y NoSQL siguen previstos. | `backend/.github/`, `frontend/.github/` |
 
-Las rutas con `*` o `{...}` agrupan archivos equivalentes. La evidencia de ejecución y sus límites se detallan a continuación; las decisiones posteriores conservan su carácter de arquitectura objetivo.
+La API usa `http://localhost:5000` en Compose y `http://localhost:5041` con su perfil `http` de `dotnet run`. Las webs usan 5041 en Development y reciben `http://api:8080/` desde Compose. PostgreSQL conserva el puerto local 5432. El detalle de ejecución vigente está en `odd/tasks/monitoreo-2026-10-08.md`.
 
-## Evidencia de validación local
+## Evidencia histórica de validación local — 7 de octubre de 2026
+
+La sección siguiente conserva la comprobación del esqueleto inicial anterior al primer monitoreo. Sus cifras, endpoints y pendientes corresponden exclusivamente al 7 de octubre; el estado vigente figura arriba.
 
 En la segunda pasada se ejecutaron estos comandos para cada solución: `backend/NexoRuta.sln`, `frontend/NexoRuta.sln` y `mobile/NexoRuta.sln`.
 
@@ -50,7 +48,7 @@ También finalizaron con exit 0 `docker compose config --quiet`, `docker compose
 
 El Worker no expone una aplicación HTTP. Estas respuestas prueban disponibilidad básica de las plantillas, no integración entre clientes, API, persistencia y transporte.
 
-### Límites y validaciones pendientes
+### Límites de la validación histórica
 
 - `global.json` selecciona SDK `10.0.401` con `latestPatch`; `backend/Dockerfile` y `frontend/Dockerfile` usan `sdk:10.0`. Los contextos de construcción de `compose.yaml` no incluyen el `global.json` raíz, por lo que no se ha demostrado equivalencia ni reproducibilidad exacta entre SDK local y Docker.
 - El Compose actual es de desarrollo: usa `Development`, credenciales escritas en el archivo y puertos publicados de PostgreSQL y RabbitMQ sin restringir interfaz. El arranque local no valida un despliegue seguro en la VPS.
@@ -89,12 +87,12 @@ El Worker no expone una aplicación HTTP. Estas respuestas prueban disponibilida
 
 La API estará organizada como un monolito modular. Los módulos compartirán el mismo proceso y solución, pero mantendrán límites claros de responsabilidad.
 
-Módulos funcionales iniciales:
+Módulos funcionales acordados en la hoja `Módulos` de `docs/alcance/Calcs/Casos de Uso - Responsables.xlsm` y en la guía de arquitectura del backend:
 
-- M01 — Gestión de usuarios y operadores.
-- M02 — Gestión de comercios y configuraciones.
-- M03 — Gestión de pedidos y envíos.
-- M04 — Gestión de repartidores y asignaciones.
+- M01 — Administración y configuración.
+- M02 — Envíos y depósito.
+- M03 — Planificación, flota y despacho.
+- M04 — Ejecución y sincronización móvil.
 - M05 — Seguimiento y comunicaciones.
 - M06 — Monitoreo y liquidaciones.
 
@@ -108,13 +106,9 @@ Será la base de datos transaccional principal.
 
 Se utilizará una única base de datos compartida con aislamiento lógico mediante RLS.
 
-Cada comercio tendrá su propio identificador:
+El operador es el tenant y el comercio tiene una identidad independiente. Cada envío conserva `OperadorId` y `ComercioId`; cualquier comercio puede enviar con cualquier operador registrado, sin una relación comercial previa. Las cuentas de comercio consultan sus propios envíos y las cuentas del operador los de su organización. La consulta de los comercios atendidos por un operador se derivará de los envíos cuando se implemente esa funcionalidad.
 
-```text
-operator_id UUID
-```
-
-Las tablas pertenecientes a un comercio incluirán `operator_id`. La API establecerá el operador actual en la conexión o transacción, y PostgreSQL aplicará las políticas RLS correspondientes.
+La API establecerá el contexto validado en la conexión o transacción, y PostgreSQL aplicará las políticas RLS correspondientes cuando se implemente esa segunda barrera.
 
 La seguridad se validará en dos capas:
 
@@ -216,7 +210,9 @@ mobile/
     └── NexoRuta.Mobile
 ```
 
-## Flujo de comunicación previsto (no integrado todavía)
+## Flujo implementado y comunicación prevista
+
+El flujo implementado del monitoreo es `Commerce / Backoffice → NexoRuta.Api → PostgreSQL`. Cloudflare, móvil, caché funcional y mensajería del diagrama siguiente corresponden a la arquitectura prevista.
 
 ```text
 Cliente
