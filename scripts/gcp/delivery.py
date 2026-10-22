@@ -70,7 +70,9 @@ def create_bundle(destination):
             f"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='{role}') "
             f"THEN CREATE ROLE {role} NOLOGIN NOSUPERUSER NOBYPASSRLS; END IF; END $$;"
         )
-        statements.append(f"GRANT {role} TO postgres WITH ADMIN OPTION;")
+        # CREATEROLE already grants ADMIN to the creator. Regranting ADMIN to
+        # yourself is rejected by PostgreSQL 18; only enable object privileges.
+        statements.append(f"GRANT {role} TO postgres WITH INHERIT TRUE, SET TRUE;")
     statements.append("GRANT CREATE ON DATABASE nexoruta TO nexoruta_schema_owner;")
     statements.append("CREATE SCHEMA IF NOT EXISTS nexoruta_app AUTHORIZATION nexoruta_schema_owner;")
     statements.append(f"GRANT CREATE ON SCHEMA public, nexoruta_app TO {', '.join(sorted(roles))};")
