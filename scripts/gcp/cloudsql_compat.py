@@ -4,6 +4,7 @@ This catches ownership/membership assumptions before using Cloud SQL. It is a
 local approximation of its permissions, not a substitute for the managed service.
 """
 import os
+import json
 from pathlib import Path
 import secrets
 import subprocess
@@ -80,7 +81,7 @@ def main():
                 "organization_ids": {role: str(uuid.uuid4()) for role in ("operator", "commerce")},
             }
             settings = directory / "appsettings.Production.json"
-            settings.write_text(__import__("json").dumps(vm_deploy.bootstrap_config(runtime)), encoding="utf-8")
+            settings.write_text(json.dumps(vm_deploy.bootstrap_config(runtime)), encoding="utf-8")
             settings.chmod(0o600)
             bootstrap_env = env.copy()
             bootstrap_env["ConnectionStrings__Postgres"] = (
@@ -89,6 +90,13 @@ def main():
             )
             for _ in range(2):
                 subprocess.run(["dotnet", api, "local-bootstrap"], env=bootstrap_env, cwd=directory, check=True)
+            checked = subprocess.run(
+                ["docker", "exec", "-i", "--env", "PGPASSWORD=" + password, name,
+                 "psql", "-h", "127.0.0.1", "-U", "postgres", "-d", "nexoruta", "-v", "ON_ERROR_STOP=1"],
+                input=(directory / "assets/sql/postflight.sql").read_text(), text=True, capture_output=True,
+            )
+            if checked.returncode:
+                raise RuntimeError("Post-bootstrap row security check failed: " + checked.stderr.replace(password, "***"))
         print("Managed PostgreSQL migrations, repeat role provisioning, catalog import and bootstrap passed.")
     finally:
         subprocess.run(["docker", "rm", "--force", name], capture_output=True)

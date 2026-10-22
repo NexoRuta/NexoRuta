@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 import unittest
 from unittest.mock import patch
 
@@ -84,6 +85,7 @@ class SessionSafetyTests(unittest.TestCase):
             patch.dict("os.environ", {"DEMO_RELEASE": "release-" + "a" * 32}),
             patch.object(session, "instance", return_value=None),
             patch.object(session, "write_lease"),
+            patch.object(session, "start_database"),
             patch.object(session, "command", return_value='{"resource_changes": []}'),
             patch.object(session, "gcloud", return_value='{"status": "RUNNING"}'),
             patch.object(session, "stop_after_failure") as stop,
@@ -91,6 +93,65 @@ class SessionSafetyTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "STOP policy"):
                 session.run(config)
             stop.assert_called_once_with(config)
+
+    def test_stopped_database_is_woken_before_its_users_can_be_refreshed(self):
+        database = {"name": "nexoruta-demo-db", "state": "STOPPED", "settings": {
+            "activationPolicy": "NEVER", "userLabels": {"managed_by": "opentofu"},
+        }}
+        with patch.object(session, "command", side_effect=[json.dumps([database]), None, '{"state":"RUNNABLE"}']) as command:
+            session.start_database({"GCP_PROJECT_ID": "demo-project"})
+            self.assertIn("--activation-policy=ALWAYS", command.call_args_list[1].args)
+            self.assertEqual(command.call_args_list[2].args[:4], ("gcloud", "sql", "instances", "describe"))
+
+    def test_unmanaged_database_is_never_started(self):
+        database = {"name": "nexoruta-demo-db", "settings": {"userLabels": {}}}
+        with patch.object(session, "command", return_value=json.dumps([database])) as command:
+            with self.assertRaisesRegex(RuntimeError, "not owned"):
+                session.start_database({"GCP_PROJECT_ID": "demo-project"})
+            self.assertEqual(command.call_count, 1)
+
+    def test_start_cleanup_also_covers_a_failed_infrastructure_refresh(self):
+        events = []
+        def fail_refresh(config):
+            events.append("refresh")
+            raise RuntimeError("refresh failed")
+        with (
+            patch.dict("os.environ", {"DEMO_RELEASE": "release-" + "a" * 32}),
+            patch.object(session, "instance", return_value=None),
+            patch.object(session, "write_lease"),
+            patch.object(session, "start_database", side_effect=lambda config: events.append("database")),
+            patch.object(session, "start_session", side_effect=fail_refresh),
+            patch.object(session, "stop_after_failure") as cleanup,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "refresh failed"):
+                session.run({"DEMO_OPERATION": "start"})
+            self.assertEqual(events, ["database", "refresh"])
+            cleanup.assert_called_once()
+
+    def test_stopping_an_already_stopped_vm_never_refreshes_sql_users_or_wakes_it(self):
+        self.vm["status"] = "TERMINATED"
+        with (
+            patch.object(session, "instance", return_value=self.vm),
+            patch.object(session, "end_lease"),
+            patch.object(session, "stop_database") as database,
+            patch.object(session, "command") as command,
+            patch.object(session, "gcloud") as vm_command,
+        ):
+            session.run({"DEMO_OPERATION": "stop"})
+            database.assert_called_once()
+            command.assert_not_called()
+            vm_command.assert_not_called()
+
+    def test_rejected_repeat_start_does_not_clean_up_an_active_session(self):
+        with (
+            patch.object(session, "instance", return_value=self.vm),
+            patch.object(session, "start_database") as database,
+            patch.object(session, "stop_after_failure") as cleanup,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "already running"):
+                session.run({"DEMO_OPERATION": "start"})
+            database.assert_not_called()
+            cleanup.assert_not_called()
 
 
 if __name__ == "__main__":

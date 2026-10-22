@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -165,6 +166,31 @@ def stop_database(config):
                         "--activation-policy=NEVER", "--quiet")
 
 
+def start_database(config):
+    # Cloud SQL cannot list PostgreSQL users while stopped. Wake it before
+    # OpenTofu refreshes google_sql_user, while the provisioning lease protects it.
+    project = config["GCP_PROJECT_ID"]
+    databases = json.loads(command("gcloud", "sql", "instances", "list", f"--project={project}",
+                                   "--filter=name=nexoruta-demo-db", "--format=json", capture=True))
+    for database in databases:
+        if database["name"] != "nexoruta-demo-db":
+            continue
+        if database.get("settings", {}).get("userLabels", {}).get("managed_by") != "opentofu":
+            raise RuntimeError("Refusing to start a database not owned by this deployment")
+        if database["settings"]["activationPolicy"] != "ALWAYS":
+            command("gcloud", "sql", "instances", "patch", "nexoruta-demo-db", f"--project={project}",
+                    "--activation-policy=ALWAYS", "--quiet")
+        elif database.get("state") == "RUNNABLE":
+            return
+        for _ in range(120):
+            ready = json.loads(command("gcloud", "sql", "instances", "describe", "nexoruta-demo-db",
+                                       f"--project={project}", "--format=json", capture=True))
+            if ready.get("state") == "RUNNABLE":
+                return
+            time.sleep(5)
+        raise RuntimeError("Cloud SQL did not become RUNNABLE before refreshing its users")
+
+
 def run(config):
     operation = config["DEMO_OPERATION"]
     if os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch":
@@ -190,16 +216,32 @@ def run(config):
         print("No VM exists. Cloud SQL cleanup completed without creating infrastructure.")
         return
     check_existing(existing, operation)
-    if operation == "start" and not re.fullmatch(r"release-[a-f0-9]{32}", os.environ.get("DEMO_RELEASE", "")):
-        raise ValueError("A tested, published DEMO_RELEASE is required before starting the VM")
-    if operation == "start":
-        now = dt.datetime.now(dt.timezone.utc).timestamp()
-        write_lease(config, now + MAX_SECONDS + 1800, now + 1800)
-    else:
+    if operation == "stop":
+        # Power operations use the APIs directly: a stopped SQL instance cannot
+        # refresh its users, and stop must never wake it or create infrastructure.
         end_lease(config)
         if existing.get("status") == "RUNNING":
             gcloud(config, "compute", "instances", "stop", VM_NAME)
         stop_database(config)
+        message = f"VM {VM_NAME} and Cloud SQL stopped. Persistent storage and static IP retained.\n"
+        print(message)
+        if os.environ.get("GITHUB_STEP_SUMMARY"):
+            with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
+                output.write(message)
+        return
+    if not re.fullmatch(r"release-[a-f0-9]{32}", os.environ.get("DEMO_RELEASE", "")):
+        raise ValueError("A tested, published DEMO_RELEASE is required before starting the VM")
+    now = dt.datetime.now(dt.timezone.utc).timestamp()
+    write_lease(config, now + MAX_SECONDS + 1800, now + 1800)
+    try:
+        start_database(config)
+        start_session(config)
+    except Exception:
+        stop_after_failure(config)
+        raise
+
+
+def start_session(config):
     tofu = ("tofu", f"-chdir={INFRA}")
     command(
         *tofu, "init", "-input=false", "-lockfile=readonly",
@@ -212,7 +254,7 @@ def run(config):
         inputs.write_text(json.dumps({
             "project_id": config["GCP_PROJECT_ID"],
             "zone": config["GCP_ZONE"],
-            "running": operation == "start",
+            "running": True,
             "base_domain": os.environ.get("GCP_BASE_DOMAIN", ""),
             "manage_dns": os.environ.get("GCP_MANAGE_DNS", "false").lower() == "true",
         }), encoding="utf-8")
@@ -222,34 +264,23 @@ def run(config):
             f"-var-file={inputs}", f"-out={plan_file}",
         )
         plan = json.loads(command(*tofu, "show", "-json", str(plan_file), capture=True))
-        check_plan(plan, operation)
-        try:
-            command(*tofu, "apply", "-input=false", "-lock-timeout=5m", str(plan_file))
-            vm = json.loads(gcloud(
-                config, "compute", "instances", "describe", VM_NAME,
-                "--format=json", capture=True,
-            ))
-            if operation == "start":
-                deadline = check_deadline(vm)
-                write_lease(config, dt.datetime.fromisoformat(deadline.replace("Z", "+00:00")).timestamp())
-                from delivery import deploy
-                deploy(config, os.environ["DEMO_RELEASE"])
-                message = (
-                    f"VM {VM_NAME} running. Automatic stop: {deadline}.\n\n"
-                    "The four hours start when Compute Engine starts the VM, including bootstrap. "
-                    "HTTPS health and initial database-backed login checks passed.\n"
-                )
-            else:
-                if vm.get("status") != "TERMINATED":
-                    raise RuntimeError("The VM did not reach TERMINATED.")
-                message = f"VM {VM_NAME} and Cloud SQL stopped. Persistent storage and static IP retained.\n"
-        except Exception:
-            if operation == "start":
-                stop_after_failure(config)
-            raise
+        check_plan(plan)
+        command(*tofu, "apply", "-input=false", "-lock-timeout=5m", str(plan_file))
+        vm = json.loads(gcloud(
+            config, "compute", "instances", "describe", VM_NAME,
+            "--format=json", capture=True,
+        ))
+        deadline = check_deadline(vm)
+        write_lease(config, dt.datetime.fromisoformat(deadline.replace("Z", "+00:00")).timestamp())
+        from delivery import deploy
+        deploy(config, os.environ["DEMO_RELEASE"])
+        message = (
+            f"VM {VM_NAME} running. Automatic stop: {deadline}.\n\n"
+            "The four hours start when Compute Engine starts the VM, including bootstrap. "
+            "HTTPS health and initial database-backed login checks passed.\n"
+        )
     print(message)
-    if operation == "start":
-        publish_endpoints(config)
+    publish_endpoints(config)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as output:
