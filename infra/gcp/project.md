@@ -7,32 +7,32 @@ Proyecto creado y configurado desde la CLI el 22/10/2026.
 | Project ID | `nexoruta-demo-20261022` |
 | Project number | `1090571196455` |
 | Estado del proyecto | `ACTIVE` |
-| Facturaci?n | Vinculada a una cuenta abierta; `billingEnabled=true` |
-| Regi?n | `southamerica-west1` (Santiago) |
+| Facturación | Vinculada a una cuenta abierta; `billingEnabled=true` |
+| Región | `southamerica-west1` (Santiago) |
 | Zona | `southamerica-west1-a` |
 | VM | `n4-highcpu-8`: ocho vCPU y 16384 MiB |
 
 [Abrir el proyecto](https://console.cloud.google.com/home/dashboard?project=nexoruta-demo-20261022).
 
-El bootstrap de OpenTofu est? aplicado: APIs, cuentas de servicio e IAM, WIF,
+El bootstrap de OpenTofu está aplicado: APIs, cuentas de servicio e IAM, WIF,
 buckets privados, Artifact Registry, Secret Manager, Firebase/Android,
-alerta de presupuesto y controlador independiente de apagado. Su estado est? en
+alerta de presupuesto y controlador independiente de apagado. Su estado está en
 `gs://nexoruta-demo-20261022-tofu-state/foundation/default.tfstate`.
 
-Se solicit? por CLI una cuota de ocho vCPU C4 en Santiago mediante
-`nexoruta-demo-c4-santiago`; Google Cloud la deneg?. Se usa N4 highcpu, disponible
+Se solicitó por CLI una cuota de ocho vCPU C4 en Santiago mediante
+`nexoruta-demo-c4-santiago`; Google Cloud la denegó. Se usa N4 highcpu, disponible
 en la misma zona y con cuota suficiente, conservando ocho vCPU y 16 GiB.
-La API de cuotas qued? incorporada al bootstrap. Los precios actualizados est?n
+La API de cuotas quedó incorporada al bootstrap. Los precios actualizados están
 en [costs.md](costs.md).
 
 El environment `nexoruta-demo` del repo madre tiene las siete variables GCP
 requeridas y `GCP_MANAGE_DNS=false`. Los environments de los tres componentes
-contienen el token dedicado de notificaci?n y permiten ?nicamente `main`.
-Los workflows est?n publicados. Los pushes prueban y publican im?genes;
-solo una ejecuci?n manual puede iniciar, actualizar o detener la VM.
+contienen el token dedicado de notificación y permiten únicamente `main`.
+Los workflows están publicados. Los pushes prueban y publican imágenes;
+solo una ejecución manual puede iniciar, actualizar o detener la VM.
 
-GitHub usa sujetos OIDC con IDs inmutables en este repositorio. La condici?n WIF
-acepta ese formato y el formato anterior, comprobando adem?s IDs de repo y
+GitHub usa sujetos OIDC con IDs inmutables en este repositorio. La condición WIF
+acepta ese formato y el formato anterior, comprobando además IDs de repo y
 propietario, nombre del repo, branch `main`, environment, workflow y tipo de evento.
 El provider es:
 
@@ -40,7 +40,7 @@ El provider es:
 projects/1090571196455/locations/global/workloadIdentityPools/nexoruta-github/providers/demo-vm
 ```
 
-La infraestructura de aplicaci?n se gestiona desde `infra/gcp/demo` con estado
+La infraestructura de aplicación se gestiona desde `infra/gcp/demo` con estado
 GCS independiente en `demo/vm`. El workflow manual crea o inicia Cloud SQL y la
 VM, despliega contenedores por digest, ejecuta migraciones y comprueba HTTPS.
 Los endpoints y el vencimiento real aparecen en el resumen de
@@ -48,10 +48,10 @@ Los endpoints y el vencimiento real aparecen en el resumen de
 Consultar ese resumen o `tofu output -json endpoints` para conocer las URLs;
 el estado encendido/apagado cambia entre sesiones de cuatro horas.
 
-La sesi?n local de Google Cloud y las Application Default Credentials est?n
+La sesión local de Google Cloud y las Application Default Credentials están
 fuera del repositorio, con este proyecto como quota project. GitHub usa tokens
-temporales OIDC y no recibe una clave JSON ni la sesi?n personal de la CLI.
-El proyecto y la vinculaci?n de facturaci?n se administran por CLI y quedan
+temporales OIDC y no recibe una clave JSON ni la sesión personal de la CLI.
+El proyecto y la vinculación de facturación se administran por CLI y quedan
 fuera del estado OpenTofu.
 
 Para sincronizar el bootstrap y sus variables:
@@ -61,4 +61,4 @@ Para sincronizar el bootstrap y sus variables:
 ```
 
 El inicio de la VM sigue siendo manual. Ver [github-environment.md](github-environment.md)
-para variables, secrets y configuraci?n p?blica centralizada en Compose.
+para variables, secrets y configuración pública centralizada en Compose.

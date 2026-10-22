@@ -35,10 +35,10 @@ proyecto y su almacenamiento crece con las releases.
 
 | Uso durante un mes | Cómputo de sesiones | Persistencia inicial | Reserva auxiliar | Total orientativo |
 | --- | --- | --- | --- | --- |
-| 8 sesiones de 4 horas | 20,22 | 19,81 | 5–20 | 47–62 |
-| 20 sesiones de 4 horas | 50,54 | 19,81 | 5–20 | 79–94 |
+| 8 sesiones de 4 horas | 20,22 | 19,81 | 5–20 | 45–60 |
+| 20 sesiones de 4 horas | 50,54 | 19,81 | 5–20 | 75–90 |
 
-Tres meses de 20 sesiones mensuales serían aproximadamente **USD 237–283**,
+Tres meses de 20 sesiones mensuales serían aproximadamente **USD 226–271**,
 antes de impuestos, variaciones de uso y crecimiento. Es compatible como objetivo
 con el crédito de USD 300 si no lo consumen otros proyectos, pero hay que observar
 Billing. El saldo y la fecha real de vencimiento requieren acceso a tu cuenta.

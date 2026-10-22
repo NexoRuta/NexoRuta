@@ -19,7 +19,7 @@ por región desde este equipo a los endpoints oficiales de gcping: mediana de
 no una medición de la aplicación ni un compromiso de latencia.
 
 La VM es **`n4-highcpu-8`: 8 vCPU y 16 GiB**. C3 no está disponible en Santiago.
-N4 mantiene los 16 GiB solicitados y prioriza CPU. Se usa N4 porque GCP deneg? la cuota C4 del proyecto; N4 tiene cuota disponible en Santiago. Usa discos Hyperdisk Balanced
+N4 mantiene los 16 GiB solicitados y prioriza CPU. Se usa N4 porque GCP denegó la cuota C4 del proyecto; N4 tiene cuota disponible en Santiago. Usa discos Hyperdisk Balanced
 de 20 GiB para arranque y 80 GiB para datos, con 3000 IOPS y 140 MiB/s por disco.
 N4 no admite Persistent Disk: no cambiar estos discos a `pd-balanced`.
 Cloud SQL es PostgreSQL 18 Enterprise, 2 vCPU y 8 GiB, 20 GiB SSD, sin HA,
