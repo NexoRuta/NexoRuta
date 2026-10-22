@@ -82,6 +82,7 @@ locals {
     "servicenetworking.googleapis.com",
     "artifactregistry.googleapis.com",
     "cloudbuild.googleapis.com",
+    "cloudquotas.googleapis.com",
     "secretmanager.googleapis.com",
     "cloudscheduler.googleapis.com",
     "workflows.googleapis.com",
@@ -188,7 +189,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "assertion.repository_owner_id == '${var.github_owner_id}'",
     "assertion.repository == '${var.github_repository}'",
     "assertion.ref == 'refs/heads/main'",
-    "assertion.sub == 'repo:${var.github_repository}:environment:nexoruta-demo'",
+    "assertion.sub in ['repo:${var.github_repository}:environment:nexoruta-demo', 'repo:${split("/", var.github_repository)[0]}@${var.github_owner_id}/${split("/", var.github_repository)[1]}@${var.github_repository_id}:environment:nexoruta-demo']",
     "assertion.workflow_ref == '${var.github_repository}/.github/workflows/demo-vm.yml@refs/heads/main'",
     "assertion.event_name in ['workflow_dispatch', 'push', 'repository_dispatch']",
   ])

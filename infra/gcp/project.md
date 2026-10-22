@@ -1,53 +1,64 @@
 # Proyecto GCP de la demo
 
-Creado y verificado mediante Google Cloud CLI el 22/10/2026.
+Proyecto creado y configurado desde la CLI el 22/10/2026.
 
 | Dato | Valor |
 | --- | --- |
-| Nombre | `NexoRuta Demo` |
 | Project ID | `nexoruta-demo-20261022` |
 | Project number | `1090571196455` |
-| Estado | `ACTIVE` |
-| Facturación | Vinculada a una cuenta abierta; `billingEnabled=true` |
-| Región configurada en la CLI | `southamerica-west1` |
-| Zona configurada en la CLI | `southamerica-west1-a` |
+| Estado del proyecto | `ACTIVE` |
+| Facturaci?n | Vinculada a una cuenta abierta; `billingEnabled=true` |
+| Regi?n | `southamerica-west1` (Santiago) |
+| Zona | `southamerica-west1-a` |
+| VM | `n4-highcpu-8`: ocho vCPU y 16384 MiB |
 
-[Abrir el proyecto en Google Cloud](https://console.cloud.google.com/home/dashboard?project=nexoruta-demo-20261022).
+[Abrir el proyecto](https://console.cloud.google.com/home/dashboard?project=nexoruta-demo-20261022).
 
-La CLI creó el proyecto, vinculó la cuenta de facturación y habilitó Service Usage
-y Cloud Resource Manager como requisitos iniciales del bootstrap. La sesión local
-y las Application Default Credentials están autenticadas, con este proyecto como
-quota project. Las credenciales se guardan fuera del repositorio.
-
-El bootstrap de OpenTofu se aplicó el 22/10/2026: cuentas de servicio y permisos,
-WIF activo, buckets privados, Artifact Registry, Secret Manager, Firebase/Android,
-alerta de presupuesto y controlador de apagado. Su estado quedó migrado a
+El bootstrap de OpenTofu est? aplicado: APIs, cuentas de servicio e IAM, WIF,
+buckets privados, Artifact Registry, Secret Manager, Firebase/Android,
+alerta de presupuesto y controlador independiente de apagado. Su estado est? en
 `gs://nexoruta-demo-20261022-tofu-state/foundation/default.tfstate`.
 
-Las siete variables requeridas y `GCP_MANAGE_DNS=false` quedaron cargadas en el
-environment `nexoruta-demo` del repo madre en GitHub. Los workflows y el código de
-infraestructura siguen pendientes de publicación desde el checkout local.
+Se solicit? por CLI una cuota de ocho vCPU C4 en Santiago mediante
+`nexoruta-demo-c4-santiago`; Google Cloud la deneg?. Se usa N4 highcpu, disponible
+en la misma zona y con cuota suficiente, conservando ocho vCPU y 16 GiB.
+La API de cuotas qued? incorporada al bootstrap. Los precios actualizados est?n
+en [costs.md](costs.md).
 
-La máquina `c4-highcpu-8` se verificó en `southamerica-west1-a`: ocho vCPU y
-16384 MiB. No se inició una VM ni se creó Cloud SQL en esta preparación. El
-proyecto y su vínculo de facturación se administran por CLI y no forman parte
-del estado OpenTofu.
+El environment `nexoruta-demo` del repo madre tiene las siete variables GCP
+requeridas y `GCP_MANAGE_DNS=false`. Los environments de los tres componentes
+contienen el token dedicado de notificaci?n y permiten ?nicamente `main`.
+Los workflows est?n publicados. Los pushes prueban y publican im?genes;
+solo una ejecuci?n manual puede iniciar, actualizar o detener la VM.
 
-Para volver a sincronizar el bootstrap y sus variables en GitHub:
-
-```powershell
-./scripts/gcp/setup.ps1 -ProjectId nexoruta-demo-20261022
-```
-
-Este paso aplica los cambios del bootstrap y necesita autenticación en GitHub. El inicio de
-la VM continúa siendo una operación manual de GitHub Actions.
-
-Para las variables de GitHub, usar `GCP_PROJECT_ID=nexoruta-demo-20261022`. El
-provider creado por OpenTofu tiene el nombre:
+GitHub usa sujetos OIDC con IDs inmutables en este repositorio. La condici?n WIF
+acepta ese formato y el formato anterior, comprobando adem?s IDs de repo y
+propietario, nombre del repo, branch `main`, environment, workflow y tipo de evento.
+El provider es:
 
 ```text
 projects/1090571196455/locations/global/workloadIdentityPools/nexoruta-github/providers/demo-vm
 ```
 
-El resto de valores se obtiene del bootstrap según la
-[lista de variables y secrets](github-environment.md).
+La infraestructura de aplicaci?n se gestiona desde `infra/gcp/demo` con estado
+GCS independiente en `demo/vm`. El workflow manual crea o inicia Cloud SQL y la
+VM, despliega contenedores por digest, ejecuta migraciones y comprueba HTTPS.
+Los endpoints y el vencimiento real aparecen en el resumen de
+[Actions](https://github.com/NexoRuta/NexoRuta/actions/workflows/demo-vm.yml).
+Consultar ese resumen o `tofu output -json endpoints` para conocer las URLs;
+el estado encendido/apagado cambia entre sesiones de cuatro horas.
+
+La sesi?n local de Google Cloud y las Application Default Credentials est?n
+fuera del repositorio, con este proyecto como quota project. GitHub usa tokens
+temporales OIDC y no recibe una clave JSON ni la sesi?n personal de la CLI.
+El proyecto y la vinculaci?n de facturaci?n se administran por CLI y quedan
+fuera del estado OpenTofu.
+
+Para sincronizar el bootstrap y sus variables:
+
+```powershell
+./scripts/gcp/setup.ps1 -ProjectId nexoruta-demo-20261022
+```
+
+El inicio de la VM sigue siendo manual. Ver [github-environment.md](github-environment.md)
+para variables, secrets y configuraci?n p?blica centralizada en Compose.
