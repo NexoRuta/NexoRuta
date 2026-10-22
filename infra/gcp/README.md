@@ -6,6 +6,7 @@ datos entre sesiones. Ver [requisitos y decisiones](requirements.md) y
 [costos de Santiago y escenarios de uso](costs.md).
 La lista completa de **variables y secrets de GitHub por environment** está en
 [github-environment.md](github-environment.md).
+Para operar la demo desde Actions, seguí la [guía rápida de despliegue](guia-uso-actions.md).
 El [proyecto de demo creado con la CLI](project.md) es
 `nexoruta-demo-20261022` (número `1090571196455`).
 
