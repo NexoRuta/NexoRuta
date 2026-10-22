@@ -114,7 +114,7 @@ resource "google_compute_disk" "data" {
 resource "google_compute_instance" "demo" {
   name                      = local.name
   zone                      = var.zone
-  machine_type              = "c4-highcpu-8"
+  machine_type              = "n4-highcpu-8"
   desired_status            = var.running ? "RUNNING" : "TERMINATED"
   allow_stopping_for_update = true
   tags                      = [local.name]

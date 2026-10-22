@@ -7,7 +7,7 @@
 - Cercanía a Uruguay: Santiago elegido tras comparar HTTP desde el equipo local.
   Servicios de aplicación/datos/build en `southamerica-west1`. Scheduler usa
   São Paulo porque no existe en Santiago; solo realiza control de apagado.
-- C4 highcpu de ocho vCPU conserva 16 GiB; SQL tiene sus propios 2 vCPU/8 GiB.
+- N4 highcpu de ocho vCPU conserva 16 GiB; SQL tiene sus propios 2 vCPU/8 GiB.
   Comprobar cuotas de la cuenta de prueba antes de crear recursos.
 - Infraestructura declarada con OpenTofu; operación desde PowerShell y CLIs.
 - Repo madre en `main`; el despliegue toma lo último de `main` de backend,

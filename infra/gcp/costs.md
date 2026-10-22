@@ -6,7 +6,7 @@ oficiales: su vista inicial muestra Iowa, cuyos precios son diferentes.
 
 | Recurso definido | Tarifa | Costo calculado |
 | --- | --- | --- |
-| VM C4 highcpu, 8 vCPU / 16 GiB | 0,48649744/h | 1,95 por cuatro horas |
+| VM N4 highcpu, 8 vCPU / 16 GiB | 0,4378088/h | 1,75 por cuatro horas |
 | Cloud SQL Enterprise, 2 vCPU / 8 GiB | 2 × 0,0578 + 8 × 0,0098/h | 0,78 por cuatro horas |
 | Hyperdisk Balanced, 20 + 80 GiB | 0,114/GiB-mes | 11,40/mes, incluso apagada |
 | Cloud SQL SSD, 20 GiB iniciales | 0,238/GiB-mes | 4,76/mes, incluso apagada |
@@ -21,7 +21,7 @@ La dirección asociada sigue considerándose en uso con la VM detenida.
 Los discos usan los primeros 3000 IOPS y 140 MiB/s por volumen, incluidos en la
 [capacidad base](https://docs.cloud.google.com/compute/docs/disks/hd-types/hyperdisk-balanced).
 
-El cómputo de una sesión suma aproximadamente **USD 2,72 por cuatro horas**.
+El cómputo de una sesión suma aproximadamente **USD 2,53 por cuatro horas**.
 SQL puede estar encendido antes de arrancar la VM y tardar en detenerse después;
 esas transiciones agregan consumo. La base persistente cuesta aproximadamente
 **USD 19,81/mes**, antes de backups, objetos, imágenes, secretos, control de
@@ -35,8 +35,8 @@ proyecto y su almacenamiento crece con las releases.
 
 | Uso durante un mes | Cómputo de sesiones | Persistencia inicial | Reserva auxiliar | Total orientativo |
 | --- | --- | --- | --- | --- |
-| 8 sesiones de 4 horas | 21,78 | 19,81 | 5–20 | 47–62 |
-| 20 sesiones de 4 horas | 54,44 | 19,81 | 5–20 | 79–94 |
+| 8 sesiones de 4 horas | 20,22 | 19,81 | 5–20 | 47–62 |
+| 20 sesiones de 4 horas | 50,54 | 19,81 | 5–20 | 79–94 |
 
 Tres meses de 20 sesiones mensuales serían aproximadamente **USD 237–283**,
 antes de impuestos, variaciones de uso y crecimiento. Es compatible como objetivo

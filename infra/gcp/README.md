@@ -18,10 +18,10 @@ por región desde este equipo a los endpoints oficiales de gcping: mediana de
 **41,85 ms a Santiago y 58,35 ms a São Paulo**. Es una comparación puntual de red,
 no una medición de la aplicación ni un compromiso de latencia.
 
-La VM es **`c4-highcpu-8`: 8 vCPU y 16 GiB**. C3 no está disponible en Santiago.
-C4 mantiene los 16 GiB solicitados y prioriza CPU. Usa discos Hyperdisk Balanced
+La VM es **`n4-highcpu-8`: 8 vCPU y 16 GiB**. C3 no está disponible en Santiago.
+N4 mantiene los 16 GiB solicitados y prioriza CPU. Se usa N4 porque GCP deneg? la cuota C4 del proyecto; N4 tiene cuota disponible en Santiago. Usa discos Hyperdisk Balanced
 de 20 GiB para arranque y 80 GiB para datos, con 3000 IOPS y 140 MiB/s por disco.
-C4 no admite Persistent Disk: no cambiar estos discos a `pd-balanced`.
+N4 no admite Persistent Disk: no cambiar estos discos a `pd-balanced`.
 Cloud SQL es PostgreSQL 18 Enterprise, 2 vCPU y 8 GiB, 20 GiB SSD, sin HA,
 solo IP privada, backups y recuperación puntual. Su memoria es independiente.
 
@@ -125,10 +125,10 @@ OpenTofu informa que ya está registrada:
 tofu -chdir=infra/gcp/bootstrap import google_firebase_project.demo projects/ID_DEL_PROYECTO
 ```
 
-Verificar cuota y disponibilidad de C4 de ocho vCPU antes del primer inicio:
+Verificar cuota y disponibilidad de N4 de ocho vCPU antes del primer inicio:
 
 ```powershell
-gcloud compute machine-types describe c4-highcpu-8 --zone=southamerica-west1-a
+gcloud compute machine-types describe n4-highcpu-8 --zone=southamerica-west1-a
 gcloud compute regions describe southamerica-west1 --format='json(quotas)'
 ```
 
@@ -281,7 +281,7 @@ gracia. Las transiciones de GCE y el apagado de SQL pueden agregar algunos minut
 de facturación. Las operaciones usan concurrency en GitHub y bloqueo del estado.
 
 Apagar conserva discos, IP, backups, secretos e imágenes: esos recursos siguen
-cobrando. Los precios anteriores de Iowa no corresponden a Santiago ni a C4.
+cobrando. Los precios anteriores de Iowa no corresponden a Santiago ni a N4.
 El crédito de USD 300 dura 90 días desde el alta y se comparte con otros consumos
 de la cuenta. La alerta de USD 80/mes deja margen para un proyecto de hasta tres
 meses; monitorear también builds y almacenamiento. Las alertas no suspenden gasto.
@@ -316,7 +316,7 @@ python scripts/gcp/validate_compose.py # necesita Docker CLI/Compose, no daemon
 
 Referencias: [regiones](https://docs.cloud.google.com/compute/docs/regions-zones),
 [gcping](https://github.com/GoogleCloudPlatform/gcping),
-[C4 y discos admitidos](https://docs.cloud.google.com/compute/docs/general-purpose-machines),
+[N4 y discos admitidos](https://docs.cloud.google.com/compute/docs/general-purpose-machines),
 [ubicaciones de Scheduler](https://docs.cloud.google.com/scheduler/docs/locations),
 [límite nativo](https://docs.cloud.google.com/compute/docs/instances/limit-vm-runtime),
 [restricciones de Cloud SQL](https://docs.cloud.google.com/sql/docs/postgres/users),
