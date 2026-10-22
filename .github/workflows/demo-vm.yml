@@ -18,7 +18,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: nexoruta-gcp-demo-vm
+  # Automatic publication must not replace a queued manual VM operation.
+  # All manual operations still share one lock, including start/update/stop.
+  group: nexoruta-gcp-demo-${{ github.event_name == 'workflow_dispatch' && 'session' || 'publish' }}
   cancel-in-progress: false
 
 jobs:
