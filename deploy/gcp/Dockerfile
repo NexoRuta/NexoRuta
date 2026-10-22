@@ -10,6 +10,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl libgssapi-
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /out .
-ENV APP_ASSEMBLY=$ASSEMBLY ASPNETCORE_URLS=http://+:8080 DOTNET_GCHeapHardLimitPercent=75
+ENV APP_ASSEMBLY=$ASSEMBLY ASPNETCORE_URLS=http://+:8080 DOTNET_GCHeapHardLimitPercent=0x4B
 EXPOSE 8080
 ENTRYPOINT ["sh", "-c", "exec dotnet \"$APP_ASSEMBLY.dll\" \"$@\"", "--"]
