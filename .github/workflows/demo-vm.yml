@@ -206,7 +206,8 @@ jobs:
           CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: |
           gcloud secrets versions access latest --secret=nexoruta-mobile-config --project="$GCP_PROJECT_ID" > "$RUNNER_TEMP/google-services.json"
-          export ANDROID_SIGNING_PASSWORD="$(gcloud secrets versions access latest --secret=nexoruta-mobile-signing-password --project="$GCP_PROJECT_ID")"
+          ANDROID_SIGNING_PASSWORD="$(gcloud secrets versions access latest --secret=nexoruta-mobile-signing-password --project="$GCP_PROJECT_ID")"
+          export ANDROID_SIGNING_PASSWORD
           echo "::add-mask::$ANDROID_SIGNING_PASSWORD"
           versions="$(gcloud secrets versions list nexoruta-mobile-keystore --project="$GCP_PROJECT_ID" --filter=state:ENABLED --format='value(name)')"
           if [[ -z "$versions" ]]; then

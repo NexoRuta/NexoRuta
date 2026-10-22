@@ -71,8 +71,8 @@ def create_bundle(destination):
             f"THEN CREATE ROLE {role} NOLOGIN NOSUPERUSER NOBYPASSRLS; END IF; END $$;"
         )
         statements.append(f"GRANT {role} TO postgres WITH ADMIN OPTION;")
-    statements.append("CREATE SCHEMA IF NOT EXISTS nexoruta_app AUTHORIZATION nexoruta_schema_owner;")
     statements.append("GRANT CREATE ON DATABASE nexoruta TO nexoruta_schema_owner;")
+    statements.append("CREATE SCHEMA IF NOT EXISTS nexoruta_app AUTHORIZATION nexoruta_schema_owner;")
     statements.append(f"GRANT CREATE ON SCHEMA public, nexoruta_app TO {', '.join(sorted(roles))};")
     (sql / "preflight.sql").write_text("\n".join(statements) + "\n", encoding="utf-8")
     with open(sql / "postflight.sql", "a", encoding="utf-8") as output:

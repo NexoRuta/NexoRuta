@@ -46,9 +46,11 @@ def main():
             preflight = (directory / "assets/sql/preflight.sql").read_text()
             env = os.environ.copy()
             env["PGPASSWORD"] = password
-            subprocess.run(["docker", "exec", "-i", "--env", "PGPASSWORD=" + password,
-                            name, "psql", "-h", "127.0.0.1", "-U", "postgres", "-d", "nexoruta", "-v", "ON_ERROR_STOP=1"],
-                           input=preflight, text=True, check=True, capture_output=True)
+            checked = subprocess.run(["docker", "exec", "-i", "--env", "PGPASSWORD=" + password,
+                                      name, "psql", "-h", "127.0.0.1", "-U", "postgres", "-d", "nexoruta", "-v", "ON_ERROR_STOP=1"],
+                                     input=preflight, text=True, capture_output=True)
+            if checked.returncode:
+                raise RuntimeError("Database preflight failed: " + checked.stderr.replace(password, "***"))
             env.update({
                 "ASPNETCORE_ENVIRONMENT": "Production",
                 "ConnectionStrings__Postgres": f"Host=127.0.0.1;Port={port};Database=nexoruta;Username=postgres;Password={password}",
