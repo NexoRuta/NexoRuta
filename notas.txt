@@ -1,0 +1,4 @@
+1: sacar magic strings a constantes
+2: normalizar consultas para no meter mil veces
+where acceso.Activo
+en algo como getUsuarioActivo

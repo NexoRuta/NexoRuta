@@ -7,6 +7,10 @@ datos entre sesiones. Ver [requisitos y decisiones](requirements.md) y
 La lista completa de **variables y secrets de GitHub por environment** está en
 [github-environment.md](github-environment.md).
 Para operar la demo desde Actions, seguí la [guía rápida de despliegue](guia-uso-actions.md).
+Cada publicación queda identificada por un [tag de integración inmutable](integration-tags.md)
+del repo madre, con los tres commits probados de los componentes. Se publica una
+GitHub prerelease después de construir sus imágenes; no se crean PRs ni commits
+automáticos sobre ramas.
 El [proyecto de demo creado con la CLI](project.md) es
 `nexoruta-demo-20261022` (número `1090571196455`).
 
@@ -178,11 +182,12 @@ No se suben la keystore ni su contraseña como artifacts.
 
 ## CI/CD entre los cuatro repositorios
 
-El repo madre permanece en `main`; las fuentes de demo son lo último de `main` de
-backend, frontend y mobile. El inicio manual resuelve los tres SHAs; CI prueba
-esos commits y Cloud Build
-construye esos mismos commits. La release registra SHAs, build ID, checksum del
-bundle e imágenes fijadas por digest. No se construye código en la VM.
+Las fuentes de demo se seleccionan una vez desde los `main` de backend, frontend
+y mobile. CI prueba esos SHAs y, si pasa, se crea un commit del madre con los
+gitlinks actualizados y el tag `integration-<run-id>-<intento>`. Cloud Build hace
+checkout de ese tag, sin volver a resolver ramas. La release registra el tag,
+los SHAs, build ID, checksum del bundle e imágenes fijadas por digest. El tag
+conserva el snapshot sin modificar las ramas del madre. No se construye código en la VM.
 
 `.github/workflows/ci.yml` valida OpenTofu, workflows, Compose y scripts; compila y
 prueba backend/frontend y las cuatro capas portables móviles. También ejecuta la

@@ -19,20 +19,20 @@ git submodule update --init --recursive
 
 Los submódulos configurados en `.gitmodules` son [backend](backend/), [frontend](frontend/) y [mobile](mobile/). Cada uno tiene un README independiente con su estructura, requisitos y comandos locales.
 
-## VM de pruebas en Google Cloud
+## Ramas y versiones de integración
 
-La [guía de infraestructura y CI/CD](infra/gcp/README.md) documenta OpenTofu,
-Cloud SQL/PostGIS, las seis imágenes .NET, HTTPS, los workers y el APK. La demo usa
-una VM de 16 GiB en Santiago, cercana a Uruguay, con inicio manual por cuatro horas
-y apagado coordinado de VM y base de datos. Los pushes a `main` solo prueban y publican
-imágenes. Iniciar, actualizar contenedores y apagar son operaciones manuales desde
-GitHub Actions; `start` usa lo último de `main` de los tres repos. La preparación
-y operación también se hacen por terminal.
+Los cambios se preparan en `develop` del madre y de los componentes. El pipeline
+operativo selecciona una vez los `main` aprobados de backend, frontend y mobile,
+prueba esa combinación y publica un tag anotado `integration-<run-id>-<intento>`
+en el madre. El tag apunta a un commit con esos tres SHAs fijados; no se abre una
+PR ni se escriben commits automáticos sobre las ramas del madre.
 
-La configuración pública de aplicaciones (SMTP y Mapbox) está en el bloque
-`x-app-settings` de [compose.yaml](compose.yaml), junto con la configuración local.
-Las variables GCP y las credenciales se configuran en el environment de GitHub,
-según la [lista de variables y secrets](infra/gcp/github-environment.md).
+Las imágenes se construyen desde ese tag y se publica una GitHub prerelease con
+el manifiesto. `start` y `update` siguen siendo operaciones manuales. Para
+reproducir una release se usa su tag, cuyos punteros pueden ser más recientes que
+los guardados en la rama. No se requieren tags en los componentes. Ver el
+[flujo y las garantías de integración](infra/gcp/integration-tags.md) y la
+[guía de operación de la demo](infra/gcp/guia-uso-actions.md).
 
 ## Requisitos de desarrollo
 
@@ -51,7 +51,27 @@ docker compose up -d
 docker compose ps
 ```
 
-El Compose inicia nueve servicios. Para el primer monitoreo del 8 de octubre de 2026 se verificó el alta de un envío desde el portal, su persistencia con bulto en PostgreSQL y la consulta del mismo ID en Backoffice. Se inicializan un operador, un comercio, una cuenta del dueño y una cuenta del operador. El comercio puede elegir cualquier operador registrado, sin un vínculo previo; cada envío conserva `OperadorId` y `ComercioId`. El ingreso al portal selecciona la cuenta del comercio, y el operador se elige al crear cada envío. Backoffice solo admite cuentas del operador. El selector es sin credenciales; no se implementaron CRUD ni perfiles laborales.
+Para API y portales, la configuración local ignorada por Git (`.env`) debe mantener `NEXORUTA_POSTGRES_CONNECTION` apuntando al servicio Compose `postgres` (`nexoruta:5432`), `NEXORUTA_APPLY_MIGRATIONS=false` y `NEXORUTA_SEED_DATA=false`. Arranque habitual en PowerShell:
+
+```powershell
+docker compose config --quiet
+docker compose up -d --build postgres api backoffice commerce
+docker compose ps
+```
+
+Aplicar una migración local es una operación administrativa separada: revisar previamente el SQL y confirmar que el destino es el PostgreSQL de este Compose. Sin cambiar `NEXORUTA_SEED_DATA=false`, habilitar solo la migración para el primer arranque de API y después volver a la configuración protegida:
+
+```powershell
+$env:NEXORUTA_APPLY_MIGRATIONS = 'true'
+docker compose up -d --no-deps --force-recreate api
+docker compose ps api  # esperar a que la API quede healthy
+Remove-Item Env:NEXORUTA_APPLY_MIGRATIONS
+docker compose up -d --no-deps --force-recreate api
+```
+
+No dejar el override de proceso habilitado luego de la aplicación. No se versionan credenciales ni cadenas de conexión; `.env` permanece local e ignorado.
+
+El Compose inicia diez servicios. Para el primer monitoreo del 8 de octubre de 2026 se verificó el alta de un envío desde el portal, su persistencia con bulto en PostgreSQL y la consulta del mismo ID en Backoffice. Se inicializan un operador, un comercio, una cuenta del dueño y una cuenta del operador. El comercio puede elegir cualquier operador registrado, sin un vínculo previo; cada envío conserva `OperadorId` y `ComercioId`. El ingreso al portal selecciona la cuenta del comercio, y el operador se elige al crear cada envío. Backoffice solo admite cuentas del operador. El selector es sin credenciales; no se implementaron CRUD ni perfiles laborales.
 
 Para detener los servicios sin borrar los volúmenes de datos:
 
@@ -63,9 +83,11 @@ docker compose down
 
 | Servicio | Dirección local | Uso y límites |
 | --- | --- | --- |
-| API | `http://localhost:5000` | Cuentas en `GET /api/accesos?tipo=Comercio|Operador`; operadores disponibles en `GET /api/operadores`. Usuario actual, operadores y envíos requieren `X-NexoRuta-Acceso`. Salud en `/health/live` y `/health/ready`; OpenAPI en [`/openapi/v1.json`](http://localhost:5000/openapi/v1.json). |
-| Backoffice | `http://localhost:5101` | Consulta de envíos persistidos y sus bultos en Razor Pages. |
-| Commerce | `http://localhost:5102` | Alta individual de envío y bulto en Blazor Server. |
+| API | `http://localhost:5000` | Login en `POST /api/auth/login`; las rutas privadas usan `Authorization: Bearer`. El comercio selecciona un operador disponible por envío. Salud en `/health/live` y `/health/ready`; OpenAPI en [`/openapi/v1.json`](http://localhost:5000/openapi/v1.json). |
+| Backoffice | `http://localhost:5101` | Portal autenticado del operador: su organización, usuarios/roles propios y envíos asignados. |
+| Admin | `http://localhost:5104` | Operaciones de plataforma: alta/consulta/estado de organizaciones y resolución de solicitudes. Ver [guía de plataforma](backend/docs/workflow/platform-administration.md). |
+| Commerce | `http://localhost:5102` | Registro, alta propia y autogestión de la organización de comercio, usuarios/roles, envíos y consulta. |
+| Mailpit | `http://localhost:8025` | Bandeja SMTP local de pruebas, publicada solo en loopback. Ver [guía de recuperación de contraseña](docs/recuperacion-contrasena.md). |
 | Tracking | `http://localhost:5103` | Plantilla Blazor Server. |
 | Aspire Dashboard | `http://localhost:18888` | Observabilidad local; recibe telemetría de la API. |
 | RabbitMQ Management | `http://localhost:15672` | Interfaz de administración; credenciales locales de desarrollo: `nexoruta` / `nexoruta_dev`. |
@@ -74,14 +96,20 @@ docker compose down
 | Redis | Sin puerto publicado en el host | Disponible para otros contenedores en `redis:6379` dentro de la red Compose. |
 | Worker | Sin puerto HTTP publicado | Proceso de plantilla que registra actividad periódica. |
 
-Las credenciales del archivo Compose son públicas y no deben reutilizarse fuera del entorno local. EF Core/PostgreSQL persiste los envíos; Redis, RabbitMQ y Worker todavía no participan del flujo. La configuración de `AccesoInicial` y su alcance se describen en [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md).
+Las credenciales del archivo Compose son públicas y no deben reutilizarse fuera del entorno local. EF Core/PostgreSQL persiste los datos; outbox y workers participan en la publicación de eventos y generación de seguimiento. Redis no define la autorización de CU-01. El bootstrap conserva `AccesoInicial` y `DatosInicialesSeeder`, con cuatro valores explícitos requeridos: `AccesoInicial:UsuarioEmail`, `AccesoInicial:OperadorNombre`, `AccesoInicial:ComercioNombre` y `AccesoInicial:OperadorUsuarioEmail`. `Demo:Enabled` y las transformaciones históricas por nombres Demo fueron eliminados; no se borraron registros existentes. La configuración y su alcance se describen en [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md).
+
+### Initial platform administrator (local Compose)
+
+Admin is available at `http://localhost:5104`. The API maps the ignored `.env` keys `NEXORUTA_ADMIN_MAIL` and `NEXORUTA_ADMIN_PASSWORD` to `PlatformInitialization__Email/Password`. Only `NEXORUTA_PLATFORM_BOOTSTRAP=true` enables platform initialization; it defaults to false and is independent of demonstration data. Keep habitual `NEXORUTA_APPLY_MIGRATIONS=false` and `NEXORUTA_SEED_DATA=false`.
+
+Review/apply pending additive migrations explicitly to the confirmed local Compose PostgreSQL **before** recreating the updated API. Do not delete volumes or reset data. API startup creates the account atomically, or validates an existing compatible account without replacing its password. No manual `platform-admin create` is required in this configured local flow. See the [backend procedure](backend/docs/workflow/platform-administration.md).
 
 ## Estructura del repositorio
 
 ```text
 NexoRuta/
   backend/       # API, Worker y proyectos de capas .NET
-  frontend/      # Backoffice, Commerce y Tracking
+  frontend/      # Admin, Backoffice, Commerce y Tracking
   mobile/        # aplicación .NET MAUI
   architecture.md
   compose.yaml
@@ -93,10 +121,25 @@ NexoRuta/
 
 ## Estado actual
 
-- Backend y frontend compilan con .NET 10. La compilación de Worker presenta advertencias por versiones distintas de EF Core; no se modificaron sus dependencias en esta revisión. La última compilación de mobile corresponde al 7 de octubre de 2026.
-- Pasaron **30 pruebas de backend** (8 unitarias y 22 de integración PostgreSQL) y **30 de frontend** (cliente HTTP, selección y contratos). ArchitectureTests todavía no contiene pruebas; no se validó MAUI en dispositivos.
-- Los nueve servicios de Compose arrancan. Se comprobó el formulario real del portal, el bulto persistido y el mismo envío en Backoffice.
-- Están implementados los recortes de [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md), [CU-07](backend/docs/cu/CU-07-alta-envios.md) y [CU-08](backend/docs/cu/CU-08-bultos.md) del primer monitoreo. Autenticación por credenciales, RLS, CRUD de administración y mensajería funcional quedan pendientes.
+- Application, API, Infrastructure, ApiClient y presentación web están organizados por funcionalidad y responsabilidad. Las vistas Razor Pages conservan sus ubicaciones para mantener routing; sus PageModels están agrupados por feature. Tracking sigue siendo una plantilla.
+- Baseline histórico ARQ-06: backend con 19 unitarias, 3 de arquitectura y 42 de integración; frontend con 53 pruebas, incluidas 7 de contratos OpenAPI. Las 17 de configuración/DI están incluidas en las 42 de integración. Backend y frontend compilaron sin errores ni advertencias; frontend en Debug y Release. Las 46 comprobaciones HTTP de presentación usaron un backend simulado.
+- ARQ-09 (9 de octubre de 2026) verificó los commits de la tabla anterior con Chrome, Commerce, API, PostgreSQL 18 temporal aislado y Backoffice reales, sin mocks: el mismo envío se creó, persistió y visualizó. También se verificaron rechazos por sesión, cuenta y datos inválidos. No se encontraron ejecuciones de CI para esos commits integrados.
+- ARQ-10 solo sincroniza gitlinks y documentación: no reejecuta suites, E2E ni Compose. El arranque de nueve servicios Compose corresponde al monitoreo anterior; no acredita un nuevo despliegue de estas versiones. La última compilación de mobile corresponde al 7 de octubre; no se validó MAUI en dispositivos.
+- El estado actual de [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md) incluye alta propia, gestión organizacional, Identity como almacén de cuentas, autorización por tenant y RLS. La diferencia literal entre Backoffice/operador de la planilla y autogestión en Commerce queda pendiente de aceptación académica; no se declara aprobación del equipo/docente.
 - Backend y frontend tienen workflows de CI. Compilación y pruebas se verificaron localmente; no se ejecutó CI remota para estos cambios ni se verificó despliegue remoto.
 
 Para conocer el estado y los comandos de cada componente, consultá [Backend](backend/README.md), [Frontend](frontend/README.md) y [Mobile](mobile/README.md).
+
+Self-service registration and organization onboarding is the habitual entry point; see [the onboarding guide](docs/registro-alta-propia.md). Platform Admin remains available for support. The current CU-01 matrix and its academic scope difference are documented in [the audit](backend/docs/cu/CU-01-comercios-usuarios.md).
+
+
+### Datos territoriales en compilaciones aisladas
+
+Backoffice publica el GeoJSON canónico de `backend/src/ZonasCobertura/Data`.
+En el checkout integrado, MSBuild lo toma del submódulo backend; Compose usa
+`frontend/Dockerfile.Backoffice` con contexto en la raíz para incluirlo.
+La publicación GCP copia el mismo archivo del archive del backend validado a
+`frontend/.build`, antes de construir las imágenes. No descarga geometría de
+una rama durante el build. El CI independiente del frontend fija el commit del
+backend y pasa su ruta mediante `OfficialDepartmentSource`; una compilación
+independiente puede usar esa misma propiedad para indicar el archivo canónico.

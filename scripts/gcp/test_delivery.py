@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 import delivery
+import integration
 import demo_session as session
 import vm_deploy
 
@@ -87,6 +88,30 @@ class DeliveryTests(unittest.TestCase):
             self.assertEqual(len(fetches), 3)
             self.assertTrue(all(call[-1] == "main" for call in fetches))
 
+    def test_staged_frontend_receives_map_from_the_pinned_backend_archive(self):
+        def archive(*args, **kwargs):
+            data = io.BytesIO()
+            with tarfile.open(fileobj=data, mode="w") as output:
+                directory = tarfile.TarInfo(".")
+                directory.type = tarfile.DIRTYPE
+                directory.mode = 0o755
+                output.addfile(directory)
+                if args[0][2].endswith("backend"):
+                    payload = b'{"type":"FeatureCollection","features":[]}'
+                    member = tarfile.TarInfo("src/ZonasCobertura/Data/departamentos-uruguay.geojson")
+                    member.size = len(payload)
+                    output.addfile(member, io.BytesIO(payload))
+            return data.getvalue()
+
+        with tempfile.TemporaryDirectory() as temp:
+            destination = Path(temp)
+            with patch.object(delivery.subprocess, "check_output", side_effect=archive):
+                delivery.stage_sources(destination)
+            canonical = destination / "backend/src/ZonasCobertura/Data/departamentos-uruguay.geojson"
+            bundled = destination / "frontend/.build/departamentos-uruguay.geojson"
+            self.assertEqual(canonical.read_bytes(), bundled.read_bytes())
+            self.assertTrue((destination / "frontend/Dockerfile.deploy").is_file())
+
     def release_manifest(self):
         release = "release-" + "a" * 32
         return {
@@ -94,6 +119,66 @@ class DeliveryTests(unittest.TestCase):
             "images": {name: f"{session.REGION}-docker.pkg.dev/demo-project/nexoruta/{name}@sha256:" + "b" * 64
                        for name in delivery.SERVICES},
         }
+
+    def test_build_requires_the_pinned_tag_before_any_cloud_build(self):
+        with patch.object(session, "configuration", return_value={}), patch.dict("os.environ", {
+            "RELEASE_CHANNEL": "main", "INTEGRATION_TAG": "integration-123-1",
+        }), patch.object(integration, "verify_checkout", side_effect=ValueError("wrong snapshot")), patch.object(session, "command") as command:
+            with self.assertRaisesRegex(ValueError, "wrong snapshot"):
+                delivery.build()
+            command.assert_not_called()
+
+    def test_build_manifest_and_channel_use_the_tested_integration(self):
+        snapshot = {"integration_tag": "integration-123-1", "root_sha": "a" * 40,
+                    "sources": {name: "b" * 40 for name in integration.COMPONENTS}}
+        registry = f"{session.REGION}-docker.pkg.dev/demo-project/nexoruta"
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            bundle = root / "bundle.tar.gz"
+            bundle.write_bytes(b"bundle")
+            outputs = root / "outputs"
+
+            def command(*args, **kwargs):
+                if args[1:3] == ("builds", "submit"):
+                    config = json.loads(Path(next(a.split("=", 1)[1] for a in args if a.startswith("--config="))).read_text())
+                    self.images = config["images"]
+                    return json.dumps({"id": "build-123"})
+                if args[1:3] == ("builds", "describe"):
+                    return json.dumps({"status": "SUCCESS", "results": {"images": [
+                        {"name": image, "digest": "sha256:" + "c" * 64} for image in self.images]}})
+                if args[:3] == ("gcloud", "storage", "cp"):
+                    self.assertIn("--if-generation-match=0", args)
+                return ""
+
+            with (patch.object(session, "configuration", return_value={"GCP_PROJECT_ID": "demo-project"}),
+                  patch.object(delivery, "ROOT", root), patch.object(delivery, "stage_sources"),
+                  patch.object(delivery, "create_bundle", return_value=bundle),
+                  patch.object(integration, "verify_checkout", return_value=snapshot),
+                  patch.object(session, "command", side_effect=command) as calls,
+                  patch.object(delivery.publication, "promote", return_value=True) as promote,
+                  patch.dict("os.environ", {"RELEASE_CHANNEL": "main", "INTEGRATION_TAG": snapshot["integration_tag"],
+                                            "GITHUB_RUN_NUMBER": "20", "GITHUB_RUN_ATTEMPT": "2",
+                                            "GITHUB_OUTPUT": str(outputs)})):
+                delivery.build()
+                manifest = json.loads((root / "release.json").read_text())
+                self.assertEqual(manifest["root_sha"], snapshot["root_sha"])
+                self.assertEqual(manifest["sources"], snapshot["sources"])
+                self.assertEqual(manifest["integration_tag"], snapshot["integration_tag"])
+                self.assertEqual(manifest["publication_order"], [20, 2])
+                self.assertTrue(all(image.startswith(registry) and "@sha256:" in image for image in manifest["images"].values()))
+                self.assertEqual(promote.call_args.args[1]["integration_tag"], snapshot["integration_tag"])
+                self.assertFalse(any(call.args[0] == "git" for call in calls.call_args_list))
+                self.assertIn("manifest=", outputs.read_text())
+
+    def test_channel_tag_and_manifest_must_match(self):
+        manifest = self.release_manifest()
+        manifest.update(integration_tag="integration-123-1", root_sha="a" * 40,
+                        sources={name: "b" * 40 for name in integration.COMPONENTS}, publication_order=[20, 1])
+        pointer = {"channel": "main", "release": manifest["release"],
+                   "integration_tag": "integration-123-2", "publication_order": [20, 1]}
+        with patch.object(session, "command", side_effect=[json.dumps(pointer), json.dumps(manifest)]):
+            with self.assertRaisesRegex(ValueError, "snapshot"):
+                delivery.latest_release({"GCP_PROJECT_ID": "demo-project"})
 
     def test_update_resolves_one_complete_main_release_without_building(self):
         manifest = self.release_manifest()

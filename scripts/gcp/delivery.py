@@ -16,6 +16,8 @@ import time
 import uuid
 
 import demo_session as session
+import integration
+import publication
 
 ROOT = session.ROOT
 SERVICES = ("api", "worker", "admin", "backoffice", "commerce", "tracking")
@@ -51,6 +53,13 @@ def stage_sources(destination):
         with tarfile.open(fileobj=io.BytesIO(archive)) as source:
             extract_archive(source, destination / name)
         shutil.copyfile(ROOT / "deploy/gcp/Dockerfile", destination / name / "Dockerfile.deploy")
+
+    # Docker builds each archived repository in isolation. Package the canonical
+    # asset from the tested backend archive instead of fetching mutable branches.
+    map_source = destination / "backend/src/ZonasCobertura/Data/departamentos-uruguay.geojson"
+    frontend_inputs = destination / "frontend/.build"
+    frontend_inputs.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(map_source, frontend_inputs / map_source.name)
 
 
 def create_bundle(destination):
@@ -92,6 +101,8 @@ def build():
     config = session.configuration()
     if os.environ.get("RELEASE_CHANNEL") != "main":
         raise ValueError("Builds must explicitly target RELEASE_CHANNEL=main after CI tests main commits")
+    # Publication uses the already-tested tag, never resolves component branches again.
+    snapshot = integration.verify_checkout(os.environ["INTEGRATION_TAG"], os.environ.get("INTEGRATION_COMMIT"))
     project, region = config["GCP_PROJECT_ID"], session.REGION
     bucket = os.environ.get("GCP_DELIVERY_BUCKET", f"{project}-nexoruta-delivery")
     registry = f"{region}-docker.pkg.dev/{project}/nexoruta"
@@ -140,24 +151,24 @@ def build():
         manifest = {
             "release": release, "build_id": build_id, "images": images,
             "channel": "main",
-            "sources": json.loads((ROOT / "sources.json").read_text()),
-            "root_sha": session.command("git", "rev-parse", "HEAD", capture=True).strip(),
+            **snapshot,
+            "publication_order": [int(os.environ["GITHUB_RUN_NUMBER"]), int(os.environ["GITHUB_RUN_ATTEMPT"])],
             "bundle_sha256": hashlib.sha256(bundle.read_bytes()).hexdigest(),
         }
         manifest_file = work / "manifest.json"
         manifest_file.write_text(json.dumps(manifest), encoding="utf-8")
         for path in (bundle, manifest_file):
             session.command("gcloud", "storage", "cp", str(path), f"gs://{bucket}/releases/{release}/{path.name}", "--if-generation-match=0", "--quiet")
-        # Advance only after all six images and both immutable release assets exist.
-        # Updates read one pointer once, so they cannot mix concurrent image versions.
-        pointer = work / "main.json"
-        pointer.write_text(json.dumps({"channel": "main", "release": release}), encoding="utf-8")
-        session.command("gcloud", "storage", "cp", str(pointer), f"gs://{bucket}/channels/main.json",
-                        "--content-type=application/json", "--quiet")
+        # Advance only after all immutable assets exist. CAS prevents lost updates,
+        # and execution ordering prevents an old, slow build replacing a newer one.
+        publication.promote(bucket, {"channel": "main", "release": release,
+                                    "integration_tag": snapshot["integration_tag"],
+                                    "publication_order": manifest["publication_order"]})
         (ROOT / "release.json").write_text(json.dumps(manifest), encoding="utf-8")
         if os.environ.get("GITHUB_OUTPUT"):
             with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
                 output.write(f"release={release}\n")
+                output.write("manifest=" + json.dumps(manifest, separators=(",", ":")) + "\n")
         print(f"Published {release} using immutable image digests.")
 
 
@@ -178,6 +189,13 @@ def latest_release(config):
                          f"gs://{bucket}/releases/{release}/manifest.json", capture=True))
     if manifest.get("release") != release or manifest.get("channel") != "main":
         raise ValueError("Published main manifest does not match its pointer")
+    if "integration_tag" in pointer:
+        if (not re.fullmatch(integration.TAG, pointer["integration_tag"])
+                or manifest.get("integration_tag") != pointer["integration_tag"]
+                or manifest.get("publication_order") != pointer.get("publication_order")
+                or not re.fullmatch(integration.SHA, manifest.get("root_sha", ""))):
+            raise ValueError("Published integration snapshot does not match its channel")
+        integration.validate_sources(manifest.get("sources", {}))
     images = manifest.get("images", {})
     registry = f"{session.REGION}-docker.pkg.dev/{project}/nexoruta"
     if set(images) != set(SERVICES) or any(
