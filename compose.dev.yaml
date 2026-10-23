@@ -20,6 +20,9 @@ services:
     <<: *frontend-dev
     build: !reset null
     command: ["--project", "src/NexoRuta.Backoffice/NexoRuta.Backoffice.csproj", "run", "--no-launch-profile"]
+    volumes:
+      - ./frontend:/workspace
+      - ./backend/src/ZonasCobertura/Data/departamentos-uruguay.geojson:/backend/src/ZonasCobertura/Data/departamentos-uruguay.geojson:ro
   commerce:
     <<: *frontend-dev
     build: !reset null
