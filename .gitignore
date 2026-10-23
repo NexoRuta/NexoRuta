@@ -1,5 +1,19 @@
 .codex/
 
+# Local environment values and credentials; keep the sample file versioned.
+/.env
+/.env.*
+!/.env.example
+/secrets/
+
+# Local logs, temporary output and operating-system files.
+*.log
+*.tmp
+*.tmp.*
+.DS_Store
+Thumbs.db
+Desktop.ini
+
 # OpenTofu state, local configuration and credentials.
 **/.terraform/
 *.tfstate
