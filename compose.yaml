@@ -1,3 +1,11 @@
+# Public deployment settings. Credentials remain in GitHub environment secrets.
+x-app-settings:
+  SMTP_HOST: mailpit
+  SMTP_PORT: "1025"
+  SMTP_SSL: "false"
+  SMTP_FROM: demo@nexoruta.test
+  MAPBOX_PUBLIC_TOKEN: ""
+
 services:
   postgres:
     restart: unless-stopped

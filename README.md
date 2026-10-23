@@ -21,15 +21,18 @@ Los submódulos configurados en `.gitmodules` son [backend](backend/), [frontend
 
 ## Ramas y versiones de integración
 
-La rama local `develop` de la raíz se prepara como manifiesto de integración desde `origin/main` (`df5fa86817dbaf4a84a8fff16473cf408984a87a`). La rama `feature/sync-feature-first-submodules` fija estas versiones, integradas en los `develop` de los componentes y verificadas en ARQ-09:
+Los cambios se preparan en `develop` del madre y de los componentes. El pipeline
+operativo selecciona una vez los `main` aprobados de backend, frontend y mobile,
+prueba esa combinación y publica un tag anotado `integration-<run-id>-<intento>`
+en el madre. El tag apunta a un commit con esos tres SHAs fijados; no se abre una
+PR ni se escriben commits automáticos sobre las ramas del madre.
 
-| Submódulo | Commit fijado |
-| --- | --- |
-| backend | `8a8e0db2d56dd0accc2109ca073eff6d9ee41397` |
-| frontend | `bb29d036231f3e51b4b398f4c78e89ec5f394e43` |
-| mobile | `da537ecf60c188e7b2adbf67d4b70097cad9e8d9` (sin cambios) |
-
-Esta preparación es local: no crea `develop` remoto ni modifica `main`. Los commits fijados de backend y frontend todavía no están integrados en sus respectivos `main`. Publicar la rama de integración raíz y abrir un PR contra ella requiere autorización separada. La promoción del manifiesto a `main` debe coordinarse con las releases de los componentes; sus pushes a `main` pueden disparar despliegues. No actualizar los submódulos con `--remote` para sustituir estas versiones verificadas por otros HEAD.
+Las imágenes se construyen desde ese tag y se publica una GitHub prerelease con
+el manifiesto. `start` y `update` siguen siendo operaciones manuales. Para
+reproducir una release se usa su tag, cuyos punteros pueden ser más recientes que
+los guardados en la rama. No se requieren tags en los componentes. Ver el
+[flujo y las garantías de integración](infra/gcp/integration-tags.md) y la
+[guía de operación de la demo](infra/gcp/guia-uso-actions.md).
 
 ## Requisitos de desarrollo
 
