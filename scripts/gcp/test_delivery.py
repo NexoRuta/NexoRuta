@@ -94,6 +94,7 @@ class DeliveryTests(unittest.TestCase):
             with tarfile.open(fileobj=data, mode="w") as output:
                 directory = tarfile.TarInfo(".")
                 directory.type = tarfile.DIRTYPE
+                directory.mode = 0o755
                 output.addfile(directory)
                 if args[0][2].endswith("backend"):
                     payload = b'{"type":"FeatureCollection","features":[]}'
