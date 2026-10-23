@@ -88,6 +88,29 @@ class DeliveryTests(unittest.TestCase):
             self.assertEqual(len(fetches), 3)
             self.assertTrue(all(call[-1] == "main" for call in fetches))
 
+    def test_staged_frontend_receives_map_from_the_pinned_backend_archive(self):
+        def archive(*args, **kwargs):
+            data = io.BytesIO()
+            with tarfile.open(fileobj=data, mode="w") as output:
+                directory = tarfile.TarInfo(".")
+                directory.type = tarfile.DIRTYPE
+                output.addfile(directory)
+                if args[0][2].endswith("backend"):
+                    payload = b'{"type":"FeatureCollection","features":[]}'
+                    member = tarfile.TarInfo("src/ZonasCobertura/Data/departamentos-uruguay.geojson")
+                    member.size = len(payload)
+                    output.addfile(member, io.BytesIO(payload))
+            return data.getvalue()
+
+        with tempfile.TemporaryDirectory() as temp:
+            destination = Path(temp)
+            with patch.object(delivery.subprocess, "check_output", side_effect=archive):
+                delivery.stage_sources(destination)
+            canonical = destination / "backend/src/ZonasCobertura/Data/departamentos-uruguay.geojson"
+            bundled = destination / "frontend/.build/departamentos-uruguay.geojson"
+            self.assertEqual(canonical.read_bytes(), bundled.read_bytes())
+            self.assertTrue((destination / "frontend/Dockerfile.deploy").is_file())
+
     def release_manifest(self):
         release = "release-" + "a" * 32
         return {

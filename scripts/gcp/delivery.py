@@ -54,6 +54,13 @@ def stage_sources(destination):
             extract_archive(source, destination / name)
         shutil.copyfile(ROOT / "deploy/gcp/Dockerfile", destination / name / "Dockerfile.deploy")
 
+    # Docker builds each archived repository in isolation. Package the canonical
+    # asset from the tested backend archive instead of fetching mutable branches.
+    map_source = destination / "backend/src/ZonasCobertura/Data/departamentos-uruguay.geojson"
+    frontend_inputs = destination / "frontend/.build"
+    frontend_inputs.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(map_source, frontend_inputs / map_source.name)
+
 
 def create_bundle(destination):
     assets = destination / "assets"

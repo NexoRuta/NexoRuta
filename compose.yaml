@@ -347,8 +347,8 @@ services:
 
   backoffice:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile.Backoffice
       args:
         PROJECT: NexoRuta.Backoffice
     container_name: nexoruta-backoffice

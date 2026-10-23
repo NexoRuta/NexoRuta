@@ -131,3 +131,15 @@ NexoRuta/
 Para conocer el estado y los comandos de cada componente, consultá [Backend](backend/README.md), [Frontend](frontend/README.md) y [Mobile](mobile/README.md).
 
 Self-service registration and organization onboarding is the habitual entry point; see [the onboarding guide](docs/registro-alta-propia.md). Platform Admin remains available for support. The current CU-01 matrix and its academic scope difference are documented in [the audit](backend/docs/cu/CU-01-comercios-usuarios.md).
+
+
+### Datos territoriales en compilaciones aisladas
+
+Backoffice publica el GeoJSON canónico de `backend/src/ZonasCobertura/Data`.
+En el checkout integrado, MSBuild lo toma del submódulo backend; Compose usa
+`frontend/Dockerfile.Backoffice` con contexto en la raíz para incluirlo.
+La publicación GCP copia el mismo archivo del archive del backend validado a
+`frontend/.build`, antes de construir las imágenes. No descarga geometría de
+una rama durante el build. El CI independiente del frontend fija el commit del
+backend y pasa su ruta mediante `OfficialDepartmentSource`; una compilación
+independiente puede usar esa misma propiedad para indicar el archivo canónico.
