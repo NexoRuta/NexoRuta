@@ -1,0 +1,272 @@
+name: nexoruta-demo
+
+x-api-env: &api-env
+  ASPNETCORE_ENVIRONMENT: Production
+  ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+  ConnectionStrings__Postgres: ${API_CONNECTION:?}
+  Jwt__SigningKeyBase64: ${JWT_KEY:?}
+  DataProtection__KeysDirectory: /data/keys
+  DatabaseInitialization__ApplyMigrations: "false"
+  DatabaseInitialization__SeedData: "false"
+  Email__Smtp__Host: ${SMTP_HOST:?}
+  Email__Smtp__Port: ${SMTP_PORT:?}
+  Email__Smtp__UseSsl: ${SMTP_SSL:?}
+  Email__Smtp__Username: ${SMTP_USERNAME:-}
+  Email__Smtp__Password: ${SMTP_PASSWORD:-}
+  Email__Smtp__FromAddress: ${SMTP_FROM:?}
+  PasswordRecovery__ResetPageUrl: ${COMMERCE_URL:?}/restablecer-contrasena
+  Tracking__PublicBaseUrl: ${TRACKING_URL:?}
+  Seguimiento__EncryptionKey: ${TRACKING_KEY:?}
+  Push__RegistrationEncryptionKey: ${PUSH_KEY:?}
+  Reparto__EvidenciasEncryptionKey: ${EVIDENCE_KEY:?}
+  Geocoding__Geoapify__ApiKey: ${GEOAPIFY_API_KEY:-}
+  OpenTelemetry__Enabled: "false"
+
+x-worker: &worker
+  image: ${WORKER_IMAGE:?}
+  entrypoint: [dotnet, NexoRuta.Worker.dll]
+  restart: unless-stopped
+  mem_limit: 768m
+  cpu_shares: 256
+  stop_grace_period: 30s
+  environment: &worker-env
+    DOTNET_ENVIRONMENT: Production
+    ConnectionStrings__Postgres: ${WORKER_CONNECTION:?}
+    Messaging__Transport: RabbitMq
+    RabbitMq__Host: rabbitmq
+    RabbitMq__Username: nexoruta
+    RabbitMq__Password: ${RABBIT_PASSWORD:?}
+    DataProtection__KeysDirectory: /data/keys
+    Seguimiento__EncryptionKey: ${TRACKING_KEY:?}
+    Tracking__PublicBaseUrl: ${TRACKING_URL:?}
+    Push__RegistrationEncryptionKey: ${PUSH_KEY:?}
+    Push__ProjectId: ${PROJECT_ID:?}
+    Email__Smtp__Host: ${SMTP_HOST:?}
+    Email__Smtp__Port: ${SMTP_PORT:?}
+    Email__Smtp__UseSsl: ${SMTP_SSL:?}
+    Email__Smtp__Username: ${SMTP_USERNAME:-}
+    Email__Smtp__Password: ${SMTP_PASSWORD:-}
+    Email__Smtp__FromAddress: ${SMTP_FROM:?}
+  volumes: [api-keys:/data/keys]
+  healthcheck:
+    test: [CMD-SHELL, "kill -0 1"]
+    interval: 15s
+    timeout: 3s
+    retries: 4
+
+x-web: &web
+  restart: unless-stopped
+  mem_limit: 768m
+  cpu_shares: 1024
+  stop_grace_period: 30s
+  environment: &web-env
+    ASPNETCORE_ENVIRONMENT: Production
+    ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+    Api__BaseAddress: http://api:8080/
+  healthcheck:
+    test: [CMD-SHELL, "curl -fsS http://localhost:8080/health/ready >/dev/null"]
+    interval: 10s
+    timeout: 5s
+    retries: 18
+    start_period: 30s
+
+services:
+  sql-proxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.18.0
+    command: [--private-ip, --address=0.0.0.0, --port=5432, --structured-logs, "${SQL_CONNECTION_NAME:?}"]
+    restart: unless-stopped
+    mem_limit: 256m
+
+  rabbitmq:
+    image: rabbitmq:4.2-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: nexoruta
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD:?}
+    volumes: [rabbit:/var/lib/rabbitmq]
+    mem_limit: 768m
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:4.1.1
+    hostname: kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: "24"
+      KAFKA_LOG_RETENTION_BYTES: "1073741824"
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx768m
+      CLUSTER_ID: mN63dY3RQWeNexoRutaDemoQ
+    volumes: [kafka:/var/lib/kafka/data]
+    mem_limit: 1536m
+    cpu_shares: 512
+    healthcheck:
+      test: [CMD-SHELL, "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null"]
+      interval: 15s
+      timeout: 15s
+      retries: 20
+
+  mongo:
+    image: mongo:8.0
+    command: [mongod, --wiredTigerCacheSizeGB, "0.25", --bind_ip_all]
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: nexoruta
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?}
+    volumes: [mongo:/data/db]
+    mem_limit: 768m
+    healthcheck:
+      test: [CMD-SHELL, "mongosh --quiet --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)' >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    environment: {MP_MAX_MESSAGES: "500"}
+    mem_limit: 128m
+
+  db-tools:
+    image: postgres:18-alpine
+    environment:
+      PGHOST: sql-proxy
+      PGDATABASE: nexoruta
+      PGUSER: postgres
+      PGPASSWORD: ${MIGRATOR_PASSWORD:?}
+      NEXORUTA_API_DB_PASSWORD: ${API_DB_PASSWORD:?}
+      NEXORUTA_WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD:?}
+      NEXORUTA_BOOTSTRAP_DB_PASSWORD: ${BOOTSTRAP_DB_PASSWORD:?}
+    volumes: [./sql:/deploy/sql:ro]
+    profiles: [administration]
+
+  migrate:
+    image: ${API_IMAGE:?}
+    command: [database-migrate]
+    environment:
+      <<: *api-env
+      ConnectionStrings__Postgres: ${MIGRATOR_CONNECTION:?}
+    volumes: [api-keys:/data/keys]
+    profiles: [administration]
+
+  bootstrap:
+    image: ${API_IMAGE:?}
+    command: [local-bootstrap]
+    environment:
+      <<: *api-env
+      ConnectionStrings__Postgres: ${BOOTSTRAP_CONNECTION:?}
+    volumes:
+      - api-keys:/data/keys
+      - ./bootstrap.json:/app/appsettings.Production.json:ro
+    profiles: [administration]
+
+  api:
+    image: ${API_IMAGE:?}
+    restart: unless-stopped
+    environment: *api-env
+    volumes: [api-keys:/data/keys]
+    mem_limit: 1536m
+    cpu_shares: 2048
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD-SHELL, "curl -fsS http://localhost:8080/health/ready >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
+
+  worker-rabbit:
+    <<: *worker
+
+  worker-kafka:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      Messaging__Transport: Kafka
+      Kafka__BootstrapServers: kafka:9092
+      Kafka__SecurityProtocol: Plaintext
+      MongoDb__ConnectionString: mongodb://nexoruta:${MONGO_PASSWORD:?}@mongo:27017/?authSource=admin
+      MongoDb__Database: nexoruta
+      MongoDb__PasswordRecoveryCollection: PasswordRecoveryRequested
+
+  worker-push:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      Messaging__Transport: Push
+
+  admin:
+    <<: *web
+    image: ${ADMIN_IMAGE:?}
+    volumes: [admin-keys:/root/.aspnet/DataProtection-Keys]
+
+  backoffice:
+    <<: *web
+    image: ${BACKOFFICE_IMAGE:?}
+    volumes: [backoffice-keys:/root/.aspnet/DataProtection-Keys]
+
+  commerce:
+    <<: *web
+    image: ${COMMERCE_IMAGE:?}
+    volumes: [commerce-keys:/root/.aspnet/DataProtection-Keys]
+
+  tracking:
+    <<: *web
+    image: ${TRACKING_IMAGE:?}
+    volumes: [tracking-keys:/root/.aspnet/DataProtection-Keys]
+    healthcheck:
+      test: [CMD-SHELL, "curl -fsS http://localhost:8080/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+
+  proxy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      API_HOST: ${API_HOST:?}
+      ADMIN_HOST: ${ADMIN_HOST:?}
+      BACKOFFICE_HOST: ${BACKOFFICE_HOST:?}
+      COMMERCE_HOST: ${COMMERCE_HOST:?}
+      TRACKING_HOST: ${TRACKING_HOST:?}
+      MAIL_HOST: ${MAIL_HOST:?}
+      MAIL_PASSWORD_HASH: ${MAIL_PASSWORD_HASH:?}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    mem_limit: 256m
+    healthcheck:
+      test: [CMD-SHELL, "wget -qO- http://127.0.0.1:2019/config/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  api-keys:
+  admin-keys:
+  backoffice-keys:
+  commerce-keys:
+  tracking-keys:
+  rabbit:
+  kafka:
+  mongo:
+  caddy-data:
+  caddy-config:

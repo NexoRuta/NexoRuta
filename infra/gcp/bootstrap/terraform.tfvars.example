@@ -1,0 +1,5 @@
+project_id           = "REPLACE_WITH_EXISTING_PROJECT_ID"
+region               = "southamerica-west1"
+github_repository    = "NexoRuta/NexoRuta"
+github_repository_id = "REPLACE_WITH_NUMERIC_REPOSITORY_ID"
+github_owner_id      = "REPLACE_WITH_NUMERIC_OWNER_ID"

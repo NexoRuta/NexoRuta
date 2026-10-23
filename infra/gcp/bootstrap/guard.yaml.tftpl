@@ -1,0 +1,149 @@
+main:
+  steps:
+  - init:
+      assign:
+      - vm_status: ABSENT
+      - lease:
+          expires_at: 0
+          provisioning_until: 0
+      - now: $${sys.now()}
+      - lease_response:
+          body: null
+      - vm_response:
+          body: null
+      - latest_lease:
+          body: null
+  - read_lease:
+      try:
+        call: http.get
+        args:
+          url: https://storage.googleapis.com/storage/v1/b/${state_bucket}/o/leases%2Fdemo.json?alt=media
+          auth:
+            type: OAuth2
+        result: lease_response
+      except:
+        as: error
+        steps:
+        - missing_lease:
+            switch:
+            - condition: $${error.code != 404}
+              steps:
+              - condition_result_0:
+                  raise: $${error}
+  - decode_lease:
+      switch:
+      - condition: $${default(map.get(lease_response, "body"), null) != null}
+        steps:
+        - assign_lease:
+            assign:
+            - lease: $${lease_response.body}
+  - read_vm:
+      try:
+        call: http.get
+        args:
+          url: https://compute.googleapis.com/compute/v1/projects/${project_id}/zones/${zone}/instances/nexoruta-demo
+          auth:
+            type: OAuth2
+        result: vm_response
+      except:
+        as: error
+        steps:
+        - missing_vm:
+            switch:
+            - condition: $${error.code != 404}
+              steps:
+              - condition_result_1:
+                  raise: $${error}
+  - decode_vm:
+      switch:
+      - condition: $${default(map.get(vm_response, "body"), null) != null}
+        steps:
+        - assign_vm:
+            assign:
+            - vm_status: $${vm_response.body.status}
+  - keep_valid_session:
+      switch:
+      - condition: $${now < lease.provisioning_until}
+        steps:
+        - condition_result_2:
+            return: provisioning
+      - condition: $${vm_status == "RUNNING" and now < lease.expires_at}
+        steps:
+        - condition_result_3:
+            return: active
+  - stop_expired_vm:
+      switch:
+      - condition: $${vm_status == "RUNNING"}
+        steps:
+        - stop_vm:
+            call: http.post
+            args:
+              url: https://compute.googleapis.com/compute/v1/projects/${project_id}/zones/${zone}/instances/nexoruta-demo/stop
+              auth:
+                type: OAuth2
+            result: vm_stop
+  - read_sql:
+      try:
+        call: http.get
+        args:
+          url: https://sqladmin.googleapis.com/sql/v1beta4/projects/${project_id}/instances/nexoruta-demo-db
+          auth:
+            type: OAuth2
+        result: sql_response
+      except:
+        as: error
+        steps:
+        - missing_sql:
+            switch:
+            - condition: $${error.code == 404}
+              steps:
+              - condition_result_4:
+                  return: no_database
+        - sql_read_error:
+            raise: $${error}
+  - check_for_new_session:
+      try:
+        call: http.get
+        args:
+          url: https://storage.googleapis.com/storage/v1/b/${state_bucket}/o/leases%2Fdemo.json?alt=media
+          auth:
+            type: OAuth2
+        result: latest_lease
+      except:
+        as: error
+        steps:
+        - missing_latest_lease:
+            switch:
+            - condition: $${error.code != 404}
+              steps:
+              - condition_result_5:
+                  raise: $${error}
+  - protect_new_session:
+      switch:
+      - condition: $${latest_lease.body != null}
+        steps:
+        - newer_lease:
+            switch:
+            - condition: $${sys.now() < latest_lease.body.provisioning_until}
+              steps:
+              - condition_result_6:
+                  return: provisioning
+            - condition: $${latest_lease.body.expires_at != lease.expires_at and sys.now() < latest_lease.body.expires_at}
+              steps:
+              - condition_result_7:
+                  return: new_session
+  - stop_sql:
+      switch:
+      - condition: $${sql_response.body.settings.activationPolicy != "NEVER"}
+        steps:
+        - patch_sql:
+            call: http.patch
+            args:
+              url: https://sqladmin.googleapis.com/sql/v1beta4/projects/${project_id}/instances/nexoruta-demo-db
+              auth:
+                type: OAuth2
+              body:
+                settings:
+                  activationPolicy: NEVER
+  - done:
+      return: stopped
