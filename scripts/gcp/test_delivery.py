@@ -55,6 +55,12 @@ class DeliveryTests(unittest.TestCase):
             "Node a stage prepare failed (PermissionError)",
         )
 
+    def test_remote_stage_error_reports_python_exception_class_only(self):
+        self.assertEqual(
+            delivery.remote_stage_error("Traceback:\nPermissionError: private detail", "a", "prepare"),
+            "Node a stage prepare failed (PermissionError)",
+        )
+
     def test_offline_update_does_not_provision_or_start_anything(self):
         config = {"DEMO_OPERATION": "update"}
         with patch.object(session, "instance", return_value=None), patch.object(session, "command") as command:
