@@ -48,6 +48,13 @@ class DeliveryTests(unittest.TestCase):
             "Node a stage prepare failed without a structured report",
         )
 
+    def test_remote_stage_error_can_read_stderr_report(self):
+        output = '{"node":"a","stage":"prepare","status":"failed","error_type":"PermissionError"}'
+        self.assertEqual(
+            delivery.remote_stage_error(output, "a", "prepare"),
+            "Node a stage prepare failed (PermissionError)",
+        )
+
     def test_offline_update_does_not_provision_or_start_anything(self):
         config = {"DEMO_OPERATION": "update"}
         with patch.object(session, "instance", return_value=None), patch.object(session, "command") as command:

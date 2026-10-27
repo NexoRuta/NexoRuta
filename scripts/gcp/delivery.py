@@ -254,7 +254,8 @@ def deploy(config, release):
                     "--bucket", bucket, "--release", release, "--node", node["NODE_ID"],
                     "--deadline", str(deadline), "--stage", operation]), capture=True)
         except subprocess.CalledProcessError as error:
-            raise RuntimeError(remote_stage_error(error.stdout or "", node["NODE_ID"], operation)) from None
+            output = (error.stdout or "") + "\n" + (error.stderr or "")
+            raise RuntimeError(remote_stage_error(output, node["NODE_ID"], operation)) from None
         for line in reversed(output.splitlines()):
             if line.startswith("{"):
                 result = json.loads(line)
