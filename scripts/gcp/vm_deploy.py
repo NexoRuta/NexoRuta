@@ -16,6 +16,7 @@ import socket
 import subprocess
 import tarfile
 import time
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -357,6 +358,16 @@ def current_release():
     return release
 
 
+def error_location(error):
+    frames = traceback.extract_tb(error.__traceback__)
+    if not frames:
+        return ""
+    frame = frames[-1]
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", frame.name) or not 1 <= frame.lineno <= 99999:
+        return ""
+    return f"{frame.name}:{frame.lineno}"
+
+
 def direct_health(private_ip, attempts=18):
     for name, port in DIRECT_PORTS.items():
         path = "/api/health" if name == "monitor" else "/health/ready"
@@ -584,7 +595,8 @@ def main():
                 print(json.dumps({"release": args.release, "node": args.node, "stage": args.stage, "status": "healthy", **result}))
             except Exception as error:
                 print(json.dumps({"release": args.release, "node": args.node, "stage": args.stage,
-                                  "status": "failed", "error_type": type(error).__name__}))
+                                  "status": "failed", "error_type": type(error).__name__,
+                                  "error_location": error_location(error)}))
                 raise SystemExit(1) from None
 
 

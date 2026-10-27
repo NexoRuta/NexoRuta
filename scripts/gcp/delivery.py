@@ -236,7 +236,11 @@ def remote_stage_error(output, node, operation):
         error_type = result.get("error_type", "")
         if (result.get("node") == node and result.get("stage") == operation
                 and result.get("status") == "failed" and re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", error_type)):
-            return f"Node {node} stage {operation} failed ({error_type})"
+            location = result.get("error_location", "")
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*:[0-9]{1,5}", location):
+                location = ""
+            suffix = f" at {location}" if location else ""
+            return f"Node {node} stage {operation} failed ({error_type}{suffix})"
     if exit_code is not None:
         return f"Node {node} stage {operation} exited ({exit_code}) without a report"
     return f"Node {node} stage {operation} failed without a structured report"
