@@ -529,7 +529,6 @@ def smoke(runtime, check_accounts=True):
 
 
 def main():
-    import fcntl
     parser = argparse.ArgumentParser()
     parser.add_argument("--bucket", required=True)
     parser.add_argument("--release", required=True)
@@ -537,6 +536,17 @@ def main():
     parser.add_argument("--node", choices=("a", "b"), required=True)
     parser.add_argument("--deadline", type=float, required=True)
     args = parser.parse_args()
+    try:
+        run_stage(args)
+    except Exception as error:
+        print(json.dumps({"release": args.release, "node": args.node, "stage": args.stage,
+                          "status": "failed", "error_type": type(error).__name__,
+                          "error_location": error_location(error)}))
+        raise SystemExit(1) from None
+
+
+def run_stage(args):
+    import fcntl
     if not re.fullmatch(r"release-[a-f0-9]{32}", args.release):
         raise ValueError("Invalid release ID")
     if not math.isfinite(args.deadline) or args.deadline <= time.time():
