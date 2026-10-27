@@ -47,6 +47,14 @@ def extract_archive(archive, destination):
     archive.extractall(destination)
 
 
+def migration_policy_files(migrations):
+    for path in sorted(Path(migrations).glob("*.cs")):
+        if (not re.match(r"^\d{14}_.+\.cs$", path.name)
+                or path.name.endswith((".Designer.cs", ".Sql.cs"))):
+            continue
+        yield path
+
+
 def stage_sources(destination):
     for name in ("backend", "frontend"):
         archive = subprocess.check_output([shutil.which("git"), "-C", str(ROOT / name), "archive", "HEAD"])
@@ -91,9 +99,7 @@ def create_bundle(destination):
         output.write(f"\nREVOKE CREATE ON SCHEMA public, nexoruta_app FROM {', '.join(restricted)};\n")
     # Deploy upgrades only additive pending migrations while old/new nodes overlap.
     safety = {}
-    for migration in migrations.glob("*.cs"):
-        if not re.match(r"^\d{14}_.+\.cs$", migration.name) or migration.name.endswith(".Designer.cs"):
-            continue
+    for migration in migration_policy_files(migrations):
         code = migration.read_text(encoding="utf-8-sig")
         up = code.split("protected override void Down", 1)[0]
         safety[migration.stem] = not bool(re.search(r"\.(?:Drop|Rename|AlterColumn)\w*\s*\(|\b(?:DROP|TRUNCATE|DELETE\s+FROM)\s", up, re.I))
