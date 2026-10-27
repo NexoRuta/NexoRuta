@@ -218,10 +218,12 @@ def latest_release(config):
 
 
 def remote_stage_error(output, node, operation):
+    exit_code = None
     for line in reversed(output.splitlines()):
-        exit_code = re.fullmatch(r"__NEXORUTA_STAGE_EXIT__=([0-9]{1,3})", line.strip())
-        if exit_code:
-            return f"Node {node} stage {operation} exited ({exit_code.group(1)}) without a report"
+        exit_match = re.fullmatch(r"__NEXORUTA_STAGE_EXIT__=([0-9]{1,3})", line.strip())
+        if exit_match:
+            exit_code = exit_match.group(1)
+            continue
         try:
             result = json.loads(line)
         except json.JSONDecodeError:
@@ -235,6 +237,8 @@ def remote_stage_error(output, node, operation):
         if (result.get("node") == node and result.get("stage") == operation
                 and result.get("status") == "failed" and re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", error_type)):
             return f"Node {node} stage {operation} failed ({error_type})"
+    if exit_code is not None:
+        return f"Node {node} stage {operation} exited ({exit_code}) without a report"
     return f"Node {node} stage {operation} failed without a structured report"
 
 

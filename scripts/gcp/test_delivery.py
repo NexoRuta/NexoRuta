@@ -67,6 +67,16 @@ class DeliveryTests(unittest.TestCase):
             "Node a stage prepare exited (1) without a report",
         )
 
+    def test_remote_stage_error_reads_report_before_exit_marker(self):
+        output = '\n'.join([
+            '{"node":"a","stage":"prepare","status":"failed","error_type":"PermissionError"}',
+            "__NEXORUTA_STAGE_EXIT__=1",
+        ])
+        self.assertEqual(
+            delivery.remote_stage_error(output, "a", "prepare"),
+            "Node a stage prepare failed (PermissionError)",
+        )
+
     def test_remote_stage_error_reports_qualified_exception_class_only(self):
         self.assertEqual(
             delivery.remote_stage_error("urllib.error.HTTPError: private detail", "a", "prepare"),
