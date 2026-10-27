@@ -217,6 +217,19 @@ def latest_release(config):
     return release
 
 
+def remote_stage_error(output, node, operation):
+    for line in reversed(output.splitlines()):
+        try:
+            result = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        error_type = result.get("error_type", "")
+        if (result.get("node") == node and result.get("stage") == operation
+                and result.get("status") == "failed" and re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", error_type)):
+            return f"Node {node} stage {operation} failed ({error_type})"
+    return f"Node {node} stage {operation} failed without a structured report"
+
+
 def deploy(config, release):
     if not re.fullmatch(r"release-[a-f0-9]{32}", release):
         raise ValueError("Invalid release identifier")
@@ -235,10 +248,13 @@ def deploy(config, release):
     def stage(node, operation):
         if time.time() >= deadline:
             raise RuntimeError("The deployment cannot extend the common session deadline")
-        output = session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
-            "--command=" + shlex.join(["sudo", "python3", "/srv/nexoruta/deploy/vm_deploy.py",
-                "--bucket", bucket, "--release", release, "--node", node["NODE_ID"],
-                "--deadline", str(deadline), "--stage", operation]), capture=True)
+        try:
+            output = session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
+                "--command=" + shlex.join(["sudo", "python3", "/srv/nexoruta/deploy/vm_deploy.py",
+                    "--bucket", bucket, "--release", release, "--node", node["NODE_ID"],
+                    "--deadline", str(deadline), "--stage", operation]), capture=True)
+        except subprocess.CalledProcessError as error:
+            raise RuntimeError(remote_stage_error(error.stdout or "", node["NODE_ID"], operation)) from None
         for line in reversed(output.splitlines()):
             if line.startswith("{"):
                 result = json.loads(line)
