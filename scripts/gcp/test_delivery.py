@@ -34,6 +34,20 @@ class DeliveryTests(unittest.TestCase):
             vm_deploy.env_line("SMTP_PASSWORD", "value\nAPI_IMAGE=attacker/image")
         self.assertEqual(vm_deploy.env_line("PASSWORD", "a'b$cd"), "PASSWORD='a\\'b$cd'\n")
 
+    def test_remote_stage_error_reports_only_the_structured_error_type(self):
+        output = '\n'.join([
+            '{"node":"a","stage":"prepare","status":"failed","error_type":"PermissionError","error":"sensitive"}',
+            '{"node":"a","stage":"prepare","status":"failed","error_type":"invalid type; leak"}',
+        ])
+        self.assertEqual(
+            delivery.remote_stage_error(output, "a", "prepare"),
+            "Node a stage prepare failed (PermissionError)",
+        )
+        self.assertEqual(
+            delivery.remote_stage_error('{"node":"b","stage":"apply","status":"failed"}', "a", "prepare"),
+            "Node a stage prepare failed without a structured report",
+        )
+
     def test_offline_update_does_not_provision_or_start_anything(self):
         config = {"DEMO_OPERATION": "update"}
         with patch.object(session, "instance", return_value=None), patch.object(session, "command") as command:
