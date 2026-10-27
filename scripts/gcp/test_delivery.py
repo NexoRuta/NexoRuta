@@ -77,6 +77,20 @@ class DeliveryTests(unittest.TestCase):
             "Node a stage prepare failed (PermissionError)",
         )
 
+    def test_remote_stage_error_reports_safe_source_location(self):
+        output = '{"node":"a","stage":"prepare","status":"failed","error_type":"TypeError","error_location":"environment:177","error":"sensitive"}'
+        self.assertEqual(
+            delivery.remote_stage_error(output, "a", "prepare"),
+            "Node a stage prepare failed (TypeError at environment:177)",
+        )
+
+    def test_vm_error_location_contains_only_function_and_line(self):
+        try:
+            raise TypeError("secret detail")
+        except TypeError as error:
+            location = vm_deploy.error_location(error)
+        self.assertRegex(location, r"^test_vm_error_location_contains_only_function_and_line:[0-9]+$")
+
     def test_remote_stage_error_reports_qualified_exception_class_only(self):
         self.assertEqual(
             delivery.remote_stage_error("urllib.error.HTTPError: private detail", "a", "prepare"),
