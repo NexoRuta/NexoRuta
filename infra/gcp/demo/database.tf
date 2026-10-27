@@ -94,7 +94,6 @@ resource "google_secret_manager_secret_version" "runtime" {
   secret_data = jsonencode({
     project_id       = var.project_id
     region           = local.region
-    legacy_domain    = "${replace(google_compute_address.demo.address, ".", "-")}.sslip.io"
     services_host    = "nexoruta-demo.${var.zone}.c.${var.project_id}.internal"
     frontend_ip      = google_compute_global_address.frontend.address
     nodes            = { a = { name = local.name, zone = var.zone }, b = { name = "${local.name}-b", zone = var.secondary_zone } }

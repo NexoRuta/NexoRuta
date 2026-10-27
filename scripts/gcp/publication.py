@@ -17,18 +17,15 @@ def request(url, data=None):
 
 def order(pointer):
     value = pointer.get("publication_order")
-    # The previous pipeline had no ordering metadata. Its first tagged successor may replace it.
-    if value is None:
-        return (0, 0)
     if not isinstance(value, list) or len(value) != 2 or any(type(v) is not int or v < 1 for v in value):
         raise ValueError("Invalid channel publication order")
     return tuple(value)
 
 
 def promote(bucket, pointer):
-    candidate = order(pointer)
-    if candidate == (0, 0):
+    if "publication_order" not in pointer:
         raise ValueError("New publications must include their Actions execution order")
+    candidate = order(pointer)
     name = "channels/main.json"
     base = "https://storage.googleapis.com/storage/v1/b/" + urllib.parse.quote(bucket, safe="") + "/o/" + urllib.parse.quote(name, safe="")
     for _ in range(8):
@@ -41,10 +38,11 @@ def promote(bucket, pointer):
             generation, previous = "0", {}
         if previous and (previous.get("channel") != "main" or not previous.get("release")):
             raise ValueError("Invalid existing publication channel")
-        if order(previous) > candidate:
+        previous_order = order(previous) if previous else (0, 0)
+        if previous_order > candidate:
             print("Older publication retained as a release; current channel is unchanged.")
             return False
-        if order(previous) == candidate:
+        if previous_order == candidate:
             if previous != pointer:
                 raise ValueError("Publication identity collision")
             return True

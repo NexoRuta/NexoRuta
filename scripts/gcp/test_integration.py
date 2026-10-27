@@ -148,11 +148,13 @@ class PublicationTests(unittest.TestCase):
             self.assertTrue(publication.promote("demo-delivery", self.pointer()))
             self.assertIn("ifGenerationMatch=0", request.call_args.args[0])
 
-    def test_legacy_channel_can_be_upgraded(self):
-        with patch.object(publication, "request", side_effect=[{"generation": "42"}, {"channel": "main", "release": "legacy"}, {}]) as request:
-            self.assertTrue(publication.promote("demo-delivery", self.pointer()))
-            self.assertIn("ifGenerationMatch=42", request.call_args.args[0])
-            self.assertIn("generation=42", request.call_args_list[1].args[0])
+    def test_channel_without_publication_order_is_rejected(self):
+        with patch.object(publication, "request", side_effect=[
+            {"generation": "42"}, {"channel": "main", "release": "release-legacy"},
+        ]) as request:
+            with self.assertRaisesRegex(ValueError, "publication order"):
+                publication.promote("demo-delivery", self.pointer())
+            self.assertEqual(request.call_count, 2)
 
     def test_old_build_cannot_replace_newer_publication(self):
         for old in (self.pointer(19, 9), self.pointer(20, 1)):

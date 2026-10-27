@@ -92,17 +92,6 @@ resource "google_compute_firewall" "iap_ssh" {
   }
 }
 
-resource "google_compute_firewall" "web" {
-  name          = "${local.name}-web"
-  network       = google_compute_network.demo.name
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = [local.name]
-  allow {
-    protocol = "tcp"
-    ports    = ["80", "443"]
-  }
-}
-
 resource "google_compute_address" "demo" {
   name   = local.name
   region = local.region

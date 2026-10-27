@@ -32,7 +32,7 @@ Estos SHAs describen el código inspeccionado, no la release actualmente despleg
 | Tráfico interno | Los portales usan `http://api:8080/` | Usar el origen HTTPS balanceado para no depender de la API local |
 | Salud | API `/health/live` y `/health/ready`; ready comprueba PostgreSQL; portales salvo Tracking tienen ready | Agregar salud uniforme y distinguir proceso, disponibilidad y degradación |
 | Telemetría | API instrumentada con OpenTelemetry; despliegue la deshabilita; logs Docker con driver `local` | Activar exportación y configurar recolección real de logs |
-| Entrega | CI → tag → seis imágenes → prerelease; `vm_deploy.py` detiene todas las apps y luego las recrea | Una release común, despliegue secuencial por nodo y migración única |
+| Entrega | CI → tag → seis imágenes → prerelease; `delivery.py` drena ambos nodos, detiene las apps y migra una vez | Una release común; corte durante el update, luego aplicación y alta de cada nodo |
 | Sesiones | `demo_session.py` y guard de Workflows conocen un nombre y una zona; límite GCE de cuatro horas | Inventario de dos nodos y vencimiento común, incluso si falla Actions |
 | Protección de uso | Rate limiting en memoria por proceso | Duplicar API cambia las cuotas efectivas si no se comparte el contador |
 
@@ -73,7 +73,7 @@ Google documenta [grupos no administrados](https://docs.cloud.google.com/compute
 - Establecer un nombre privado estable para A y parametrizar RabbitMQ, Kafka, MongoDB y SMTP. Kafka debe anunciar una dirección alcanzable desde ambas VMs; `PLAINTEXT://kafka:9092` solo sirve en la red Docker actual. Usar listeners internos/entre hosts cuando sean necesarios. Los puertos de brokers y Mongo quedan limitados al tráfico privado requerido.
 - Ejecutar workers en ambos nodos contra los mismos servicios. Verificar reservas de outbox, vencimiento de leases, confirmaciones, consumer groups e idempotencia antes de habilitar las dos réplicas. No prometer entrega exactamente una vez; no replicar los brokers entre A y B.
 - Mantener `worker-push` independiente de RabbitMQ/Kafka. Caída A: la API y webs de B pueden continuar si SQL está disponible; correo y generación de nuevos enlaces/asientos de eventos dependientes de Rabbit/Kafka se retrasan. Los enlaces de seguimiento ya generados y las consultas basadas en SQL deben probarse por separado. La outbox conserva pendientes, respetando expiraciones ya existentes.
-- Persistir Data Protection en PostgreSQL usando el proveedor oficial de EF Core, en almacenamiento técnico separado del modelo de negocio y con permisos mínimos. Un anillo por portal; API y worker Rabbit conservan su `ApplicationName` compartido actual. Importar las claves existentes y conservar la posibilidad de descifrar mensajes pendientes y cookies compatibles. Proteger claves nuevas con un certificado de cifrado almacenado en Secret Manager y conservar certificados anteriores para lectura.
+- Persistir Data Protection en PostgreSQL usando el proveedor oficial de EF Core, en almacenamiento técnico separado del modelo de negocio y con permisos mínimos. Un anillo por portal; API y worker Rabbit conservan su `ApplicationName` compartido actual. Los anillos existentes ya fueron importados; el deploy no vuelve a importar claves desde volúmenes. Proteger claves nuevas con un certificado de cifrado almacenado en Secret Manager y conservar certificados anteriores mientras haya claves actuales cifradas con ellos.
 - Compartir claves **no** equivale a compartir autenticación entre portales: mantener cookies, discriminadores y límites de permisos separados. Los portales recibirán credenciales SQL técnicas restringidas para su propio anillo, no acceso a datos de negocio.
 - Conservar JWT y claves de seguimiento/push/evidencias actuales. No regenerarlas al añadir B. La caché geográfica en memoria puede seguir por instancia porque no es la fuente de verdad.
 - Mantener los límites actuales de login, recuperación, registro, refresh, seguimiento y geocodificación mediante contadores atómicos compartidos en PostgreSQL, con ventana, expiración y limpieza acotadas. Probar que alternar A/B no duplica la cuota; no añadir Redis únicamente para esto. Definir respuesta ante indisponibilidad de SQL sin dejar abiertos los endpoints protegidos.
@@ -119,14 +119,13 @@ Conservar CI, selección única de SHAs, tag inmutable, build y publicación act
 
 Secuencia de `update`:
 
-1. Leer una release completa y fijarla para toda la operación. Validar sesión y salud del nodo que seguirá atendiendo; no iniciar VMs apagadas ni modificar el vencimiento.
-2. Realizar un backup de SQL y las comprobaciones previas. Ejecutar migraciones, provisión RLS y bootstrap una sola vez bajo bloqueo de despliegue/migración compartido. El `flock` local actual no bloquea una ejecución desde otra VM. Usar bloqueo PostgreSQL para la sección compartida y mantener la serialización de operaciones manuales en Actions.
-3. Exigir migraciones compatibles con la versión anterior mientras conviven A/B. Separar cualquier eliminación incompatible para otra release posterior a retirar la versión antigua.
-4. Retirar B de todos sus grupos/backend correspondientes y esperar el drenaje. Actualizar solo sus aplicaciones, workers y Grafana; comprobar directamente su salud y la API con acceso a datos. Reincorporar y esperar a que el balanceador lo declare sano.
-5. Repetir con A. Los brokers de A no se reinician en una actualización ordinaria de aplicaciones. Actualizar versiones de brokers será una operación de mantenimiento separada, con degradación prevista.
-6. Verificar endpoints públicos, sesiones, procesamiento y ambos IDs de release. Marcar el despliegue completo únicamente cuando ambos nodos estén en la versión objetivo.
+1. Leer una release completa y fijarla para toda la operación. Validar sesión y que ambas VMs estén encendidas; no extender el vencimiento.
+2. Realizar un backup de SQL y las comprobaciones previas. Retirar ambos nodos de sus grupos de instancias y esperar el drenaje. Detener las aplicaciones en ambos nodos, manteniendo los servicios compartidos de A y la monitorización del host.
+3. Ejecutar migraciones, provisión RLS y bootstrap una sola vez bajo bloqueo PostgreSQL. No se exige compatibilidad entre releases y no se mantiene código anterior ejecutándose contra el esquema nuevo.
+4. Aplicar la release al primer nodo, comprobar salud local, reincorporarlo y esperar a que el balanceador lo declare sano. Repetir con el otro nodo.
+5. Verificar endpoints públicos, login con PostgreSQL, monitorización y ambos nodos. Marcar el despliegue completo solo cuando los dos estén sanos en la release objetivo.
 
-Ante fallo, detener el avance, mantener el nodo sano y restaurar los contenedores de la release anterior en el nodo afectado antes de devolverlo al balanceador. Conservar el esquema migrado; no deshacer la base automáticamente. Mostrar explícitamente estado parcial y releases por nodo. Si la migración rompe compatibilidad con la versión anterior, el despliegue se bloquea antes de rotar nodos.
+Ante un fallo antes de terminar las migraciones, las aplicaciones permanecen detenidas para evitar que una versión antigua use un esquema parcialmente cambiado. Si falla la aplicación de un nodo después de migrar, ese nodo permanece fuera del balanceador; un nodo nuevo ya sano puede seguir atendiendo. Corregir el código y volver a desplegar desde la release objetivo. No se restauran automáticamente contenedores de una release anterior ni se deshace la base. El backup SQL queda como recuperación manual deliberada.
 
 ### Las cuatro horas son de la sesión completa
 
@@ -145,12 +144,12 @@ El balanceador y la IP se mantienen entre sesiones para conservar nombres y cert
 | Fase | Trabajo y archivos principales | Condición de salida |
 | --- | --- | --- |
 | 0. Preparación | Verificar release remota, recursos/estado OpenTofu, cuotas para 16 vCPU N4 y segunda zona, presupuesto y acceso Google/sslip.io; inventariar claves/volúmenes y ensayar restauración | Acceso al panel viable; copia recuperable; plan sin pérdida de datos; estimación aceptable |
-| 1. Aplicación preparada | Backend/frontend: proveedor DP compartido, importación de claves, rate limits compartidos, forwarded headers, salud de Tracking y pruebas de concurrencia de workers | Dos instancias locales aceptan cookies/formularios cruzados; cuotas globales y RLS correctos; pendientes descifrables |
+| 1. Aplicación preparada | Backend/frontend: proveedor DP compartido, anillos existentes importados, rate limits compartidos, forwarded headers, salud de Tracking y pruebas de concurrencia de workers | Dos instancias locales aceptan cookies/formularios cruzados; cuotas globales y RLS correctos; pendientes descifrables |
 | 2. Separación de runtime | `deploy/gcp/compose*.yaml`, configuración privada de A, listeners de Kafka, roles SQL técnicos, scripts de arranque/despliegue | A conserva sus volúmenes; B accede a SQL y servicios de A sin puertos públicos de datos |
 | 3. Infraestructura | `infra/gcp/demo/main.tf`, nuevos archivos de balanceador y monitorización, `database.tf`, IAM/APIs en `bootstrap/`, startup | A/B y backends saludables, HTTPS válido y entrada directa restringida; estado OpenTofu conserva A/disco/SQL |
-| 4. Operación | `delivery.py`, `vm_deploy.py`, `demo_session.py`, guard TF/template y `demo-vm.yml`; ampliar tests de scripts | Start/stop limpian ambos; update secuencial; migración única; plazo común; fallo parcial no apaga nodo sano |
+| 4. Operación | `delivery.py`, `vm_deploy.py`, `demo_session.py`, guard TF/template y `demo-vm.yml`; ampliar tests de scripts | Start/stop limpian ambos; update coordinado con corte; migración única; plazo común; fallo parcial no vuelve a ejecutar una release anterior |
 | 5. Telemetría y panel | Ops Agent, OTel API/webs/workers, logs, integraciones de servicios, Grafana provisionado, OAuth y alertas en OpenTofu | CPU/RAM/disco/latencia/errores y estado reales por nodo; Google permitido/denegado; histórico conservado |
-| 6. Migración y fallos | Ventana de corte, nuevos hosts, APK y enlaces históricos; actualizar guías y requisitos | Pruebas reales de caída A y caída B con límites observados y procedimiento de rollback |
+| 6. Migración y fallos | Ventana de corte, nuevos hosts, APK y enlaces históricos; actualizar guías y requisitos | Pruebas reales de caída A y caída B con límites observados y recuperación desde una release corregida |
 
 Instrumentar una línea base de A antes de mover tráfico; completar el panel y las alertas antes de las pruebas de caída. Cada fase es un cambio revisable; no convertir la transición en un único apply sin puntos de recuperación.
 
@@ -161,19 +160,19 @@ Instrumentar una línea base de A antes de mover tráfico; completar el panel y 
 3. **HTTP real en GCP:** certificado, host/rutas, salud por nodo y servicio, reparto visible en logs, identidad IP, puertos cerrados, no acceso a métricas privadas sin login y flujo de login/lectura/escritura con PostgreSQL y RLS.
 4. **Revisión en navegador:** login de portales y Google, autorización denegada, formularios, afinidad/reconexión Blazor, panel con datos/retraso/error/sin datos y estado degradado. Aplicar `frontend/DESIGN.md` a cualquier UI propia; comprobar teclado, foco, contraste y tamaños pertinentes. La configuración de Grafana no justifica introducir otro frontend.
 5. **Fallos controlados:** detener B y comprobar que A atiende; restaurar dentro del plazo y repetir con A, documentando qué tareas se retrasan. Confirmar que B y SQL permanecen activos hasta el vencimiento. Comprobar pendientes y recuperación al volver A, update con un nodo defectuoso y apagado autónomo si desaparece Actions.
-6. **Datos y retorno:** restauración de respaldo ensayada, claves recuperables, migración de volúmenes sin duplicarlos y retorno de contenedores compatible. Preservar operaciones pendientes en Android al cambiar el origen; no borrar almacenamiento ni reinstalar como método de migración.
+6. **Datos y recuperación:** restauración de respaldo ensayada y claves recuperables. No hacer downgrade de contenedores contra un esquema nuevo; reparar y volver a desplegar código, o restaurar manualmente un backup cuando se acepte perder los cambios posteriores. Preservar operaciones pendientes en Android al cambiar el origen; no borrar almacenamiento ni reinstalar como método de migración.
 
 Informar los resultados por separado: compilación/estático, automatización, HTTP y revisión visual. Definir un objetivo inicial de recuperación de nuevas peticiones de hasta 60 segundos tras una caída de VM, medirlo con los health checks elegidos y registrar errores en vuelo/reconexiones; no presentarlo como SLA demostrado antes de ejecutarlo.
 
-## 6. Migración de nombres, datos y rollback
+## 6. Migración de nombres, datos y recuperación
 
 La IP actual es regional y la del balanceador propuesto es global: no asumir que puede reutilizarse. Al conservar `sslip.io`, cambiar la IP cambia los nombres de API/webs/monitor. Preparar la actualización de configuración pública, APK, enlaces en correo, callbacks OAuth y acceso de usuarios; las cookies del host antiguo no se trasladan al nuevo dominio.
 
-Mantener temporalmente Caddy en A para los hosts anteriores y una tabla explícita de redirecciones a los nuevos, conservando ruta/query sin registrarlas cuando contienen tokens. Comprobar qué enlaces previos siguen válidos y definir cuándo se retiran esos hosts. Los hosts antiguos ligados a A no obtienen redundancia por conservar esta transición.
+Usar solo los hosts nuevos del balanceador. Actualizar configuración móvil, enlaces generados, OAuth y accesos de prueba cuando cambie la IP global; no mantener aliases Caddy para los hosts previos.
 
 Antes del cambio: backup SQL, snapshot del disco y copia protegida de claves/configuración. No usar `down -v`, no recrear el disco y no regenerar identificadores/credenciales. Añadir B y LB sin renombrar/reemplazar A; si se cambia a `for_each`, declarar el movimiento de estado y comprobar un plan sin reemplazo de A.
 
-Mantener una release compatible con el nuevo almacenamiento de claves y el esquema anterior/nuevo como punto de retorno. Si falla el balanceador o B, retirar B y volver temporalmente al acceso por Caddy en A con esa release. No intentar volver a una versión que solo conoce claves locales si ya se han emitido nuevas con el almacén compartido; preparar explícitamente exportación/lectura de claves o usar la release compatible. La pérdida física de los servicios de A requiere restauración de disco/respaldo y no queda resuelta por el rollback de contenedores.
+No mantener una release anterior como ruta automática de retorno. Si falla el balanceador o un nodo, corregir la release actual y desplegarla de nuevo; las aplicaciones no vuelven a una versión que podría no entender el esquema migrado. La pérdida física de los servicios de A requiere restauración de disco/respaldo y no queda resuelta por el despliegue de contenedores.
 
 ## 7. Costos y límites del alcance
 
@@ -185,7 +184,7 @@ No se incorporan en esta propuesta Kubernetes, autoscaling, un tercer host, clú
 
 ## 8. Estado de implementación
 
-Implementado en el checkout: OpenTofu para los dos nodos/balanceador/métricas/alertas; Compose privado para brokers, apps y Grafana; exportación OTel/Ops Agent; almacenamiento compartido de Data Protection y rate limits; login Google de Grafana con allowlist; operación común de cuatro horas, mutex, despliegue por rotación y procedimiento de migración/rollback. Se ajustaron las VMs a `n4-custom-6-16384` para caber en la cuota de 12 vCPU. La IP global `34.49.146.66` quedó reservada; el callback de OAuth acordado es `https://monitor.34-49-146-66.sslip.io/login/google` y los nombres de sus dos secretos existen en el environment de GitHub.
+Implementado en el checkout: OpenTofu para los dos nodos/balanceador/métricas/alertas; Compose privado para brokers, apps y Grafana; exportación OTel/Ops Agent; almacenamiento compartido de Data Protection y rate limits; login Google de Grafana con allowlist; operación común de cuatro horas y mutex. Las claves antiguas ya se importaron a sus anillos PostgreSQL y no se conserva el importador. El deploy de aplicaciones tiene una ventana breve: drena ambos nodos, los detiene, migra y aplica la release en cada nodo sin recuperar contenedores anteriores. Se ajustaron las VMs a `n4-custom-6-16384` para caber en la cuota de 12 vCPU. La IP global `34.49.146.66` quedó reservada; el callback de OAuth acordado es `https://monitor.34-49-146-66.sslip.io/login/google` y los nombres de sus dos secretos existen en el environment de GitHub.
 
 Validación local realizada: OpenTofu valida en `demo/` y `bootstrap/`; `tofu fmt -check`; `actionlint` en `demo-vm.yml`; validación de Compose y del Caddyfile; 81 pruebas Python (3 omitidas por sus precondiciones); compilación de ambas soluciones .NET; 459 pruebas de integración, 174 unitarias y 3 de arquitectura en backend; 324 pruebas de frontend. El esquema SQL también pasó el harness con permisos restringidos de PostgreSQL y aislamiento de roles. Caddy responde 200 en `/healthz` y 401 sin credenciales en la bandeja. Grafana 13.2.4 se inició localmente y se revisó en navegador el dashboard y la pantalla de acceso Google; sin identidad GCP no hay métricas reales en esta vista ni se probó el OAuth de producción.
 

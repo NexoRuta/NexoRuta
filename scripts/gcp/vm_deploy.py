@@ -61,12 +61,7 @@ def extract(data, destination):
         for member in archive.getmembers():
             if not member.isfile() or not (destination / member.name).resolve().is_relative_to(destination.resolve()):
                 raise ValueError("Unsafe release archive")
-        if getattr(tarfile, "data_filter", None) is None:
-            # Older distro Python versions lack the extraction filter; members
-            # above are restricted to regular files with paths inside destination.
-            archive.extractall(destination)
-        else:
-            archive.extractall(destination, filter="data")
+        archive.extractall(destination, filter="data")
     # Grafana runs as UID 472; the release itself stays private under umask 077.
     provisioning = destination / "grafana/provisioning"
     if provisioning.exists():
@@ -170,14 +165,8 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
             ipaddress.IPv4Address(address)
         if not re.fullmatch(r"[A-Za-z0-9.-]+", runtime["services_host"]):
             raise ValueError("Invalid private services host")
-        legacy = runtime["legacy_domain"]
-        if not re.fullmatch(r"[a-zA-Z0-9.-]+\.sslip\.io", legacy):
-            raise ValueError("Invalid legacy domain")
         allowed_hosts = {urllib.parse.urlsplit(url).hostname for url in endpoints.values()}
         allowed_hosts.update((private_ip, "localhost", "127.0.0.1"))
-        for name in ("api", "admin", "backoffice", "commerce", "tracking", "mail"):
-            result[f"LEGACY_{name.upper()}_HOST"] = name + "." + legacy
-            allowed_hosts.add(result[f"LEGACY_{name.upper()}_HOST"])
         networks = [runtime["frontend_ip"] + "/32", *LOAD_BALANCER_PROXIES]
         for subnet in docker_subnets:
             network = ipaddress.ip_network(subnet, strict=False)
@@ -210,22 +199,6 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
         if result["SMTP_HOST"] == "mailpit":
             result["SMTP_HOST"] = runtime["services_host"]
     return result
-
-
-def check_migration_policy(policy, applied, history_exists, allow_non_additive=False):
-    migrations = policy.get("migrations")
-    if not isinstance(migrations, dict) or not migrations:
-        raise ValueError("Release has no migration compatibility policy")
-    if any(not re.fullmatch(r"[0-9]{14}_[A-Za-z0-9_]+", name) or not isinstance(safe, bool)
-           for name, safe in migrations.items()):
-        raise ValueError("Invalid migration compatibility policy")
-    unknown = set(applied) - migrations.keys()
-    if unknown:
-        raise RuntimeError("The database contains migrations outside this release")
-    pending = sorted(migrations.keys() - set(applied))
-    if history_exists and not allow_non_additive and any(not migrations[name] for name in pending):
-        raise RuntimeError("Pending migration is unsafe while two application versions coexist")
-    return pending
 
 
 class Deploy:
@@ -317,33 +290,16 @@ class Deploy:
         return self.compose("run", "--rm", "--no-deps", "-T", "db-tools", "psql",
                             "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", query, capture=True)
 
-    def migration_gate(self, allow_non_additive=False):
-        history_exists = bool(self.sql("SELECT to_regclass('public.\"__EFMigrationsHistory\"')"))
-        applied = self.sql('SELECT "MigrationId" FROM public."__EFMigrationsHistory" ORDER BY "MigrationId"').splitlines() if history_exists else []
-        policy = json.loads((self.directory / "migration-policy.json").read_text(encoding="utf-8"))
-        check_migration_policy(policy, applied, history_exists, allow_non_additive)
-
-    def migrate(self, deadline=None, allow_non_additive=False):
+    def migrate(self, deadline=None):
         self.wait_sql()
         with self.migration_lock(deadline if deadline is not None else time.time() + 600):
-            self.migration_gate(allow_non_additive)
             for name in ("preflight.sql",):
                 self.compose("run", "--rm", "--no-deps", "db-tools", "psql", "-v", "ON_ERROR_STOP=1", "-f", "/deploy/sql/" + name)
             self.compose("run", "--rm", "--no-deps", "migrate")
             for name in ("runtime-roles.sql", "hosting.sql", "postflight.sql"):
                 self.compose("run", "--rm", "--no-deps", "db-tools", "psql", "-v", "ON_ERROR_STOP=1", "-f", "/deploy/sql/" + name)
-            self.import_keys()
             self.compose("run", "--rm", "--no-deps", "migrate", "department-catalog-import")
             self.compose("run", "--rm", "--no-deps", "bootstrap")
-
-    def import_keys(self):
-        marker = BASE / "shared-keys-imported"
-        if marker.exists():
-            return
-        self.compose("run", "--rm", "--no-deps", "migrate", "keys-import", "/data/keys")
-        for portal in ("admin", "backoffice", "commerce", "tracking"):
-            self.compose("run", "--rm", "--no-deps", portal, "keys-import", "/root/.aspnet/DataProtection-Keys")
-        private_file(marker, "Imported all legacy rings to their shared stores.\n")
 
 
 def metadata(path):
@@ -404,7 +360,6 @@ def bridge_subnets(deployment):
 
 
 def prepare(args, deployment, runtime, integrations, hosting, manifest, private_ip):
-    shared_keys_ready = (BASE / "shared-keys-imported").exists()
     registry_host = runtime["registry"].split("/")[0]
     deployment.execute("docker", "login", registry_host, "--username", "oauth2accesstoken", "--password-stdin", input=token() + "\n")
     try:
@@ -424,23 +379,19 @@ def prepare(args, deployment, runtime, integrations, hosting, manifest, private_
     finally:
         deployment.execute("docker", "logout", registry_host)
 
-    # The first transition must stop the old local key writers before importing their rings.
-    first_transition = args.node == "a" and not (BASE / "shared-keys-imported").exists()
-    if first_transition and current_release():
-        old = Deploy(BASE / "releases" / current_release(), deployment.log)
-        old_services = json.loads(old.compose("config", "--format", "json", capture=True))["services"]
-        old.compose("stop", *(service for service in APPS if service in old_services))
     deployment.compose("up", "-d", "--wait", "--wait-timeout", "300", "sql-proxy")
     if args.node == "a":
-        if first_transition:
-            deployment.compose("--profile", "shared", "up", "-d", "--wait", "--wait-timeout", "300", *SHARED)
-        else:
-            # Starting existing infrastructure keeps release-specific mount paths from recreating brokers.
-            existing = deployment.execute("docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=nexoruta-demo", capture=True).split()
-            for identifier in existing:
-                service = deployment.execute("docker", "inspect", "--format", '{{index .Config.Labels "com.docker.compose.service"}}', identifier, capture=True)
-                if service in SHARED:
-                    deployment.execute("docker", "start", identifier)
+        existing = deployment.execute("docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=nexoruta-demo", capture=True).split()
+        existing_services = {}
+        for identifier in existing:
+            service = deployment.execute("docker", "inspect", "--format", '{{index .Config.Labels "com.docker.compose.service"}}', identifier, capture=True)
+            if service in SHARED:
+                existing_services[service] = identifier
+        for service, identifier in existing_services.items():
+            deployment.execute("docker", "start", identifier)
+        missing = tuple(service for service in SHARED if service not in existing_services)
+        if missing:
+            deployment.compose("--profile", "shared", "up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", *missing)
         for topic in ("nexoruta.envios.creados.v1", "nexoruta.password-recovery.requested.v1"):
             deployment.compose("--profile", "shared", "exec", "-T", "kafka", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:9092",
                                "--create", "--if-not-exists", "--topic", topic, "--partitions", "1", "--replication-factor", "1")
@@ -462,38 +413,18 @@ def prepare(args, deployment, runtime, integrations, hosting, manifest, private_
             deployment.execute("systemctl", "restart", "google-cloud-ops-agent")
     deployment.execute("systemctl", "restart", "nexoruta-monitor.service")
     private_file(deployment.directory / "prepared.json", json.dumps({"node": args.node, "deadline": args.deadline}))
-    running_services = deployment.execute("docker", "ps", "--format", '{{.Label "com.docker.compose.service"}}',
-                                          "--filter", "label=com.docker.compose.project=nexoruta-demo",
-                                          capture=True).splitlines()
-    running_applications = sorted(set(running_services) & set(APPS))
-    return {"shared_keys_ready": shared_keys_ready, "running_applications": running_applications}
+    return {}
 
 
 def apply(args, deployment, private_ip):
-    previous = current_release()
-    private_file(deployment.directory / "previous-release", (previous or "") + "\n")
     try:
-        deployment.compose("stop", *APPS)
         deployment.compose("up", "-d", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "300", *APPS)
         direct_health(private_ip)
         private_file(BASE / "current-release", args.release + "\n")
-        private_file(BASE / "shared-keys-imported", "Shared key storage is active on this node.\n")
     except Exception:
-        restored = False
-        if previous and previous != args.release:
-            try:
-                old_directory = BASE / "releases" / previous
-                if not (old_directory / "hosting.pfx").exists():
-                    raise RuntimeError("The previous release cannot read shared Data Protection keys")
-                rollback = Deploy(old_directory, deployment.log)
-                rollback.compose("up", "-d", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "180", *APPS)
-                direct_health(private_ip)
-                restored = True
-            except Exception:
-                pass
         print(json.dumps({"stage": "apply", "node": args.node, "release": args.release,
-                          "previous_release": previous, "status": "failed", "rollback_healthy": restored}))
-        raise RuntimeError("Node application update failed; inspect its private deployment log") from None
+                          "status": "failed"}))
+        raise RuntimeError("Node application update failed; it remains out of the load balancer") from None
 
 
 def smoke(runtime, check_accounts=True):
@@ -541,13 +472,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bucket", required=True)
     parser.add_argument("--release", required=True)
-    parser.add_argument("--stage", choices=("prepare", "migrate", "apply", "verify", "verify-local"), required=True)
+    parser.add_argument("--stage", choices=("prepare", "stop", "migrate", "apply", "verify"), required=True)
     parser.add_argument("--node", choices=("a", "b"), required=True)
     parser.add_argument("--deadline", type=float, required=True)
-    parser.add_argument("--allow-non-additive", action="store_true")
     args = parser.parse_args()
-    if args.allow_non_additive and args.stage != "migrate":
-        parser.error("--allow-non-additive is valid only with --stage migrate")
     try:
         run_stage(args)
     except Exception as error:
@@ -601,18 +529,15 @@ def run_stage(args):
                 if args.stage == "prepare":
                     result = prepare(args, deployment, runtime, secret(project, "nexoruta-demo-integrations"),
                                      secret(project, "nexoruta-demo-hosting"), manifest, private_ip)
+                elif args.stage == "stop":
+                    deployment.compose("stop", *APPS)
                 elif args.stage == "migrate":
-                    deployment.migrate(args.deadline, args.allow_non_additive)
-                    deployment.compose("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", "grafana")
+                    deployment.migrate(args.deadline)
                 elif args.stage == "apply":
                     apply(args, deployment, private_ip)
-                elif args.stage == "verify-local":
-                    direct_health(private_ip)
-                    result = {"applied_release": current_release()}
                 else:
                     direct_health(private_ip)
-                    previous = (directory / "previous-release").read_text().strip()
-                    smoke(runtime, check_accounts=not previous)
+                    smoke(runtime)
                     result = {"endpoints": runtime["endpoints"]}
                 print(json.dumps({"release": args.release, "node": args.node, "stage": args.stage, "status": "healthy", **result}))
             except Exception as error:

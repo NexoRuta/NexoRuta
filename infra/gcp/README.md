@@ -271,13 +271,16 @@ logins runtime sin `cloudsqlsuperuser`/`BYPASSRLS`, importa el catálogo de Urug
 crea cuentas/organizaciones iniciales y levanta todos los servicios.
 
 Tras los healthchecks internos se comprueba HTTPS de las cinco apps y el endpoint
-de salud de `monitor`; también se verifica que Grafana y Mailpit exijan login. En el primer
-despliegue, login real contra la base. Los datos y contraseñas posteriores no se
+de salud de `monitor`; también se verifica que Grafana y Mailpit exijan login. En cada
+despliegue se prueba login real contra la base. Los datos y contraseñas posteriores no se
 reinician. Las cuentas iniciales son `admin@nexoruta.test`, `operador@nexoruta.test`
 y `comercio@nexoruta.test`; sus contraseñas están en el secreto runtime, no en el repo.
-Un fallo intenta restaurar los contenedores de la release anterior. **No revierte
-migraciones automáticamente**: usar el backup y una operación administrativa
-explícita si un cambio de esquema impide volver al código anterior.
+Cada `update` tiene un corte breve: retira ambos nodos del balanceador, detiene
+las apps, migra una vez y aplica la release objetivo. Si falla una migración, las
+apps quedan detenidas; si falla un nodo después, queda fuera del balanceador y
+el otro nodo nuevo puede seguir atendiendo. No se recuperan automáticamente
+contenedores anteriores ni se revierten migraciones; corregir el código y
+desplegar una release nueva. El backup sirve para recuperación manual deliberada.
 
 ## Plazo y costos residuales
 

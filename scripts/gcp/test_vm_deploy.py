@@ -57,7 +57,7 @@ class VmDeploymentTests(unittest.TestCase):
             "migrator", "api", "worker", "bootstrap", "rabbit", "mongo", "mail", "monitor", "grafana",
             "keys_api", "keys_admin", "keys_backoffice", "keys_commerce", "keys_tracking", "admin", "operator", "commerce")}
         runtime = {"project_id": "demo-project", "sql_connection": "demo-project:region:sql", "registry": registry,
-                   "services_host": "10.0.0.1", "frontend_ip": "34.0.0.1", "legacy_domain": "34-0-0-2.sslip.io",
+                   "services_host": "10.0.0.1", "frontend_ip": "34.0.0.1",
                    "passwords": passwords, "keys": {name: "key" for name in ("jwt", "tracking", "push", "evidence")},
                    "endpoints": {name: f"https://{name}.34-0-0-1.sslip.io" for name in (
                        "api", "admin", "backoffice", "commerce", "tracking", "mail", "monitor")},
@@ -77,7 +77,10 @@ class VmDeploymentTests(unittest.TestCase):
                                        "release-" + "a" * 32, ("172.22.0.0/16",))
         self.assertEqual(values["SMTP_HOST"], "10.0.0.1")
         self.assertEqual(values["TRUSTED_NETWORKS"], "34.0.0.1/32,35.191.0.0/16,130.211.0.0/22,172.22.0.0/16")
-        self.assertIn("api.34-0-0-2.sslip.io", values["ALLOWED_HOSTS"].split(";"))
+        allowed_hosts = values["ALLOWED_HOSTS"].split(";")
+        self.assertIn("api.34-0-0-1.sslip.io", allowed_hosts)
+        self.assertNotIn("api.34-0-0-2.sslip.io", allowed_hosts)
+        self.assertFalse(any(key.startswith("LEGACY_") for key in values))
         for ring in vm_deploy.RINGS:
             self.assertIn("Username=nexoruta_keys_" + ring + ";", values["KEYS_" + ring.upper() + "_CONNECTION"])
         self.assertEqual(values["MONITOR_ROLE_EXPRESSION"], "contains(['reader@example.test'], email) && 'Viewer' || 'None'")
@@ -92,33 +95,7 @@ class VmDeploymentTests(unittest.TestCase):
                     vm_deploy.environment(runtime, integrations, images, "hash", hosting, "a", "10.0.0.1",
                                           "release-" + "a" * 32, subnets)
 
-    def test_migration_gate_blocks_unsafe_pending_and_newer_unknown_schema(self):
-        first, second = "20261001000000_Initial", "20261002000000_RemoveField"
-        policy = {"migrations": {first: False, second: False}}
-        self.assertEqual(vm_deploy.check_migration_policy(policy, [], False), [first, second])
-        self.assertEqual(vm_deploy.check_migration_policy(policy, [first, second], True), [])
-        with self.assertRaisesRegex(RuntimeError, "unsafe"):
-            vm_deploy.check_migration_policy(policy, [first], True)
-        with self.assertRaisesRegex(RuntimeError, "outside"):
-            vm_deploy.check_migration_policy(policy, ["20261003000000_Unknown"], True)
-        policy["migrations"][second] = True
-        self.assertEqual(vm_deploy.check_migration_policy(policy, [first], True), [second])
-
-    def test_key_import_marker_is_written_only_after_all_portal_imports(self):
-        with tempfile.TemporaryDirectory() as directory, patch.object(vm_deploy, "BASE", Path(directory)):
-            deployment = vm_deploy.Deploy(Path(directory), io.StringIO())
-            deployment.compose = Mock(side_effect=[None, None, RuntimeError("import failed")])
-            with self.assertRaises(RuntimeError):
-                deployment.import_keys()
-            self.assertFalse((Path(directory) / "shared-keys-imported").exists())
-            deployment.compose = Mock()
-            deployment.import_keys()
-            self.assertTrue((Path(directory) / "shared-keys-imported").exists())
-            self.assertEqual(deployment.compose.call_count, 5)
-            deployment.import_keys()
-            self.assertEqual(deployment.compose.call_count, 5)
-
-    def test_migrations_provision_hosting_before_import_and_bootstrap(self):
+    def test_migrations_provision_hosting_before_catalog_and_bootstrap(self):
         deployment = vm_deploy.Deploy(Path("unused"), io.StringIO())
         events = []
 
@@ -131,13 +108,11 @@ class VmDeploymentTests(unittest.TestCase):
 
         deployment.wait_sql = Mock()
         deployment.migration_lock = Mock(return_value=Lock())
-        deployment.migration_gate = Mock(side_effect=lambda: events.append("gate"))
         deployment.compose = Mock(side_effect=lambda *args, **kwargs: events.append(args[-1]))
-        deployment.import_keys = Mock(side_effect=lambda: events.append("keys"))
         deployment.migrate(12345)
-        self.assertEqual(events, ["lock", "gate", "/deploy/sql/preflight.sql", "migrate",
+        self.assertEqual(events, ["lock", "/deploy/sql/preflight.sql", "migrate",
                                  "/deploy/sql/runtime-roles.sql", "/deploy/sql/hosting.sql",
-                                 "/deploy/sql/postflight.sql", "keys", "department-catalog-import", "bootstrap", "unlock"])
+                                 "/deploy/sql/postflight.sql", "department-catalog-import", "bootstrap", "unlock"])
 
     def test_lost_sql_lock_blocks_the_next_compose_mutation(self):
         deployment = vm_deploy.Deploy(Path("unused"), io.StringIO())
@@ -148,23 +123,20 @@ class VmDeploymentTests(unittest.TestCase):
             deployment.compose("run", "migrate")
         deployment.execute.assert_not_called()
 
-    def test_failed_node_update_restores_previous_apps_without_marking_release_or_restarting_brokers(self):
+    def test_failed_node_update_does_not_restart_previous_release_or_brokers(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(vm_deploy, "BASE", Path(directory)):
             root = Path(directory)
-            previous, target = "release-" + "a" * 32, "release-" + "b" * 32
-            old = root / "releases" / previous
-            old.mkdir(parents=True)
-            (old / "hosting.pfx").write_bytes(b"certificate")
-            (root / "current-release").write_text(previous + "\n")
+            target = "release-" + "b" * 32
             target_directory = root / "releases" / target
-            target_directory.mkdir()
+            target_directory.mkdir(parents=True)
             deployment = vm_deploy.Deploy(target_directory, io.StringIO())
             args = SimpleNamespace(release=target, node="b")
-            with patch.object(vm_deploy.Deploy, "compose") as compose, patch.object(vm_deploy, "direct_health", side_effect=[RuntimeError("new node unhealthy"), None]), redirect_stdout(io.StringIO()) as output:
+            with patch.object(vm_deploy.Deploy, "compose") as compose, patch.object(vm_deploy, "direct_health", side_effect=RuntimeError("new node unhealthy")), redirect_stdout(io.StringIO()) as output:
                 with self.assertRaises(RuntimeError):
                     vm_deploy.apply(args, deployment, "10.0.0.2")
-            self.assertEqual((root / "current-release").read_text().strip(), previous)
-            self.assertTrue(json.loads(output.getvalue())["rollback_healthy"])
+            self.assertFalse((root / "current-release").exists())
+            self.assertEqual(json.loads(output.getvalue())["status"], "failed")
+            self.assertEqual(compose.call_count, 1)
             for call in compose.call_args_list:
                 self.assertFalse(set(vm_deploy.SHARED).intersection(call.args))
 
@@ -172,22 +144,33 @@ class VmDeploymentTests(unittest.TestCase):
         runtime, integrations, hosting, images = self.configuration()
         with tempfile.TemporaryDirectory() as directory, patch.object(vm_deploy, "BASE", Path(directory)):
             root = Path(directory)
-            (root / "shared-keys-imported").write_text("done")
             release = root / "release"
             release.mkdir()
             (release / "monitor_agent.py").write_text("# collector")
             (release / "monitoring").mkdir()
             (release / "monitoring/ops-agent.yaml").write_text("metrics: {}")
             deployment = vm_deploy.Deploy(release, io.StringIO())
-            deployment.execute = Mock(side_effect=lambda *args, **kwargs: "hash" if "hash-password" in args else "")
+            services = vm_deploy.SHARED
+            identifiers = [f"container-{index}" for index in range(len(services))]
+            def execute(*args, **kwargs):
+                if args[:2] == ("docker", "run"):
+                    return "hash"
+                if args[:2] == ("docker", "ps"):
+                    return "\n".join(identifiers)
+                if args[:2] == ("docker", "inspect"):
+                    return services[identifiers.index(args[-1])]
+                return ""
+            deployment.execute = Mock(side_effect=execute)
             deployment.compose = Mock()
             args = SimpleNamespace(node="a", release="release-" + "a" * 32, deadline=12345)
             with patch.object(vm_deploy, "token", return_value="token"), patch.object(vm_deploy, "bridge_subnets", return_value=["172.22.0.0/16"]), patch.object(vm_deploy, "OPS_AGENT_CONFIG", root / "ops-agent.yaml"):
                 result = vm_deploy.prepare(args, deployment, runtime, integrations, hosting, {"images": images}, "10.0.0.1")
-            self.assertTrue(result["shared_keys_ready"])
+            self.assertEqual(result, {})
             up_calls = [call.args for call in deployment.compose.call_args_list if "up" in call.args]
             self.assertEqual(len(up_calls), 1)
             self.assertEqual(up_calls[0][-1], "sql-proxy")
+            started = [call.args[-1] for call in deployment.execute.call_args_list if call.args[:2] == ("docker", "start")]
+            self.assertEqual(set(started), set(identifiers))
             for call in deployment.execute.call_args_list:
                 self.assertNotIn(runtime["passwords"]["mail"], call.args)
             config = json.loads((root / "monitor.json").read_text())

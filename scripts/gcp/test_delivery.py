@@ -29,34 +29,6 @@ class DeliveryTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     vm_deploy.extract(data.getvalue(), Path(temp))
 
-    def test_release_extraction_supports_python_without_data_filter(self):
-        data = io.BytesIO()
-        with tarfile.open(fileobj=data, mode="w:gz") as archive:
-            content = b"safe release content"
-            member = tarfile.TarInfo("assets/config.json")
-            member.size = len(content)
-            archive.addfile(member, io.BytesIO(content))
-        with tempfile.TemporaryDirectory() as temp, patch.object(vm_deploy.tarfile, "data_filter", None, create=True):
-            destination = Path(temp)
-            vm_deploy.extract(data.getvalue(), destination)
-            self.assertEqual((destination / "assets/config.json").read_bytes(), b"safe release content")
-
-    def test_migration_policy_includes_only_entity_framework_migrations(self):
-        with tempfile.TemporaryDirectory() as temp:
-            migrations = Path(temp)
-            names = (
-                "20260101010101_AddFeature.cs",
-                "20260101010101_AddFeature.Designer.cs",
-                "20260101010101_AddFeature.Sql.cs",
-                "ProvisionRoles.cs",
-            )
-            for name in names:
-                (migrations / name).write_text("", encoding="utf-8")
-            self.assertEqual(
-                [path.name for path in delivery.migration_policy_files(migrations)],
-                ["20260101010101_AddFeature.cs"],
-            )
-
     def test_grafana_dashboard_queries_use_selected_cloud_monitoring_project(self):
         dashboard_path = Path(__file__).parents[2] / "deploy/gcp/grafana/provisioning/dashboards/nexoruta.json"
         dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
@@ -68,27 +40,6 @@ class DeliveryTests(unittest.TestCase):
                    for target in panel.get("targets", []) if target.get("queryType") == "timeSeriesList"]
         self.assertTrue(queries)
         self.assertTrue(all(query.get("projectName") == "$project" for query in queries))
-
-    def test_non_additive_migrations_require_all_application_services_stopped(self):
-        prepared = {
-            "a": {"running_applications": []},
-            "b": {"running_applications": []},
-        }
-        self.assertTrue(delivery.no_application_services_running(prepared))
-        self.assertFalse(delivery.no_application_services_running({"a": prepared["a"]}))
-        self.assertFalse(delivery.no_application_services_running({
-            "a": prepared["a"], "b": {"running_applications": ["api"]},
-        }))
-        self.assertFalse(delivery.no_application_services_running({
-            "a": prepared["a"], "b": {"shared_keys_ready": True},
-        }))
-
-    def test_non_additive_migration_override_requires_quiesced_application(self):
-        policy = {"migrations": {"20260101010101_AddFeature": False}}
-        with self.assertRaisesRegex(RuntimeError, "unsafe"):
-            vm_deploy.check_migration_policy(policy, [], True)
-        self.assertEqual(vm_deploy.check_migration_policy(policy, [], True, allow_non_additive=True),
-                         ["20260101010101_AddFeature"])
 
     def test_environment_cannot_inject_additional_lines(self):
         with self.assertRaises(ValueError):
@@ -173,6 +124,67 @@ class DeliveryTests(unittest.TestCase):
             delivery.remote_stage_error("urllib.error.HTTPError: private detail", "a", "prepare"),
             "Node a stage prepare failed (HTTPError)",
         )
+
+    def test_deployment_drains_and_stops_both_nodes_before_migrating(self):
+        release = "release-" + "a" * 32
+        nodes = [
+            {"NODE_ID": "a", "VM_NAME": "nexoruta-a"},
+            {"NODE_ID": "b", "VM_NAME": "nexoruta-b"},
+        ]
+        events = []
+
+        def gcloud(node, *args, capture=False):
+            if args[:2] == ("compute", "scp"):
+                return ""
+            if args[:3] == ("compute", "ssh", node["VM_NAME"]):
+                command = args[-1]
+                if "--stage" in command:
+                    stage = command.split("--stage", 1)[1].split()[0]
+                    events.append(("stage", node["NODE_ID"], stage))
+                    result = {"release": release, "node": node["NODE_ID"], "stage": stage,
+                              "status": "healthy"}
+                    if stage == "verify":
+                        result["endpoints"] = {"api": "https://api.example.test"}
+                    return json.dumps(result)
+                return ""
+            operation = next((item for item in args if item in ("remove-instances", "add-instances")), None)
+            if operation:
+                events.append((operation, node["NODE_ID"]))
+                return ""
+            raise AssertionError(args)
+
+        def command(*args, capture=False):
+            if args[1:3] == ("storage", "cat"):
+                return json.dumps({"expires_at": 2000})
+            if args[1:3] == ("sql", "backups"):
+                return ""
+            if args[1:4] == ("compute", "backend-services", "get-health"):
+                return json.dumps([{"status": {"healthStatus": [
+                    {"instance": "/zones/test/instances/nexoruta-a", "healthState": "HEALTHY"},
+                    {"instance": "/zones/test/instances/nexoruta-b", "healthState": "HEALTHY"},
+                ]}}])
+            raise AssertionError(args)
+
+        config = {"GCP_PROJECT_ID": "demo-project", "GCP_STATE_BUCKET": "demo-state"}
+        with (
+            patch.object(session, "node_configs", return_value=nodes),
+            patch.object(session, "command", side_effect=command),
+            patch.object(session, "gcloud", side_effect=gcloud),
+            patch.object(delivery.time, "time", return_value=1000),
+            patch.object(delivery.time, "sleep", side_effect=lambda seconds: events.append(("sleep", seconds))),
+        ):
+            result = delivery.deploy(config, release)
+
+        operations = [event for event in events if event[0] in ("remove-instances", "add-instances", "stage")]
+        self.assertEqual(operations, [
+            ("stage", "a", "prepare"), ("stage", "b", "prepare"),
+            ("remove-instances", "a"), ("remove-instances", "b"),
+            ("stage", "a", "stop"), ("stage", "b", "stop"), ("stage", "a", "migrate"),
+            ("stage", "b", "apply"), ("add-instances", "b"),
+            ("stage", "a", "apply"), ("add-instances", "a"), ("stage", "a", "verify"),
+        ])
+        self.assertEqual(events[4], ("sleep", 35))
+        self.assertEqual(result["endpoints"]["api"], "https://api.example.test")
 
     def test_offline_update_does_not_provision_or_start_anything(self):
         config = {"DEMO_OPERATION": "update"}

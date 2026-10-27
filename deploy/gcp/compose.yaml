@@ -3,7 +3,6 @@ x-api-env: &id001
   ASPNETCORE_ENVIRONMENT: Production
   ConnectionStrings__Postgres: ${API_CONNECTION:?}
   Jwt__SigningKeyBase64: ${JWT_KEY:?}
-  DataProtection__KeysDirectory: /data/keys
   DatabaseInitialization__ApplyMigrations: 'false'
   DatabaseInitialization__SeedData: 'false'
   Email__Smtp__Host: ${SMTP_HOST:?}
@@ -48,7 +47,6 @@ x-worker:
     RabbitMq__Host: ${SERVICES_HOST:?}
     RabbitMq__Username: nexoruta
     RabbitMq__Password: ${RABBIT_PASSWORD:?}
-    DataProtection__KeysDirectory: /data/keys
     Seguimiento__EncryptionKey: ${TRACKING_KEY:?}
     Tracking__PublicBaseUrl: ${TRACKING_URL:?}
     Push__RegistrationEncryptionKey: ${PUSH_KEY:?}
@@ -70,7 +68,6 @@ x-worker:
     DataProtection__CertificatePath: /data/hosting.pfx
     DataProtection__CertificatePassword: ${HOSTING_CERT_PASSWORD:?}
   volumes: &id004
-  - api-keys:/data/keys
   - ./hosting.pfx:/data/hosting.pfx:ro
   healthcheck: &id005
     test:
@@ -245,7 +242,6 @@ services:
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: 'true'
       ConnectionStrings__Postgres: ${MIGRATOR_CONNECTION:?}
       Jwt__SigningKeyBase64: ${JWT_KEY:?}
-      DataProtection__KeysDirectory: /data/keys
       DatabaseInitialization__ApplyMigrations: 'false'
       DatabaseInitialization__SeedData: 'false'
       Email__Smtp__Host: ${SMTP_HOST:?}
@@ -265,7 +261,6 @@ services:
       DataProtection__CertificatePath: /data/hosting.pfx
       DataProtection__CertificatePassword: ${HOSTING_CERT_PASSWORD:?}
     volumes:
-    - api-keys:/data/keys
     - ./hosting.pfx:/data/hosting.pfx:ro
     profiles:
     - administration
@@ -278,7 +273,6 @@ services:
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: 'true'
       ConnectionStrings__Postgres: ${BOOTSTRAP_CONNECTION:?}
       Jwt__SigningKeyBase64: ${JWT_KEY:?}
-      DataProtection__KeysDirectory: /data/keys
       DatabaseInitialization__ApplyMigrations: 'false'
       DatabaseInitialization__SeedData: 'false'
       Email__Smtp__Host: ${SMTP_HOST:?}
@@ -298,7 +292,6 @@ services:
       DataProtection__CertificatePath: /data/hosting.pfx
       DataProtection__CertificatePassword: ${HOSTING_CERT_PASSWORD:?}
     volumes:
-    - api-keys:/data/keys
     - ./bootstrap.json:/app/appsettings.Production.json:ro
     - ./hosting.pfx:/data/hosting.pfx:ro
     profiles:
@@ -308,7 +301,6 @@ services:
     restart: unless-stopped
     environment: *id001
     volumes:
-    - api-keys:/data/keys
     - ./hosting.pfx:/data/hosting.pfx:ro
     mem_limit: 1536m
     cpu_shares: 2048
@@ -351,7 +343,6 @@ services:
       RabbitMq__Host: ${SERVICES_HOST:?}
       RabbitMq__Username: nexoruta
       RabbitMq__Password: ${RABBIT_PASSWORD:?}
-      DataProtection__KeysDirectory: /data/keys
       Seguimiento__EncryptionKey: ${TRACKING_KEY:?}
       Tracking__PublicBaseUrl: ${TRACKING_URL:?}
       Push__RegistrationEncryptionKey: ${PUSH_KEY:?}
@@ -392,7 +383,6 @@ services:
       RabbitMq__Host: ${SERVICES_HOST:?}
       RabbitMq__Username: nexoruta
       RabbitMq__Password: ${RABBIT_PASSWORD:?}
-      DataProtection__KeysDirectory: /data/keys
       Seguimiento__EncryptionKey: ${TRACKING_KEY:?}
       Tracking__PublicBaseUrl: ${TRACKING_URL:?}
       Push__RegistrationEncryptionKey: ${PUSH_KEY:?}
@@ -438,7 +428,6 @@ services:
     healthcheck: *id006
     image: ${ADMIN_IMAGE:?}
     volumes:
-    - admin-keys:/root/.aspnet/DataProtection-Keys
     - ./hosting.pfx:/data/hosting.pfx:ro
     extra_hosts:
     - host.docker.internal:host-gateway
@@ -468,7 +457,6 @@ services:
     healthcheck: *id006
     image: ${BACKOFFICE_IMAGE:?}
     volumes:
-    - backoffice-keys:/root/.aspnet/DataProtection-Keys
     - ./hosting.pfx:/data/hosting.pfx:ro
     extra_hosts:
     - host.docker.internal:host-gateway
@@ -498,7 +486,6 @@ services:
     healthcheck: *id006
     image: ${COMMERCE_IMAGE:?}
     volumes:
-    - commerce-keys:/root/.aspnet/DataProtection-Keys
     - ./hosting.pfx:/data/hosting.pfx:ro
     extra_hosts:
     - host.docker.internal:host-gateway
@@ -534,7 +521,6 @@ services:
       retries: 18
     image: ${TRACKING_IMAGE:?}
     volumes:
-    - tracking-keys:/root/.aspnet/DataProtection-Keys
     - ./hosting.pfx:/data/hosting.pfx:ro
     extra_hosts:
     - host.docker.internal:host-gateway
@@ -544,23 +530,9 @@ services:
     image: caddy:2.10.2-alpine
     restart: unless-stopped
     ports:
-    - 80:80
-    - 443:443
     - ${NODE_PRIVATE_IP:?}:18025:8025
     environment:
-      API_HOST: ${API_HOST:?}
-      ADMIN_HOST: ${ADMIN_HOST:?}
-      BACKOFFICE_HOST: ${BACKOFFICE_HOST:?}
-      COMMERCE_HOST: ${COMMERCE_HOST:?}
-      TRACKING_HOST: ${TRACKING_HOST:?}
-      MAIL_HOST: ${MAIL_HOST:?}
       MAIL_PASSWORD_HASH: ${MAIL_PASSWORD_HASH:?}
-      LEGACY_API_HOST: ${LEGACY_API_HOST:?}
-      LEGACY_ADMIN_HOST: ${LEGACY_ADMIN_HOST:?}
-      LEGACY_BACKOFFICE_HOST: ${LEGACY_BACKOFFICE_HOST:?}
-      LEGACY_COMMERCE_HOST: ${LEGACY_COMMERCE_HOST:?}
-      LEGACY_TRACKING_HOST: ${LEGACY_TRACKING_HOST:?}
-      LEGACY_MAIL_HOST: ${LEGACY_MAIL_HOST:?}
     volumes:
     - ./Caddyfile:/etc/caddy/Caddyfile:ro
     - caddy-data:/data
@@ -618,11 +590,6 @@ services:
       timeout: 5s
       retries: 24
 volumes:
-  api-keys: null
-  admin-keys: null
-  backoffice-keys: null
-  commerce-keys: null
-  tracking-keys: null
   rabbit: null
   kafka: null
   mongo: null

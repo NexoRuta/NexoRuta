@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: 'start: test/tag latest main and start for 4h / update: latest published integration / stop: VM and SQL'
+        description: 'start: test/tag latest main and start for 4h / update: latest published integration (application downtime) / stop: VM and SQL'
         required: true
         default: start
         type: choice
