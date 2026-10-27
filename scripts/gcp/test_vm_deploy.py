@@ -51,6 +51,25 @@ class VmDeploymentTests(unittest.TestCase):
             self.assertEqual((root / "grafana/provisioning/dashboards/provider.yaml").stat().st_mode & 0o777, 0o644)
             self.assertEqual((root / "grafana/provisioning/dashboards").stat().st_mode & 0o777, 0o755)
 
+    def test_release_extraction_rejects_paths_and_links(self):
+        for member in (
+            ("../escape.txt", tarfile.REGTYPE, None),
+            ("link", tarfile.SYMTYPE, "../../escape.txt"),
+        ):
+            archive_data = io.BytesIO()
+            with tarfile.open(fileobj=archive_data, mode="w:gz") as archive:
+                info = tarfile.TarInfo(member[0])
+                info.type = member[1]
+                info.linkname = member[2] or ""
+                info.size = 1 if info.type == tarfile.REGTYPE else 0
+                archive.addfile(info, io.BytesIO(b"x") if info.size else None)
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "release"
+                root.mkdir()
+                with self.assertRaisesRegex(ValueError, "Unsafe release archive"):
+                    vm_deploy.extract(archive_data.getvalue(), root)
+                self.assertFalse((Path(directory) / "escape.txt").exists())
+
     def configuration(self):
         registry = "southamerica-west1-docker.pkg.dev/demo-project/nexoruta"
         passwords = {name: "private-" + name for name in (

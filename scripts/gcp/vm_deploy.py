@@ -11,6 +11,7 @@ import math
 import os
 from pathlib import Path
 import re
+import shutil
 import selectors
 import socket
 import subprocess
@@ -57,11 +58,45 @@ def object_bytes(bucket, name):
 
 
 def extract(data, destination):
+    destination = Path(destination).resolve()
+    destination.mkdir(parents=True, exist_ok=True)
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
-        for member in archive.getmembers():
-            if not member.isfile() or not (destination / member.name).resolve().is_relative_to(destination.resolve()):
+        members = archive.getmembers()
+        targets = []
+        seen = set()
+        for member in members:
+            relative = Path(member.name)
+            if (not member.isfile() or relative.is_absolute() or not relative.parts
+                    or any(part in (".", "..") for part in relative.parts)):
                 raise ValueError("Unsafe release archive")
-        archive.extractall(destination, filter="data")
+            target = destination.joinpath(*relative.parts)
+            if member.name in seen or not target.resolve().is_relative_to(destination):
+                raise ValueError("Unsafe release archive")
+            seen.add(member.name)
+            parent = target.parent
+            while parent != destination:
+                if parent.is_symlink():
+                    raise ValueError("Unsafe release archive")
+                parent = parent.parent
+            if target.is_symlink() or (target.exists() and not target.is_file()):
+                raise ValueError("Unsafe release archive")
+            targets.append((member, target))
+
+        # Extract regular files ourselves so deployment also works on Debian 12's
+        # Python 3.11, whose tarfile.extractall() has no filter parameter.
+        for member, target in targets:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if not target.parent.resolve().is_relative_to(destination) or target.is_symlink():
+                raise ValueError("Unsafe release archive")
+            source = archive.extractfile(member)
+            if source is None:
+                raise ValueError("Unsafe release archive")
+            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+            if hasattr(os, "O_NOFOLLOW"):
+                flags |= os.O_NOFOLLOW
+            with source, os.fdopen(os.open(target, flags, 0o600), "wb") as output:
+                shutil.copyfileobj(source, output)
+            target.chmod(member.mode & 0o755)
     # Grafana runs as UID 472; the release itself stays private under umask 077.
     provisioning = destination / "grafana/provisioning"
     if provisioning.exists():
