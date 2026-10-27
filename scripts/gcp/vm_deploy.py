@@ -24,6 +24,7 @@ BASE = Path("/srv/nexoruta")
 APPS = ("api", "worker-rabbit", "worker-kafka", "worker-push", "admin", "backoffice", "commerce", "tracking", "grafana")
 SHARED = ("rabbitmq", "kafka", "mongo", "mailpit", "proxy")
 RINGS = ("api", "admin", "backoffice", "commerce", "tracking")
+LOAD_BALANCER_PROXIES = ("35.191.0.0/16", "130.211.0.0/22")
 DIRECT_PORTS = {"api": 18080, "admin": 18081, "backoffice": 18082,
                 "commerce": 18083, "tracking": 18084, "monitor": 13000}
 MIGRATION_LOCK = 74200344171234
@@ -59,7 +60,20 @@ def extract(data, destination):
         for member in archive.getmembers():
             if not member.isfile() or not (destination / member.name).resolve().is_relative_to(destination.resolve()):
                 raise ValueError("Unsafe release archive")
-        archive.extractall(destination)
+        archive.extractall(destination, filter="data")
+    # Grafana runs as UID 472; the release itself stays private under umask 077.
+    provisioning = destination / "grafana/provisioning"
+    if provisioning.exists():
+        for directory in (destination / "grafana", provisioning, *provisioning.rglob("*")):
+            if directory.is_dir():
+                directory.chmod(0o755)
+            elif directory.is_file():
+                directory.chmod(0o644)
+        dashboards = destination / "grafana/dashboards"
+        if dashboards.exists():
+            dashboards.chmod(0o755)
+            for path in dashboards.rglob("*"):
+                path.chmod(0o755 if path.is_dir() else 0o644)
 
 
 def private_file(path, value):
@@ -158,7 +172,7 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
         for name in ("api", "admin", "backoffice", "commerce", "tracking", "mail"):
             result[f"LEGACY_{name.upper()}_HOST"] = name + "." + legacy
             allowed_hosts.add(result[f"LEGACY_{name.upper()}_HOST"])
-        networks = [runtime["frontend_ip"] + "/32"]
+        networks = [runtime["frontend_ip"] + "/32", *LOAD_BALANCER_PROXIES]
         for subnet in docker_subnets:
             network = ipaddress.ip_network(subnet, strict=False)
             if network.prefixlen == 0:
@@ -464,8 +478,10 @@ def apply(args, deployment, private_ip):
 
 def smoke(runtime, check_accounts=True):
     endpoints = runtime["endpoints"]
-    for name in ("api", "admin", "backoffice", "commerce", "tracking"):
+    for name in ("api", "admin", "backoffice", "commerce", "tracking", "monitor"):
         path = "/health/ready" if name in ("api", "tracking") else "/ingresar"
+        if name == "monitor":
+            path = "/api/health"
         url = endpoints[name] + path
         for attempt in range(60):
             try:
@@ -477,6 +493,20 @@ def smoke(runtime, check_accounts=True):
                 time.sleep(5)
         else:
             raise RuntimeError(f"HTTPS smoke test failed: {name}")
+    try:
+        urllib.request.urlopen(endpoints["monitor"] + "/api/search?query=nexoruta", timeout=10)
+    except urllib.error.HTTPError as error:
+        if error.code != 401:
+            raise RuntimeError("The monitoring dashboard API must require Google authentication") from None
+    else:
+        raise RuntimeError("The monitoring dashboard API is publicly accessible")
+    try:
+        urllib.request.urlopen(endpoints["mail"] + "/", timeout=10)
+    except urllib.error.HTTPError as error:
+        if error.code != 401:
+            raise RuntimeError("The demo mail inbox must remain password-protected") from None
+    else:
+        raise RuntimeError("The demo mail inbox is publicly accessible")
     # A database-backed login exercises the migrated schema and runtime RLS role.
     accounts = (("admin", "admin@nexoruta.test"), ("operator", "operador@nexoruta.test"), ("commerce", "comercio@nexoruta.test")) if check_accounts else ()
     for role, email in accounts:

@@ -1,6 +1,6 @@
 # Plan: dos VMs, balanceador HTTPS y monitorización privada
 
-Estado: propuesta de implementación; no aplicada. Fecha: 26/10/2026.
+Estado: implementación local en curso; pendiente validar y desplegar desde `main`. Fecha: 26/10/2026.
 
 ## 1. Alcance confirmado
 
@@ -22,7 +22,7 @@ Estos SHAs describen el código inspeccionado, no la release actualmente despleg
 
 | Pieza | Implementación actual | Consecuencia para el cambio |
 | --- | --- | --- |
-| Cómputo | Una `n4-highcpu-8`, 8 vCPU/16 GiB, en `southamerica-west1-a`; IP pública regional | Agregar B y un frontal independiente; conservar A y sus datos |
+| Cómputo | Una `n4-highcpu-8`, 8 vCPU/16 GiB, en `southamerica-west1-a`; IP pública regional | La cuota global de 12 vCPU obliga a `n4-custom-6-16384` en ambos nodos; conservar A y sus datos |
 | Persistencia local | Hyperdisk de 80 GiB con Docker/containerd, volúmenes y releases bajo `/srv/nexoruta` | No compartir ese disco como filesystem de dos hosts ni copiarlo con servicios escribiendo |
 | Datos | Cloud SQL PostgreSQL 18, IP privada, `availability_type = ZONAL`, backups y PITR | Ambas VMs usan la misma base; conservar migraciones y RLS |
 | Servicios locales | RabbitMQ, Kafka KRaft de un nodo, MongoDB y Mailpit | Mantenerlos en A y hacer explícita su dependencia desde B |
@@ -58,7 +58,7 @@ flowchart TD
 
 ### Cómputo y entrada
 
-1. Conservar la VM A `nexoruta-demo`, su zona y su disco. Añadir B en otra zona de Santiago que tenga cuota y soporte N4. Empezar con la capacidad actual por VM para que cualquiera pueda sostener la carga web; revisar tamaño después de medir, sin prometer rendimiento por duplicar recursos.
+1. Conservar la VM A `nexoruta-demo`, su zona y su disco. Añadir B en otra zona de Santiago que tenga cuota y soporte N4. Se eligió `n4-custom-6-16384` por nodo para ajustarse a la cuota global de 12 vCPU; medir antes de dimensionar de nuevo.
 2. Usar dos grupos de instancias no administrados, uno por zona, con una VM cada uno. Esto conserva el control manual de encendido/apagado y evita que un grupo administrado reponga máquinas al terminar la sesión. No habrá reparación automática de VMs en este alcance.
 3. Crear un **global external Application Load Balancer** administrado, una IP global fija, certificado gestionado, URL map por host y redirección HTTP→HTTPS. Los backends siguen en Santiago; el frontal global de Google es una excepción explícita a la localización regional del cómputo.
 4. Crear backend services independientes para `api`, `admin`, `backoffice`, `commerce`, `tracking`, `monitor` y `mail`. Cada uno usa su puerto nombrado y health check; `mail` apunta solo a A. Un fallo de un portal no debe retirar los demás.
@@ -183,6 +183,12 @@ Como referencia de planificación, la [tarifa oficial del balanceador](https://c
 
 No se incorporan en esta propuesta Kubernetes, autoscaling, un tercer host, clústeres de Rabbit/Kafka/Mongo, Cloud SQL regional HA ni una pila local Prometheus/Loki/Tempo. Con dos VMs y servicios únicos en A, la continuidad aceptada tiene los límites de la sección 1. La [documentación de RabbitMQ](https://www.rabbitmq.com/docs/clustering) desaconseja clústeres de dos nodos para consenso; duplicar brokers no completaría esa garantía.
 
-## 8. Evidencia de esta planificación
+## 8. Estado de implementación
 
-Se inspeccionaron archivos y workflows del checkout y documentación oficial de Google Cloud, Microsoft y Grafana. Se leyeron las reglas de interfaz del proyecto. No se consultó el estado remoto de GCP/GitHub, no se desplegó infraestructura y no se ejecutaron compilaciones, suites, peticiones a la demo ni revisión visual. Las comprobaciones descritas arriba son criterios de aceptación futuros.
+Implementado en el checkout: OpenTofu para los dos nodos/balanceador/métricas/alertas; Compose privado para brokers, apps y Grafana; exportación OTel/Ops Agent; almacenamiento compartido de Data Protection y rate limits; login Google de Grafana con allowlist; operación común de cuatro horas, mutex, despliegue por rotación y procedimiento de migración/rollback. Se ajustaron las VMs a `n4-custom-6-16384` para caber en la cuota de 12 vCPU. La IP global `34.49.146.66` quedó reservada; el callback de OAuth acordado es `https://monitor.34-49-146-66.sslip.io/login/google` y los nombres de sus dos secretos existen en el environment de GitHub.
+
+Validación local realizada: OpenTofu valida en `demo/` y `bootstrap/`; `tofu fmt -check`; `actionlint` en `demo-vm.yml`; validación de Compose y del Caddyfile; 81 pruebas Python (3 omitidas por sus precondiciones); compilación de ambas soluciones .NET; 459 pruebas de integración, 174 unitarias y 3 de arquitectura en backend; 324 pruebas de frontend. El esquema SQL también pasó el harness con permisos restringidos de PostgreSQL y aislamiento de roles. Caddy responde 200 en `/healthz` y 401 sin credenciales en la bandeja. Grafana 13.2.4 se inició localmente y se revisó en navegador el dashboard y la pantalla de acceso Google; sin identidad GCP no hay métricas reales en esta vista ni se probó el OAuth de producción.
+
+El plan remoto de OpenTofu se generó en modo solo lectura desde el estado del proyecto. Propone crear el balanceador y recursos nuevos; A se actualiza sin reemplazo, el disco de datos y Cloud SQL no se destruyen. La nueva versión inmutable del secreto runtime queda retenida junto con las anteriores (`ABANDON`). No se aplicó ese plan.
+
+Pendiente para considerar completado: actualizar/aplicar el estado remoto de bootstrap con permisos y secreto de hosting, publicar estos cambios en `main`, ejecutar el CI/publicación, arrancar la primera sesión de cuatro horas y comprobar certificados, health checks, OAuth, panel con métricas reales, caída de un nodo, drenaje, parada y guard. No se declara tolerancia a fallos operativa hasta superar esas comprobaciones en GCP.

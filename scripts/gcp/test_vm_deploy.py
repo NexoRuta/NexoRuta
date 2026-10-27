@@ -2,15 +2,55 @@ from contextlib import redirect_stdout
 import io
 import json
 from pathlib import Path
+import tarfile
 import tempfile
 from types import SimpleNamespace
 import unittest
+import urllib.error
 from unittest.mock import Mock, patch
 
 import vm_deploy
 
 
 class VmDeploymentTests(unittest.TestCase):
+    def test_public_smoke_checks_monitor_health_and_requires_auth_for_grafana_and_mail(self):
+        endpoints = {name: f"https://{name}.34-0-0-1.sslip.io" for name in
+                    ("api", "admin", "backoffice", "commerce", "tracking", "monitor", "mail")}
+        response = Mock()
+        response.__enter__ = Mock(return_value=SimpleNamespace(status=200))
+        response.__exit__ = Mock(return_value=False)
+        requests = []
+
+        def open_url(url, timeout):
+            requests.append(url)
+            if url.endswith("/api/search?query=nexoruta") or url.endswith("/mail.34-0-0-1.sslip.io/"):
+                raise urllib.error.HTTPError(url, 401, "unauthorized", {}, None)
+            return response
+
+        with patch.object(vm_deploy.urllib.request, "urlopen", side_effect=open_url):
+            vm_deploy.smoke({"endpoints": endpoints}, check_accounts=False)
+        self.assertIn(endpoints["monitor"] + "/api/health", requests)
+        self.assertIn(endpoints["monitor"] + "/api/search?query=nexoruta", requests)
+        self.assertIn(endpoints["mail"] + "/", requests)
+
+    def test_release_extraction_makes_only_grafana_provisioning_readable_by_its_container_user(self):
+        archive_data = io.BytesIO()
+        with tarfile.open(fileobj=archive_data, mode="w:gz") as archive:
+            for name, contents in (
+                ("compose.yaml", b"services: {}\n"),
+                ("grafana/provisioning/dashboards/provider.yaml", b"apiVersion: 1\n"),
+            ):
+                info = tarfile.TarInfo(name)
+                info.size = len(contents)
+                info.mode = 0o644
+                archive.addfile(info, io.BytesIO(contents))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            vm_deploy.extract(archive_data.getvalue(), root)
+            self.assertEqual((root / "compose.yaml").stat().st_mode & 0o777, 0o644)
+            self.assertEqual((root / "grafana/provisioning/dashboards/provider.yaml").stat().st_mode & 0o777, 0o644)
+            self.assertEqual((root / "grafana/provisioning/dashboards").stat().st_mode & 0o777, 0o755)
+
     def configuration(self):
         registry = "southamerica-west1-docker.pkg.dev/demo-project/nexoruta"
         passwords = {name: "private-" + name for name in (
@@ -36,7 +76,7 @@ class VmDeploymentTests(unittest.TestCase):
         values = vm_deploy.environment(runtime, integrations, images, "hash", hosting, "b", "10.0.0.2",
                                        "release-" + "a" * 32, ("172.22.0.0/16",))
         self.assertEqual(values["SMTP_HOST"], "10.0.0.1")
-        self.assertEqual(values["TRUSTED_NETWORKS"], "34.0.0.1/32,172.22.0.0/16")
+        self.assertEqual(values["TRUSTED_NETWORKS"], "34.0.0.1/32,35.191.0.0/16,130.211.0.0/22,172.22.0.0/16")
         self.assertIn("api.34-0-0-2.sslip.io", values["ALLOWED_HOSTS"].split(";"))
         for ring in vm_deploy.RINGS:
             self.assertIn("Username=nexoruta_keys_" + ring + ";", values["KEYS_" + ring.upper() + "_CONNECTION"])

@@ -10,7 +10,7 @@ locals {
     commerce   = { port = 18083, health_path = "/health/ready", affinity = true }
     tracking   = { port = 18084, health_path = "/health/ready", affinity = true }
     monitor    = { port = 13000, health_path = "/api/health", affinity = false }
-    mail       = { port = 18025, health_path = "/", affinity = false }
+    mail       = { port = 18025, health_path = "/healthz", affinity = false }
   }
 }
 

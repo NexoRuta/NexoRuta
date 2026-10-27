@@ -17,16 +17,19 @@ El [proyecto de demo creado con la CLI](project.md) es
 ## Región y capacidad
 
 Los servicios de aplicación, Cloud SQL, imágenes, builds, secretos y almacenamiento
-se definen en **Santiago, `southamerica-west1`**. La VM usa `southamerica-west1-a`.
+se definen en **Santiago, `southamerica-west1`**. Las VMs usan las zonas
+`southamerica-west1-a` y `southamerica-west1-b`.
 Al preparar este cambio se midieron ocho peticiones HTTPS con conexión reutilizada
 por región desde este equipo a los endpoints oficiales de gcping: mediana de
 **41,85 ms a Santiago y 58,35 ms a São Paulo**. Es una comparación puntual de red,
 no una medición de la aplicación ni un compromiso de latencia.
 
-La VM es **`n4-highcpu-8`: 8 vCPU y 16 GiB**. C3 no está disponible en Santiago.
-N4 mantiene los 16 GiB solicitados y prioriza CPU. Se usa N4 porque GCP denegó la cuota C4 del proyecto; N4 tiene cuota disponible en Santiago. Usa discos Hyperdisk Balanced
-de 20 GiB para arranque y 80 GiB para datos, con 3000 IOPS y 140 MiB/s por disco.
-N4 no admite Persistent Disk: no cambiar estos discos a `pd-balanced`.
+La cuota global disponible es de 12 vCPU. Para conservar dos nodos dentro de ella,
+cada VM usa `n4-custom-6-16384` (6 vCPU y 16 GiB); cada nodo conserva un disco
+Hyperdisk Balanced de 80 GiB. La VM A conserva su disco y datos. La entrada pública
+usa un Application Load Balancer global con IP fija; los nombres `*.IP.sslip.io`
+apuntan a esa dirección. N4 no admite Persistent Disk: no cambiar estos discos a
+`pd-balanced`.
 Cloud SQL es PostgreSQL 18 Enterprise, 2 vCPU y 8 GiB, 20 GiB SSD, sin HA,
 solo IP privada, backups y recuperación puntual. Su memoria es independiente.
 
@@ -39,7 +42,7 @@ No interviene en el tráfico de los usuarios. Firebase/IAM son servicios globale
 - `bootstrap/`: APIs, estado GCS, Artifact Registry, buckets de delivery, secretos,
   cuentas de servicio e IAM, WIF de GitHub, Firebase/Android, alertas de presupuesto,
   controlador de apagado y Cloud Scheduler.
-- `demo/`: red, subred, SSH por IAP, puertos públicos 80/443, VM, IP estática,
+- `demo/`: red, subred, SSH por IAP, VMs A/B, Application Load Balancer e IP global,
   Hyperdisks, conexión privada a Cloud SQL, base, administrador de migraciones,
   claves/contraseñas generadas y DNS opcional.
 - `deploy/gcp/` en la raíz del repo: imagen .NET común,
@@ -53,16 +56,16 @@ flowchart LR
     B --> C[Cloud Build en Santiago]
     C --> D[Artifact Registry: seis imágenes por digest]
     D --> E[Publicar release completa del canal main]
-    E -->|solo start manual| F[OpenTofu: Cloud SQL y VM]
+    E -->|solo start manual| F[OpenTofu: Cloud SQL y dos VMs]
     U[Botón update manual] --> V[Leer última release publicada]
     E -.-> V
-    V -->|VM activa| G[Descargar imágenes y recrear contenedores]
-    V -->|VM apagada| O[Finalizar sin encender]
+    V -->|sesión activa| G[Actualizar A y B en rotación]
+    V -->|sesión apagada| O[Finalizar sin encender]
     F --> H[Migraciones, RLS y datos iniciales]
     G --> H
     H --> I[HTTPS y smoke tests]
     I -->|solo start| J[APK con la URL real de la API]
-    K[GCE: cuatro horas] --> L[Apagar VM]
+    K[GCE: cuatro horas] --> L[Apagar las dos VMs]
     M[Scheduler y Workflows] --> L
     L --> N[Apagar Cloud SQL y conservar datos]
 ```
@@ -130,19 +133,21 @@ OpenTofu informa que ya está registrada:
 tofu -chdir=infra/gcp/bootstrap import google_firebase_project.demo projects/ID_DEL_PROYECTO
 ```
 
-Verificar cuota y disponibilidad de N4 de ocho vCPU antes del primer inicio:
+Verificar cuota y disponibilidad de N4 custom en ambas zonas:
 
 ```powershell
-gcloud compute machine-types describe n4-highcpu-8 --zone=southamerica-west1-a
+gcloud compute machine-types describe n4-custom-6-16384 --zone=southamerica-west1-a
+gcloud compute machine-types describe n4-custom-6-16384 --zone=southamerica-west1-b
 gcloud compute regions describe southamerica-west1 --format='json(quotas)'
 ```
 
 ## DNS, HTTPS y servicios externos
 
-Sin dominio propio se generan nombres como `api.IP-CON-GUIONES.sslip.io`, con IP
-estática y certificados públicos automáticos de Caddy. Es un servicio DNS externo
-de demo y está sujeto a disponibilidad y límites de emisión de certificados.
-Los seis hosts son `api`, `admin`, `backoffice`, `commerce`, `tracking` y `mail`.
+Sin dominio propio se usan nombres `*.IP-CON-GUIONES.sslip.io` que apuntan a la IP
+global fija del Application Load Balancer. Google termina HTTPS con un certificado
+gestionado y redirige HTTP a HTTPS. Es un servicio DNS externo de demo. Los hosts
+son `api`, `admin`, `backoffice`, `commerce`, `tracking`, `monitor` y `mail`;
+`mail` continúa disponible solo a través del nodo A.
 
 Para un dominio propio:
 
@@ -224,9 +229,9 @@ con branch `main`, y elegir una operación:
 
 | Operación | Comportamiento |
 | --- | --- |
-| `start` | Obtiene lo último de los tres `main`, ejecuta CI, construye/publica imágenes e inicia una sesión de cuatro horas con esa release. |
-| `update` | Lee la última release completa publicada de `main`, descarga imágenes del registry y recrea los contenedores. No compila ni inicia la VM; conserva el vencimiento. |
-| `stop` | Apaga VM y Cloud SQL, conservando datos. |
+| `start` | Obtiene lo último de los tres `main`, ejecuta CI, construye/publica imágenes e inicia dos VMs por cuatro horas con esa release. |
+| `update` | Lee la última release completa publicada de `main` y rota el despliegue por B y A. No compila ni enciende VMs detenidas; conserva el vencimiento. |
+| `stop` | Apaga las dos VMs y Cloud SQL, conservando datos. |
 
 El canal `main` se registra en `channels/main.json` del bucket privado de delivery
 solo después de publicar las seis imágenes y los assets de la release. `update`
@@ -234,7 +239,7 @@ lee ese puntero una sola vez y valida el manifiesto: así todas las apps usan un
 misma release por digest, aunque se publique otra durante la descarga. No mezcla
 tags `latest` de distintos builds. Si una publicación está fallando o en curso,
 se usa la última completa; esperar a que termine el workflow de publicación para
-actualizar a ese cambio. Una VM apagada termina `update` sin ejecutar despliegue.
+actualizar a ese cambio. Con ambas VMs apagadas, `update` termina sin ejecutarlo.
 El update incluye backup, migraciones y comprobaciones de salud; también reinicia
 las apps si la release seleccionada ya era la instalada.
 
@@ -244,13 +249,13 @@ Las comprobaciones CI sobre PRs no reciben credenciales GCP ni despliegan recurs
 ## Operación habitual desde PowerShell
 
 ```powershell
-# Tomar los tres main, probar, construir, activar SQL/VM, desplegar y generar APK.
+# Tomar los tres main, probar, construir, activar SQL y dos VMs, desplegar y generar APK.
 gh workflow run demo-vm.yml --repo NexoRuta/NexoRuta --ref main -f operation=start
 
 # Descargar la última release publicada y recrear las apps de una demo activa.
 gh workflow run demo-vm.yml --repo NexoRuta/NexoRuta --ref main -f operation=update
 
-# Apagar antes de las cuatro horas, tanto VM como base de datos.
+# Apagar antes de las cuatro horas las dos VMs y la base de datos.
 gh workflow run demo-vm.yml --repo NexoRuta/NexoRuta --ref main -f operation=stop
 
 gh run list --repo NexoRuta/NexoRuta --workflow demo-vm.yml
@@ -258,13 +263,15 @@ gh run watch ID_EJECUCION --repo NexoRuta/NexoRuta
 gh run download ID_EJECUCION --repo NexoRuta/NexoRuta --name nexoruta-demo-android
 ```
 
-El resumen muestra las URLs y el vencimiento. La VM instala Docker, monta el disco
-persistente y conserva tanto Docker como containerd y los volúmenes. El despliegue
-crea un backup SQL, prepara permisos de migración, aplica migraciones, aprovisiona
+El resumen muestra las URLs y el vencimiento. Cada VM instala Docker y conserva
+su disco y volúmenes; los servicios persistentes (RabbitMQ, Kafka y MongoDB) viven
+solo en A y B los consume por la red privada. El despliegue crea un backup SQL,
+prepara permisos de migración, aplica migraciones, aprovisiona
 logins runtime sin `cloudsqlsuperuser`/`BYPASSRLS`, importa el catálogo de Uruguay,
 crea cuentas/organizaciones iniciales y levanta todos los servicios.
 
-Tras los healthchecks internos se comprueba HTTPS de las cinco apps y, en el primer
+Tras los healthchecks internos se comprueba HTTPS de las cinco apps y el endpoint
+de salud de `monitor`; también se verifica que Grafana y Mailpit exijan login. En el primer
 despliegue, login real contra la base. Los datos y contraseñas posteriores no se
 reinician. Las cuentas iniciales son `admin@nexoruta.test`, `operador@nexoruta.test`
 y `comercio@nexoruta.test`; sus contraseñas están en el secreto runtime, no en el repo.
@@ -274,10 +281,11 @@ explícita si un cambio de esquema impide volver al código anterior.
 
 ## Plazo y costos residuales
 
-Las cuatro horas comienzan al entrar la VM en RUNNING e incluyen instalación,
+Las cuatro horas comienzan al entrar la primera VM en RUNNING e incluyen instalación,
 despliegue y pruebas. GCE tiene `max_run_duration=14400`, `STOP` y reinicio automático
-deshabilitado. GitHub no queda ejecutándose durante cuatro horas. Otro `start`
-con la VM ya encendida falla sin reiniciar ni extender el plazo.
+deshabilitado en ambos nodos. GitHub no queda ejecutándose durante cuatro horas.
+Otro `start` con cualquiera de las VMs ya encendida falla sin reiniciar ni extender
+el plazo.
 
 Antes de provisionar se escribe una lease con un máximo de 30 minutos de gracia
 para preparar SQL/VM. Al arrancar se registra su vencimiento real. Workflows
@@ -298,6 +306,8 @@ de SQL/discos/bucket antes de `tofu destroy`; el cierre es una operación separa
 
 ```powershell
 gcloud compute instances describe nexoruta-demo --zone=southamerica-west1-a --format='json(status,scheduling,resourceStatus.scheduling,machineType)'
+gcloud compute instances describe nexoruta-demo-b --zone=southamerica-west1-b --format='json(status,scheduling,resourceStatus.scheduling,machineType)'
+gcloud compute backend-services get-health nexoruta-demo-api --global
 gcloud sql instances describe nexoruta-demo-db --format='json(state,settings.activationPolicy,settings.tier)'
 gcloud compute ssh nexoruta-demo --zone=southamerica-west1-a --tunnel-through-iap
 ```

@@ -150,7 +150,8 @@
           "unit": "dateTimeAsIso",
           "noValue": "Sin datos",
           "color": {
-            "mode": "palette-classic"
+            "mode": "fixed",
+            "fixedColor": "gray"
           },
           "mappings": []
         },
@@ -237,7 +238,8 @@
           "unit": "s",
           "noValue": "Sin datos",
           "color": {
-            "mode": "palette-classic"
+            "mode": "fixed",
+            "fixedColor": "gray"
           },
           "mappings": []
         },
@@ -313,7 +315,8 @@
           "unit": "short",
           "noValue": "Sin datos",
           "color": {
-            "mode": "palette-classic"
+            "mode": "fixed",
+            "fixedColor": "gray"
           },
           "mappings": [
             {
@@ -1213,7 +1216,8 @@
           "unit": "short",
           "noValue": "Sin datos",
           "color": {
-            "mode": "palette-classic"
+            "mode": "fixed",
+            "fixedColor": "gray"
           },
           "mappings": [
             {
