@@ -7,7 +7,7 @@
     "demo"
   ],
   "schemaVersion": 40,
-  "version": 1,
+  "version": 2,
   "editable": false,
   "refresh": "1m",
   "time": {
@@ -17,6 +17,33 @@
   "timezone": "America/Montevideo",
   "templating": {
     "list": [
+      {
+        "name": "project",
+        "label": "Proyecto",
+        "type": "query",
+        "hide": 2,
+        "datasource": {
+          "type": "stackdriver",
+          "uid": "gcp"
+        },
+        "definition": "Google Cloud Monitoring - Projects",
+        "query": {
+          "labelKey": "",
+          "loading": false,
+          "projectName": "$project",
+          "projects": [],
+          "selectedMetricType": "actions.googleapis.com/smarthome_action/num_active_users",
+          "selectedQueryType": "projects",
+          "selectedSLOService": "",
+          "selectedService": "actions.googleapis.com",
+          "sloServices": []
+        },
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "current": {},
+        "options": []
+      },
       {
         "name": "node",
         "label": "Nodo",
@@ -69,7 +96,7 @@
           "selectedQueryType": "labelValues",
           "selectedMetricType": "custom.googleapis.com/nexoruta/service_up",
           "labelKey": "metric.label.service",
-          "projectName": ""
+          "projectName": "$project"
         },
         "current": {
           "selected": true,
@@ -125,7 +152,7 @@
           "queryType": "timeSeriesList",
           "aliasBy": "Nodo {{metric.label.node}}",
           "timeSeriesList": {
-            "projectName": "",
+            "projectName": "$project",
             "filters": [
               "metric.type",
               "=",
@@ -213,7 +240,7 @@
           "queryType": "timeSeriesList",
           "aliasBy": "Nodo {{metric.label.node}}",
           "timeSeriesList": {
-            "projectName": "",
+            "projectName": "$project",
             "filters": [
               "metric.type",
               "=",
@@ -285,7 +312,7 @@
           "queryType": "timeSeriesList",
           "aliasBy": "{{metric.label.node}} · {{metric.label.service}}",
           "timeSeriesList": {
-            "projectName": "",
+            "projectName": "$project",
             "filters": [
               "metric.type",
               "=",
@@ -376,7 +403,7 @@
           "queryType": "timeSeriesList",
           "aliasBy": "VM {{resource.label.instance_id}}",
           "timeSeriesList": {
-            "projectName": "",
+            "projectName": "$project",
             "filters": [
               "metric.type",
               "=",
@@ -455,7 +482,7 @@
           "queryType": "timeSeriesList",
           "aliasBy": "VM {{resource.label.instance_id}}",
           "timeSeriesList": {
-            "projectName": "",
+            "projectName": "$project",
             "filters": [
               "metric.type",
               "=",
@@ -538,7 +565,7 @@
           "queryType": "timeSeriesList",
           "aliasBy": "VM {{resource.label.instance_id}} · {{metric.label.device}}",
           "timeSeriesList": {
-            "projectName": "",
+            "projectName": "$project",
             "filters": [
               "metric.type",
               "=",
@@ -622,7 +649,7 @@
           "queryType": "timeSeriesList",
           "aliasBy": "P95 global",
           "timeSeriesList": {
-            "projectName": "",
+            "projectName": "$project",
             "filters": [
               "metric.type",
               "=",
@@ -705,7 +732,7 @@
           "queryType": "timeSeriesList",
           "aliasBy": "Respuestas 5xx/s",
           "timeSeriesList": {
-            "projectName": "",
+            "projectName": "$project",
             "filters": [
               "metric.type",
               "=",
@@ -792,7 +819,7 @@
           "queryType": "timeSeriesList",
           "aliasBy": "{{resource.label.database_id}}",
           "timeSeriesList": {
-            "projectName": "",
+            "projectName": "$project",
             "filters": [
               "metric.type",
               "=",
@@ -871,7 +898,7 @@
           "queryType": "timeSeriesList",
           "aliasBy": "{{metric.label.transport}} · {{metric.label.status}}",
           "timeSeriesList": {
-            "projectName": "",
+            "projectName": "$project",
             "filters": [
               "metric.type",
               "=",
@@ -947,7 +974,7 @@
           "queryType": "timeSeriesList",
           "aliasBy": "VM {{resource.label.instance_id}}",
           "timeSeriesList": {
-            "projectName": "",
+            "projectName": "$project",
             "filters": [
               "metric.type",
               "=",
@@ -1022,7 +1049,7 @@
           "queryType": "timeSeriesList",
           "aliasBy": "{{metric.label.node}} · {{metric.label.service}}",
           "timeSeriesList": {
-            "projectName": "",
+            "projectName": "$project",
             "filters": [
               "metric.type",
               "=",
@@ -1106,7 +1133,7 @@
           "queryType": "timeSeriesList",
           "aliasBy": "{{metric.label.node}} · {{metric.label.service}}",
           "timeSeriesList": {
-            "projectName": "",
+            "projectName": "$project",
             "filters": [
               "metric.type",
               "=",
@@ -1190,7 +1217,7 @@
           "queryType": "timeSeriesList",
           "aliasBy": "{{metric.label.node}} · {{metric.label.release}}",
           "timeSeriesList": {
-            "projectName": "",
+            "projectName": "$project",
             "filters": [
               "metric.type",
               "=",
