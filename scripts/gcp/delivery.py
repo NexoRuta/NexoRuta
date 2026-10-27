@@ -219,6 +219,9 @@ def latest_release(config):
 
 def remote_stage_error(output, node, operation):
     for line in reversed(output.splitlines()):
+        exit_code = re.fullmatch(r"__NEXORUTA_STAGE_EXIT__=([0-9]{1,3})", line.strip())
+        if exit_code:
+            return f"Node {node} stage {operation} exited ({exit_code.group(1)}) without a report"
         try:
             result = json.loads(line)
         except json.JSONDecodeError:
@@ -253,9 +256,11 @@ def deploy(config, release):
     def stage(node, operation):
         if time.time() >= deadline:
             raise RuntimeError("The deployment cannot extend the common session deadline")
-        remote = shlex.join(["sudo", "python3", "/srv/nexoruta/deploy/vm_deploy.py",
+        invocation = shlex.join(["sudo", "python3", "/srv/nexoruta/deploy/vm_deploy.py",
             "--bucket", bucket, "--release", release, "--node", node["NODE_ID"],
-            "--deadline", str(deadline), "--stage", operation]) + " 2>&1 || true"
+            "--deadline", str(deadline), "--stage", operation])
+        script = invocation + " 2>&1; code=$?; printf '\\n__NEXORUTA_STAGE_EXIT__=%s\\n' \"$code\"; exit 0"
+        remote = "bash -lc " + shlex.quote(script)
         try:
             output = session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
                 "--command=" + remote, capture=True)
@@ -275,7 +280,7 @@ def deploy(config, release):
                 return result
             if result.get("status") == "failed":
                 raise RuntimeError(remote_stage_error(line, node["NODE_ID"], operation))
-        raise RuntimeError(f"Node {node['NODE_ID']} did not report stage {operation}")
+        raise RuntimeError(remote_stage_error(output, node["NODE_ID"], operation))
 
     prepared = {}
     for node in inventory:
