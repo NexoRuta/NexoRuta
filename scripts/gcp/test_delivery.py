@@ -57,6 +57,18 @@ class DeliveryTests(unittest.TestCase):
                 ["20260101010101_AddFeature.cs"],
             )
 
+    def test_grafana_dashboard_queries_use_selected_cloud_monitoring_project(self):
+        dashboard_path = Path(__file__).parents[2] / "deploy/gcp/grafana/provisioning/dashboards/nexoruta.json"
+        dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+        variables = {item["name"]: item for item in dashboard["templating"]["list"]}
+        self.assertEqual(variables["project"]["query"]["selectedQueryType"], "projects")
+        self.assertEqual(variables["project"]["hide"], 2)
+        self.assertEqual(variables["service"]["query"]["projectName"], "$project")
+        queries = [target["timeSeriesList"] for panel in dashboard["panels"]
+                   for target in panel.get("targets", []) if target.get("queryType") == "timeSeriesList"]
+        self.assertTrue(queries)
+        self.assertTrue(all(query.get("projectName") == "$project" for query in queries))
+
     def test_non_additive_migrations_require_all_application_services_stopped(self):
         prepared = {
             "a": {"running_applications": []},
