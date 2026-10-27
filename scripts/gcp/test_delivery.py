@@ -57,6 +57,27 @@ class DeliveryTests(unittest.TestCase):
                 ["20260101010101_AddFeature.cs"],
             )
 
+    def test_non_additive_migrations_require_all_application_services_stopped(self):
+        prepared = {
+            "a": {"running_applications": []},
+            "b": {"running_applications": []},
+        }
+        self.assertTrue(delivery.no_application_services_running(prepared))
+        self.assertFalse(delivery.no_application_services_running({"a": prepared["a"]}))
+        self.assertFalse(delivery.no_application_services_running({
+            "a": prepared["a"], "b": {"running_applications": ["api"]},
+        }))
+        self.assertFalse(delivery.no_application_services_running({
+            "a": prepared["a"], "b": {"shared_keys_ready": True},
+        }))
+
+    def test_non_additive_migration_override_requires_quiesced_application(self):
+        policy = {"migrations": {"20260101010101_AddFeature": False}}
+        with self.assertRaisesRegex(RuntimeError, "unsafe"):
+            vm_deploy.check_migration_policy(policy, [], True)
+        self.assertEqual(vm_deploy.check_migration_policy(policy, [], True, allow_non_additive=True),
+                         ["20260101010101_AddFeature"])
+
     def test_environment_cannot_inject_additional_lines(self):
         with self.assertRaises(ValueError):
             vm_deploy.env_line("SMTP_PASSWORD", "value\nAPI_IMAGE=attacker/image")

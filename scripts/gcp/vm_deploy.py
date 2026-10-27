@@ -212,7 +212,7 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
     return result
 
 
-def check_migration_policy(policy, applied, history_exists):
+def check_migration_policy(policy, applied, history_exists, allow_non_additive=False):
     migrations = policy.get("migrations")
     if not isinstance(migrations, dict) or not migrations:
         raise ValueError("Release has no migration compatibility policy")
@@ -223,7 +223,7 @@ def check_migration_policy(policy, applied, history_exists):
     if unknown:
         raise RuntimeError("The database contains migrations outside this release")
     pending = sorted(migrations.keys() - set(applied))
-    if history_exists and any(not migrations[name] for name in pending):
+    if history_exists and not allow_non_additive and any(not migrations[name] for name in pending):
         raise RuntimeError("Pending migration is unsafe while two application versions coexist")
     return pending
 
@@ -317,16 +317,16 @@ class Deploy:
         return self.compose("run", "--rm", "--no-deps", "-T", "db-tools", "psql",
                             "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", query, capture=True)
 
-    def migration_gate(self):
+    def migration_gate(self, allow_non_additive=False):
         history_exists = bool(self.sql("SELECT to_regclass('public.\"__EFMigrationsHistory\"')"))
         applied = self.sql('SELECT "MigrationId" FROM public."__EFMigrationsHistory" ORDER BY "MigrationId"').splitlines() if history_exists else []
         policy = json.loads((self.directory / "migration-policy.json").read_text(encoding="utf-8"))
-        check_migration_policy(policy, applied, history_exists)
+        check_migration_policy(policy, applied, history_exists, allow_non_additive)
 
-    def migrate(self, deadline=None):
+    def migrate(self, deadline=None, allow_non_additive=False):
         self.wait_sql()
         with self.migration_lock(deadline if deadline is not None else time.time() + 600):
-            self.migration_gate()
+            self.migration_gate(allow_non_additive)
             for name in ("preflight.sql",):
                 self.compose("run", "--rm", "--no-deps", "db-tools", "psql", "-v", "ON_ERROR_STOP=1", "-f", "/deploy/sql/" + name)
             self.compose("run", "--rm", "--no-deps", "migrate")
@@ -462,7 +462,11 @@ def prepare(args, deployment, runtime, integrations, hosting, manifest, private_
             deployment.execute("systemctl", "restart", "google-cloud-ops-agent")
     deployment.execute("systemctl", "restart", "nexoruta-monitor.service")
     private_file(deployment.directory / "prepared.json", json.dumps({"node": args.node, "deadline": args.deadline}))
-    return {"shared_keys_ready": shared_keys_ready}
+    running_services = deployment.execute("docker", "ps", "--format", '{{.Label "com.docker.compose.service"}}',
+                                          "--filter", "label=com.docker.compose.project=nexoruta-demo",
+                                          capture=True).splitlines()
+    running_applications = sorted(set(running_services) & set(APPS))
+    return {"shared_keys_ready": shared_keys_ready, "running_applications": running_applications}
 
 
 def apply(args, deployment, private_ip):
@@ -540,7 +544,10 @@ def main():
     parser.add_argument("--stage", choices=("prepare", "migrate", "apply", "verify", "verify-local"), required=True)
     parser.add_argument("--node", choices=("a", "b"), required=True)
     parser.add_argument("--deadline", type=float, required=True)
+    parser.add_argument("--allow-non-additive", action="store_true")
     args = parser.parse_args()
+    if args.allow_non_additive and args.stage != "migrate":
+        parser.error("--allow-non-additive is valid only with --stage migrate")
     try:
         run_stage(args)
     except Exception as error:
@@ -595,7 +602,7 @@ def run_stage(args):
                     result = prepare(args, deployment, runtime, secret(project, "nexoruta-demo-integrations"),
                                      secret(project, "nexoruta-demo-hosting"), manifest, private_ip)
                 elif args.stage == "migrate":
-                    deployment.migrate(args.deadline)
+                    deployment.migrate(args.deadline, args.allow_non_additive)
                     deployment.compose("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", "grafana")
                 elif args.stage == "apply":
                     apply(args, deployment, private_ip)

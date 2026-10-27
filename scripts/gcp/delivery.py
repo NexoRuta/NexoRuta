@@ -252,6 +252,13 @@ def remote_stage_error(output, node, operation):
     return f"Node {node} stage {operation} failed without a structured report"
 
 
+def no_application_services_running(prepared):
+    if not isinstance(prepared, dict) or set(prepared) != {"a", "b"}:
+        return False
+    return all(isinstance(result, dict) and result.get("running_applications") == []
+               for result in prepared.values())
+
+
 def deploy(config, release):
     if not re.fullmatch(r"release-[a-f0-9]{32}", release):
         raise ValueError("Invalid release identifier")
@@ -267,12 +274,17 @@ def deploy(config, release):
         raise RuntimeError("The common session deadline has expired")
     session.command("gcloud", "sql", "backups", "create", "--instance=nexoruta-demo-db", f"--project={project}", "--quiet")
 
-    def stage(node, operation):
+    def stage(node, operation, allow_non_additive=False):
         if time.time() >= deadline:
             raise RuntimeError("The deployment cannot extend the common session deadline")
-        invocation = shlex.join(["sudo", "python3", "/srv/nexoruta/deploy/vm_deploy.py",
+        command = ["sudo", "python3", "/srv/nexoruta/deploy/vm_deploy.py",
             "--bucket", bucket, "--release", release, "--node", node["NODE_ID"],
-            "--deadline", str(deadline), "--stage", operation])
+            "--deadline", str(deadline), "--stage", operation]
+        if allow_non_additive:
+            if operation != "migrate":
+                raise ValueError("Non-additive migration override is valid only for the migrate stage")
+            command.append("--allow-non-additive")
+        invocation = shlex.join(command)
         script = invocation + " 2>&1; code=$?; printf '\\n__NEXORUTA_STAGE_EXIT__=%s\\n' \"$code\"; exit 0"
         remote = "bash -lc " + shlex.quote(script)
         try:
@@ -312,7 +324,7 @@ def deploy(config, release):
         session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
             "--command=sudo install -D -m 0700 /tmp/nexoruta-vm-deploy.py /srv/nexoruta/deploy/vm_deploy.py")
         prepared[node["NODE_ID"]] = stage(node, "prepare")
-    stage(inventory[0], "migrate")
+    stage(inventory[0], "migrate", allow_non_additive=no_application_services_running(prepared))
 
     def health(node):
         for service in ("api", "admin", "backoffice", "commerce", "tracking", "monitor"):
