@@ -61,7 +61,12 @@ def extract(data, destination):
         for member in archive.getmembers():
             if not member.isfile() or not (destination / member.name).resolve().is_relative_to(destination.resolve()):
                 raise ValueError("Unsafe release archive")
-        archive.extractall(destination, filter="data")
+        if getattr(tarfile, "data_filter", None) is None:
+            # Older distro Python versions lack the extraction filter; members
+            # above are restricted to regular files with paths inside destination.
+            archive.extractall(destination)
+        else:
+            archive.extractall(destination, filter="data")
     # Grafana runs as UID 472; the release itself stays private under umask 077.
     provisioning = destination / "grafana/provisioning"
     if provisioning.exists():

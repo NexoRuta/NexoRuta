@@ -29,6 +29,18 @@ class DeliveryTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     vm_deploy.extract(data.getvalue(), Path(temp))
 
+    def test_release_extraction_supports_python_without_data_filter(self):
+        data = io.BytesIO()
+        with tarfile.open(fileobj=data, mode="w:gz") as archive:
+            content = b"safe release content"
+            member = tarfile.TarInfo("assets/config.json")
+            member.size = len(content)
+            archive.addfile(member, io.BytesIO(content))
+        with tempfile.TemporaryDirectory() as temp, patch.object(vm_deploy.tarfile, "data_filter", None, create=True):
+            destination = Path(temp)
+            vm_deploy.extract(data.getvalue(), destination)
+            self.assertEqual((destination / "assets/config.json").read_bytes(), b"safe release content")
+
     def test_environment_cannot_inject_additional_lines(self):
         with self.assertRaises(ValueError):
             vm_deploy.env_line("SMTP_PASSWORD", "value\nAPI_IMAGE=attacker/image")
