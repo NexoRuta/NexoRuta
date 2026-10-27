@@ -248,19 +248,28 @@ def deploy(config, release):
     def stage(node, operation):
         if time.time() >= deadline:
             raise RuntimeError("The deployment cannot extend the common session deadline")
+        remote = shlex.join(["sudo", "python3", "/srv/nexoruta/deploy/vm_deploy.py",
+            "--bucket", bucket, "--release", release, "--node", node["NODE_ID"],
+            "--deadline", str(deadline), "--stage", operation]) + " || true"
         try:
             output = session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
-                "--command=" + shlex.join(["sudo", "python3", "/srv/nexoruta/deploy/vm_deploy.py",
-                    "--bucket", bucket, "--release", release, "--node", node["NODE_ID"],
-                    "--deadline", str(deadline), "--stage", operation]), capture=True)
+                "--command=" + remote, capture=True)
         except subprocess.CalledProcessError as error:
             output = (error.stdout or "") + "\n" + (error.stderr or "")
             raise RuntimeError(remote_stage_error(output, node["NODE_ID"], operation)) from None
         for line in reversed(output.splitlines()):
-            if line.startswith("{"):
+            try:
                 result = json.loads(line)
-                if result.get("release") == release and result.get("status") == "healthy":
-                    return result
+            except json.JSONDecodeError:
+                continue
+            if (not isinstance(result, dict) or result.get("release") != release
+                    or result.get("node") != node["NODE_ID"]
+                    or result.get("stage") != operation):
+                continue
+            if result.get("status") == "healthy":
+                return result
+            if result.get("status") == "failed":
+                raise RuntimeError(remote_stage_error(line, node["NODE_ID"], operation))
         raise RuntimeError(f"Node {node['NODE_ID']} did not report stage {operation}")
 
     prepared = {}
