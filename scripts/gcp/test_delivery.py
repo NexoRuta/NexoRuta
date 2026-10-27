@@ -91,6 +91,22 @@ class DeliveryTests(unittest.TestCase):
             location = vm_deploy.error_location(error)
         self.assertRegex(location, r"^test_vm_error_location_contains_only_function_and_line:[0-9]+$")
 
+    def test_vm_main_reports_errors_before_service_setup_with_safe_location(self):
+        args = vm_deploy.argparse.Namespace(release="release-" + "a" * 32, node="a", stage="prepare")
+
+        def fail(_args):
+            raise TypeError("private detail")
+
+        with (patch.object(vm_deploy.argparse.ArgumentParser, "parse_args", return_value=args),
+              patch.object(vm_deploy, "run_stage", side_effect=fail),
+              patch("builtins.print") as print_mock):
+            with self.assertRaises(SystemExit):
+                vm_deploy.main()
+        report = json.loads(print_mock.call_args.args[0])
+        self.assertEqual(report["error_type"], "TypeError")
+        self.assertRegex(report["error_location"], r"^fail:[0-9]+$")
+        self.assertNotIn("private detail", print_mock.call_args.args[0])
+
     def test_remote_stage_error_reports_qualified_exception_class_only(self):
         self.assertEqual(
             delivery.remote_stage_error("urllib.error.HTTPError: private detail", "a", "prepare"),
