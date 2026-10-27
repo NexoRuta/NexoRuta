@@ -250,7 +250,7 @@ def deploy(config, release):
             raise RuntimeError("The deployment cannot extend the common session deadline")
         remote = shlex.join(["sudo", "python3", "/srv/nexoruta/deploy/vm_deploy.py",
             "--bucket", bucket, "--release", release, "--node", node["NODE_ID"],
-            "--deadline", str(deadline), "--stage", operation]) + " || true"
+            "--deadline", str(deadline), "--stage", operation]) + " 2>&1 || true"
         try:
             output = session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
                 "--command=" + remote, capture=True)
