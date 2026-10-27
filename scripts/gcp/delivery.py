@@ -225,9 +225,9 @@ def remote_stage_error(output, node, operation):
         try:
             result = json.loads(line)
         except json.JSONDecodeError:
-            match = re.match(r"^([A-Za-z][A-Za-z0-9]*(?:Error|Exception)):", line.strip())
+            match = re.match(r"^([A-Za-z][A-Za-z0-9_.]*(?:Error|Exception)):", line.strip())
             if match:
-                return f"Node {node} stage {operation} failed ({match.group(1)})"
+                return f"Node {node} stage {operation} failed ({match.group(1).rsplit('.', 1)[-1]})"
             continue
         if not isinstance(result, dict):
             continue
