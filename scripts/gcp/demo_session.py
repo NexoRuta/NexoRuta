@@ -17,6 +17,7 @@ INFRA = ROOT / "infra" / "gcp" / "demo"
 VM_NAME = "nexoruta-demo"
 MAX_SECONDS = 4 * 60 * 60
 REGION = "southamerica-west1"
+ACTIVE_CONTROL_LOCK = None
 
 
 def configuration():
@@ -38,10 +39,15 @@ def configuration():
                 raise ValueError(f"Missing GitHub environment variable {key}")
     if values["GCP_ZONE"] != REGION + "-a":
         raise ValueError("Use southamerica-west1-a (Santiago), close to Uruguay")
+    values["GCP_SECONDARY_ZONE"] = os.environ.get("GCP_SECONDARY_ZONE", REGION + "-b")
+    if values["GCP_SECONDARY_ZONE"] not in (REGION + "-b", REGION + "-c"):
+        raise ValueError("Use southamerica-west1-b or southamerica-west1-c for the second VM")
     return values
 
 
 def command(*args, capture=False):
+    if ACTIVE_CONTROL_LOCK is not None:
+        ACTIVE_CONTROL_LOCK.check()
     # Resolve .cmd wrappers on Windows as well as native Linux executables.
     executable = shutil.which(args[0])
     if not executable:
@@ -60,13 +66,21 @@ def gcloud(config, *args, capture=False):
     )
 
 
+def node_configs(config):
+    return [
+        {**config, "NODE_ID": "a", "VM_NAME": VM_NAME, "GCP_ZONE": config.get("GCP_ZONE", REGION + "-a")},
+        {**config, "NODE_ID": "b", "VM_NAME": VM_NAME + "-b", "GCP_ZONE": config.get("GCP_SECONDARY_ZONE", REGION + "-b")},
+    ]
+
+
 def instance(config):
     # `list` distinguishes a missing VM from authentication/API/network failures.
+    name = config.get("VM_NAME", VM_NAME)
     result = json.loads(gcloud(
         config, "compute", "instances", "list",
-        f"--filter=name={VM_NAME}", "--format=json", capture=True,
+        f"--filter=name={name}", "--format=json", capture=True,
     ))
-    matches = [vm for vm in result if vm["name"] == VM_NAME]
+    matches = [vm for vm in result if vm["name"] == name]
     if len(matches) > 1:
         raise RuntimeError("Unexpected duplicate VM names in the selected zone.")
     return matches[0] if matches else None
@@ -96,6 +110,13 @@ def check_plan(plan, operation="start"):
         if operation == "stop" and "create" in resource["change"]["actions"]:
             raise RuntimeError("Stopping a session must not create missing resources")
         if "delete" in resource["change"]["actions"]:
+            # New immutable secret versions retain their predecessors (ABANDON).
+            # This exception never permits deleting a secret or persistent resource.
+            if (resource.get("type") == "google_secret_manager_secret_version"
+                    and resource["change"].get("before", {}).get("deletion_policy") == "ABANDON"
+                    and resource["change"].get("after", {}).get("deletion_policy") == "ABANDON"
+                    and "create" in resource["change"]["actions"]):
+                continue
             raise RuntimeError(
                 f"Plan would delete or replace {resource['address']}. "
                 "This session workflow does not destroy resources; review locally."
@@ -123,21 +144,34 @@ def check_deadline(vm, now=None):
 
 
 def stop_after_failure(config):
+    errors = stop_session(config)
+    for error in errors:
+        print(f"Cleanup will be retried by the independent guard: {error}", file=sys.stderr)
+
+
+def stop_session(config):
+    # Close the lease first. Cleanup continues independently for both VMs and SQL
+    # so one unavailable API cannot leave the other resources running indefinitely.
+    errors = []
     try:
-        vm = instance(config)
-        if (
-            vm and vm.get("labels", {}).get("application") == "nexoruta"
-            and vm.get("labels", {}).get("managed_by") == "opentofu"
-            and vm.get("status") == "RUNNING"
-        ):
-            gcloud(config, "compute", "instances", "stop", VM_NAME)
+        end_lease(config)
     except (RuntimeError, subprocess.CalledProcessError, ValueError) as error:
-        print(f"Could not stop after failure: {error}", file=sys.stderr)
-    for cleanup in (end_lease, stop_database):
+        errors.append(f"lease: {error}")
+    for node in node_configs(config):
         try:
-            cleanup(config)
+            vm = instance(node)
+            if vm is None:
+                continue
+            check_existing(vm, "stop")
+            if vm.get("status") == "RUNNING":
+                gcloud(node, "compute", "instances", "stop", node["VM_NAME"])
         except (RuntimeError, subprocess.CalledProcessError, ValueError) as error:
-            print(f"Cleanup will be retried by the independent guard: {error}", file=sys.stderr)
+            errors.append(f"{node['VM_NAME']}: {error}")
+    try:
+        stop_database(config)
+    except (RuntimeError, subprocess.CalledProcessError, ValueError) as error:
+        errors.append(f"Cloud SQL: {error}")
+    return errors
 
 
 def write_lease(config, expires_at, provisioning_until=0):
@@ -195,39 +229,38 @@ def run(config):
     operation = config["DEMO_OPERATION"]
     if os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch":
         raise RuntimeError("VM operations require a manual workflow_dispatch; pushes only publish images")
-    existing = instance(config)
-    if operation == "update":
-        if not existing or existing.get("status") != "RUNNING":
-            print("Demo is off. Use start to begin a four-hour session.")
-            return
-        check_existing(existing, operation)
-        check_deadline(existing)
-        from delivery import deploy, latest_release
-        deployed = deploy(config, latest_release(config))
-        after = instance(config)
-        if after.get("lastStartTimestamp") != existing.get("lastStartTimestamp"):
-            raise RuntimeError("An application update must not restart the VM")
-        print("Application updated without extending the existing four-hour session.")
-        publish_endpoints(config, deployed["endpoints"])
-        return
-    if operation == "stop" and existing is None:
-        end_lease(config)
-        stop_database(config)
-        print("No VM exists. Cloud SQL cleanup completed without creating infrastructure.")
-        return
-    check_existing(existing, operation)
     if operation == "stop":
-        # Power operations use the APIs directly: a stopped SQL instance cannot
-        # refresh its users, and stop must never wake it or create infrastructure.
-        end_lease(config)
-        if existing.get("status") == "RUNNING":
-            gcloud(config, "compute", "instances", "stop", VM_NAME)
-        stop_database(config)
-        message = f"VM {VM_NAME} and Cloud SQL stopped. Persistent storage and static IP retained.\n"
+        errors = stop_session(config)
+        if errors:
+            raise RuntimeError("Cleanup incomplete; independent guard will retry: " + "; ".join(errors))
+        message = "Both demo VMs and Cloud SQL stopped or absent. Persistent storage and load balancer retained.\n"
         print(message)
         if os.environ.get("GITHUB_STEP_SUMMARY"):
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
                 output.write(message)
+        return
+    nodes = node_configs(config)
+    existing = [instance(node) for node in nodes]
+    for vm in existing:
+        check_existing(vm, operation)
+    if operation == "update":
+        running = sum(vm is not None and vm.get("status") == "RUNNING" for vm in existing)
+        if running == 0:
+            print("Demo is off. Use start to begin a four-hour session.")
+            return
+        if running != len(nodes):
+            raise RuntimeError("Demo is degraded: both VMs must be RUNNING before update; the session will not be extended.")
+        for vm in existing:
+            check_deadline(vm)
+        from delivery import deploy, latest_release
+        deployed = deploy(config, latest_release(config))
+        for node, before in zip(nodes, existing):
+            after = instance(node)
+            if not after or after.get("status") != "RUNNING" or after.get("lastStartTimestamp") != before.get("lastStartTimestamp"):
+                raise RuntimeError("An application update must not restart or stop either VM")
+            check_deadline(after)
+        print("Application updated without extending the existing four-hour session.")
+        publish_endpoints(config, deployed["endpoints"])
         return
     if not re.fullmatch(r"release-[a-f0-9]{32}", os.environ.get("DEMO_RELEASE", "")):
         raise ValueError("A tested, published DEMO_RELEASE is required before starting the VM")
@@ -254,6 +287,7 @@ def start_session(config):
         inputs.write_text(json.dumps({
             "project_id": config["GCP_PROJECT_ID"],
             "zone": config["GCP_ZONE"],
+            "secondary_zone": config.get("GCP_SECONDARY_ZONE", REGION + "-b"),
             "running": True,
             "base_domain": os.environ.get("GCP_BASE_DOMAIN", ""),
             "manage_dns": os.environ.get("GCP_MANAGE_DNS", "false").lower() == "true",
@@ -266,16 +300,19 @@ def start_session(config):
         plan = json.loads(command(*tofu, "show", "-json", str(plan_file), capture=True))
         check_plan(plan)
         command(*tofu, "apply", "-input=false", "-lock-timeout=5m", str(plan_file))
-        vm = json.loads(gcloud(
-            config, "compute", "instances", "describe", VM_NAME,
-            "--format=json", capture=True,
-        ))
-        deadline = check_deadline(vm)
-        write_lease(config, dt.datetime.fromisoformat(deadline.replace("Z", "+00:00")).timestamp())
+        deadlines = []
+        for node in node_configs(config):
+            vm = json.loads(gcloud(
+                node, "compute", "instances", "describe", node["VM_NAME"],
+                "--format=json", capture=True,
+            ))
+            deadlines.append(dt.datetime.fromisoformat(check_deadline(vm).replace("Z", "+00:00")))
+        deadline = min(deadlines)
+        write_lease(config, deadline.timestamp())
         from delivery import deploy
         deploy(config, os.environ["DEMO_RELEASE"])
         message = (
-            f"VM {VM_NAME} running. Automatic stop: {deadline}.\n\n"
+            f"Both demo VMs running. Common automatic stop: {deadline.isoformat()}.\n\n"
             "The four hours start when Compute Engine starts the VM, including bootstrap. "
             "HTTPS health and initial database-backed login checks passed.\n"
         )
@@ -304,7 +341,14 @@ def main():
         raise ValueError("Usage: demo_session.py check|run")
     config = configuration()
     if sys.argv[1] == "run":
-        run(config)
+        from control_lock import control_lock
+        global ACTIVE_CONTROL_LOCK
+        with control_lock(config) as lock:
+            ACTIVE_CONTROL_LOCK = lock
+            try:
+                run(config)
+            finally:
+                ACTIVE_CONTROL_LOCK = None
     else:
         print("Session configuration is valid.")
 

@@ -1,21 +1,26 @@
-{$API_HOST} {
-    reverse_proxy api:8080
+# Old origins remain usable during the hostname transition. No access logging.
+{$LEGACY_API_HOST} {
+	reverse_proxy api:8080
 }
-{$ADMIN_HOST} {
-    reverse_proxy admin:8080
+{$LEGACY_ADMIN_HOST} {
+	reverse_proxy admin:8080
 }
-{$BACKOFFICE_HOST} {
-    reverse_proxy backoffice:8080
+{$LEGACY_BACKOFFICE_HOST} {
+	reverse_proxy backoffice:8080
 }
-{$COMMERCE_HOST} {
-    reverse_proxy commerce:8080
+{$LEGACY_COMMERCE_HOST} {
+	reverse_proxy commerce:8080
 }
-{$TRACKING_HOST} {
-    reverse_proxy tracking:8080
+{$LEGACY_TRACKING_HOST} {
+	reverse_proxy tracking:8080
 }
-{$MAIL_HOST} {
-    basic_auth {
-        demo {$MAIL_PASSWORD_HASH}
-    }
-    reverse_proxy mailpit:8025
+{$LEGACY_MAIL_HOST}, :8025 {
+	route {
+		@health path /healthz
+		respond @health 200
+		basic_auth {
+			demo {$MAIL_PASSWORD_HASH}
+		}
+		reverse_proxy mailpit:8025
+	}
 }

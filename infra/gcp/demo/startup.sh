@@ -50,7 +50,7 @@ import re
 from pathlib import Path
 path = Path('/etc/docker/daemon.json')
 config = json.loads(path.read_text()) if path.exists() else {}
-config.update({'data-root': '/srv/nexoruta/docker', 'log-driver': 'local'})
+config.update({'data-root': '/srv/nexoruta/docker', 'log-driver': 'json-file', 'log-opts': {'max-size': '10m', 'max-file': '3'}})
 path.write_text(json.dumps(config) + '\n')
 containerd_path = Path('/etc/containerd/config.toml')
 containerd = containerd_path.read_text() if containerd_path.exists() else ''
@@ -64,5 +64,29 @@ PY
 systemctl enable docker.service containerd.service
 systemctl start containerd.service docker.service
 docker compose version
+# Install the supported host agent; application-specific config arrives with the release.
+if ! dpkg-query -W google-cloud-ops-agent >/dev/null 2>&1; then
+  curl --fail --silent --show-error --retry 3 https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh -o /tmp/nexoruta-ops-repo.sh
+  bash /tmp/nexoruta-ops-repo.sh --also-install
+  rm -f /tmp/nexoruta-ops-repo.sh
+fi
+cat > /etc/systemd/system/nexoruta-monitor.service <<'UNIT'
+[Unit]
+Description=NexoRuta infrastructure and application signals
+After=docker.service network-online.target
+Requires=docker.service
+ConditionPathExists=/srv/nexoruta/monitor.json
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /srv/nexoruta/deploy/monitor_agent.py
+Restart=on-failure
+RestartSec=15
+UMask=0077
+NoNewPrivileges=true
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable nexoruta-monitor.service
 touch /srv/nexoruta/bootstrap-ready
 echo 'VM bootstrap complete. The delivery pipeline can now deploy the application.'

@@ -18,7 +18,7 @@ resource "google_project_iam_member" "guard" {
 
 resource "google_storage_bucket_iam_member" "guard" {
   bucket = google_storage_bucket.state.name
-  role   = "roles/storage.objectViewer"
+  role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.guard.email}"
 }
 
@@ -27,9 +27,10 @@ resource "google_workflows_workflow" "guard" {
   region          = var.region
   service_account = google_service_account.guard.email
   source_contents = templatefile("${path.module}/guard.yaml.tftpl", {
-    project_id   = var.project_id
-    zone         = "${var.region}-a"
-    state_bucket = google_storage_bucket.state.name
+    project_id     = var.project_id
+    zone           = "${var.region}-a"
+    secondary_zone = var.secondary_zone
+    state_bucket   = google_storage_bucket.state.name
   })
   depends_on = [google_project_service.required, google_project_iam_member.guard]
 }
@@ -61,4 +62,10 @@ resource "google_cloud_scheduler_job" "guard" {
     oauth_token { service_account_email = google_service_account.scheduler.email }
   }
   depends_on = [google_project_iam_member.scheduler]
+}
+
+resource "google_project_iam_member" "guard_metrics" {
+  project = var.project_id
+  role    = "roles/monitoring.metricWriter"
+  member  = "serviceAccount:${google_service_account.guard.email}"
 }

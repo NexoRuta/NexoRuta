@@ -1,8 +1,9 @@
 # Costos de la demo en Santiago
 
-Estimación en USD, sin impuestos, consultada el 22/10/2026. Precios de lista por
-uso, sin compromisos anuales ni Spot. Seleccionar **Santiago** en las tablas
-oficiales: su vista inicial muestra Iowa, cuyos precios son diferentes.
+Estimación histórica en USD, sin impuestos, consultada el 22/10/2026. La tabla
+original describe **una VM** y ya no es el total de la arquitectura aprobada de
+dos `n4-custom-6-16384`; no usar sus totales para estimar las nuevas sesiones.
+Precios de lista por uso, sin compromisos anuales ni Spot.
 
 | Recurso definido | Tarifa | Costo calculado |
 | --- | --- | --- |
@@ -12,6 +13,7 @@ oficiales: su vista inicial muestra Iowa, cuyos precios son diferentes.
 | Cloud SQL SSD, 20 GiB iniciales | 0,238/GiB-mes | 4,76/mes, incluso apagada |
 | IPv4 estática asociada a la VM | 0,005/h | 3,65/mes de 730 horas |
 | Backups SQL | 0,112/GiB-mes utilizado | Variable según datos y retención |
+| Application Load Balancer global, reglas 80/443 | 0,025/h por las primeras cinco reglas globales del proyecto | 18,25/mes si permanece creado 730 horas, antes de tráfico |
 
 Fuentes: [VM](https://cloud.google.com/products/compute/pricing/general-purpose),
 [Cloud SQL](https://cloud.google.com/sql/pricing),
@@ -21,8 +23,10 @@ La dirección asociada sigue considerándose en uso con la VM detenida.
 Los discos usan los primeros 3000 IOPS y 140 MiB/s por volumen, incluidos en la
 [capacidad base](https://docs.cloud.google.com/compute/docs/disks/hd-types/hyperdisk-balanced).
 
-El cómputo de una sesión suma aproximadamente **USD 2,53 por cuatro horas**.
-SQL puede estar encendido antes de arrancar la VM y tardar en detenerse después;
+El cómputo de una sesión del diseño anterior sumaba aproximadamente **USD 2,53
+por cuatro horas para una VM**. El coste exacto de dos VMs custom debe recalcularse
+en la calculadora oficial con Santiago y `6 vCPU / 16 GiB` por VM. SQL puede estar
+encendido antes de arrancar las VMs y tardar en detenerse después;
 esas transiciones agregan consumo. La base persistente cuesta aproximadamente
 **USD 19,81/mes**, antes de backups, objetos, imágenes, secretos, control de
 apagado, red y builds. El disco SQL puede crecer automáticamente hasta 50 GiB.
@@ -38,10 +42,11 @@ proyecto y su almacenamiento crece con las releases.
 | 8 sesiones de 4 horas | 20,22 | 19,81 | 5–20 | 45–60 |
 | 20 sesiones de 4 horas | 50,54 | 19,81 | 5–20 | 75–90 |
 
-Tres meses de 20 sesiones mensuales serían aproximadamente **USD 226–271**,
-antes de impuestos, variaciones de uso y crecimiento. Es compatible como objetivo
-con el crédito de USD 300 si no lo consumen otros proyectos, pero hay que observar
-Billing. El saldo y la fecha real de vencimiento requieren acceso a tu cuenta.
+Los totales de tres meses de esta tabla no aplican al diseño de dos VMs. El
+balanceador global permanece facturando aunque las VMs estén apagadas; incluirlo
+junto con el segundo disco, transferencia entre zonas y telemetría en la próxima
+estimación de Billing. El saldo y la fecha real de vencimiento requieren acceso a
+tu cuenta.
 El presupuesto configurado avisa desde USD 40, 64 y 80 de consumo mensual antes
 de créditos; no detiene recursos ni garantiza permanecer bajo el crédito.
 

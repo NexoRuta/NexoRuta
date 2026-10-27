@@ -23,6 +23,8 @@ número, que son valores diferentes.
 | `GCP_DELIVERY_BUCKET` | `PROJECT_ID-nexoruta-delivery` |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/nexoruta-github/providers/demo-vm` |
 | `GCP_DEPLOY_SERVICE_ACCOUNT` | `nexoruta-demo-deployer@PROJECT_ID.iam.gserviceaccount.com` |
+| `GCP_SECONDARY_ZONE` | `southamerica-west1-b` |
+| `MONITOR_ALLOWED_EMAILS` | Correos Google explícitamente autorizados, separados por comas |
 
 Estos son los nombres generados por OpenTofu. La preparación inicial con
 `scripts/gcp/setup.ps1` crea WIF, IAM, buckets y secretos en GCP y escribe las siete
@@ -71,6 +73,14 @@ Al cambiarlo, publicar el cambio en `main` y ejecutar `start` o `update`.
 | `SMTP_USERNAME` | Si el proveedor SMTP requiere autenticación. |
 | `SMTP_PASSWORD` | Junto con `SMTP_USERNAME`. |
 | `GEOAPIFY_API_KEY` | Para probar geocodificación con Geoapify. |
+| `MONITOR_GOOGLE_CLIENT_ID` | Cliente OAuth web de Google para el acceso privado a Grafana. |
+| `MONITOR_GOOGLE_CLIENT_SECRET` | Secret del mismo cliente OAuth; no incluirlo en el repositorio ni en logs. |
+
+El cliente OAuth de Grafana debe tener este URI de redirección autorizado:
+`https://monitor.34-49-146-66.sslip.io/login/google`. La IP global `34.49.146.66`
+está reservada para el balanceador. Grafana asigna `Viewer` solo a las cuentas de
+`MONITOR_ALLOWED_EMAILS`; la autenticación básica y el acceso anónimo quedan
+deshabilitados.
 
 Antes de `start` o `update`, el runner combina la configuración pública de Compose
 con los secrets de GitHub y los copia al secreto privado

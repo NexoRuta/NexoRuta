@@ -1,0 +1,1252 @@
+{
+  "uid": "nexoruta-demo",
+  "title": "NexoRuta · infraestructura y aplicación",
+  "description": "Operación de la demo de dos nodos: sesión, salud, recursos y procesos. Datos de Cloud Monitoring; sin datos no equivale a estado saludable.",
+  "tags": [
+    "nexoruta",
+    "demo"
+  ],
+  "schemaVersion": 40,
+  "version": 1,
+  "editable": false,
+  "refresh": "1m",
+  "time": {
+    "from": "now-4h",
+    "to": "now"
+  },
+  "timezone": "America/Montevideo",
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Nodo",
+        "type": "custom",
+        "query": "a,b",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "Todos"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "Todos",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "a",
+            "value": "a"
+          },
+          {
+            "selected": false,
+            "text": "b",
+            "value": "b"
+          }
+        ]
+      },
+      {
+        "name": "service",
+        "label": "Servicio",
+        "type": "query",
+        "datasource": {
+          "type": "stackdriver",
+          "uid": "gcp"
+        },
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "query": {
+          "refId": "ServiceVariable",
+          "selectedQueryType": "labelValues",
+          "selectedMetricType": "custom.googleapis.com/nexoruta/service_up",
+          "labelKey": "metric.label.service",
+          "projectName": ""
+        },
+        "current": {
+          "selected": true,
+          "text": [
+            "Todos"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": []
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Sesión y disponibilidad",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Los filtros **Nodo** y **Servicio** afectan los datos de aplicación. CPU, RAM, discos y SQL muestran todos los recursos de la demo. **Sin datos** indica que falta telemetría; no acredita disponibilidad. La última muestra permite distinguir una sesión detenida de una caída. Actualización cada minuto; Google Cloud puede demorar varios minutos en publicar datos."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Última muestra por nodo",
+      "description": "Hora de la última muestra de disponibilidad recibida. Si deja de avanzar, los estados anteriores pueden estar desactualizados.",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "gcp"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 12,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "gcp"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "Nodo {{metric.label.node}}",
+          "timeSeriesList": {
+            "projectName": "",
+            "filters": [
+              "metric.type",
+              "=",
+              "custom.googleapis.com/nexoruta/service_up",
+              "AND",
+              "metric.label.node",
+              "=~",
+              "$node"
+            ],
+            "groupBys": [
+              "metric.label.node"
+            ],
+            "alignmentPeriod": "+60s",
+            "perSeriesAligner": "ALIGN_MEAN",
+            "crossSeriesReducer": "REDUCE_MAX",
+            "view": "FULL"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsIso",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "gray"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "Time"
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "lastNotNull"
+            ],
+            "mode": "reduceFields",
+            "includeTimeField": true,
+            "fields": {
+              "id": "byName",
+              "options": "Time"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Tiempo restante de sesión",
+      "description": "Vencimiento común; el contador no debe ampliarse al actualizar o recuperar un nodo.",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "gcp"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 3,
+        "w": 12,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "gcp"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "Nodo {{metric.label.node}}",
+          "timeSeriesList": {
+            "projectName": "",
+            "filters": [
+              "metric.type",
+              "=",
+              "custom.googleapis.com/nexoruta/session_remaining",
+              "AND",
+              "metric.label.node",
+              "=~",
+              "$node"
+            ],
+            "groupBys": [
+              "metric.label.node"
+            ],
+            "alignmentPeriod": "+60s",
+            "perSeriesAligner": "ALIGN_MIN",
+            "crossSeriesReducer": "REDUCE_MAX",
+            "view": "FULL"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "gray"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Disponibilidad de servicios",
+      "description": "0: la comprobación falló. 1: respondió. Un servicio HTTP disponible no acredita procesamiento de eventos.",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "gcp"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 24,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "gcp"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "{{metric.label.node}} · {{metric.label.service}}",
+          "timeSeriesList": {
+            "projectName": "",
+            "filters": [
+              "metric.type",
+              "=",
+              "custom.googleapis.com/nexoruta/service_up",
+              "AND",
+              "metric.label.node",
+              "=~",
+              "$node",
+              "AND",
+              "metric.label.service",
+              "=~",
+              "$service"
+            ],
+            "groupBys": [
+              "metric.label.node",
+              "metric.label.service"
+            ],
+            "alignmentPeriod": "+60s",
+            "perSeriesAligner": "ALIGN_MIN",
+            "crossSeriesReducer": "REDUCE_MIN",
+            "view": "FULL"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "gray"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "No disponible",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "Disponible",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "CPU por VM",
+      "description": "Utilización media. Identificador nativo de instancia; independiente del filtro Nodo.",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "gcp"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "gcp"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "VM {{resource.label.instance_id}}",
+          "timeSeriesList": {
+            "projectName": "",
+            "filters": [
+              "metric.type",
+              "=",
+              "compute.googleapis.com/instance/cpu/utilization",
+              "AND",
+              "resource.type",
+              "=",
+              "gce_instance"
+            ],
+            "groupBys": [
+              "resource.label.instance_id"
+            ],
+            "alignmentPeriod": "+60s",
+            "perSeriesAligner": "ALIGN_MEAN",
+            "crossSeriesReducer": "REDUCE_MEAN",
+            "view": "FULL"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisCenteredZero": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "RAM utilizada por VM",
+      "description": "Porcentaje usado informado por Ops Agent; excluye estados cache y buffered.",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "gcp"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 13,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "gcp"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "VM {{resource.label.instance_id}}",
+          "timeSeriesList": {
+            "projectName": "",
+            "filters": [
+              "metric.type",
+              "=",
+              "agent.googleapis.com/memory/percent_used",
+              "AND",
+              "resource.type",
+              "=",
+              "gce_instance",
+              "AND",
+              "metric.label.state",
+              "=",
+              "used"
+            ],
+            "groupBys": [
+              "resource.label.instance_id"
+            ],
+            "alignmentPeriod": "+60s",
+            "perSeriesAligner": "ALIGN_MEAN",
+            "crossSeriesReducer": "REDUCE_MEAN",
+            "view": "FULL"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisCenteredZero": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Disco utilizado por VM",
+      "description": "Porcentaje por dispositivo informado por Ops Agent, incluido el disco persistente cuando se monta.",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "gcp"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 13,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "gcp"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "VM {{resource.label.instance_id}} · {{metric.label.device}}",
+          "timeSeriesList": {
+            "projectName": "",
+            "filters": [
+              "metric.type",
+              "=",
+              "agent.googleapis.com/disk/percent_used",
+              "AND",
+              "resource.type",
+              "=",
+              "gce_instance",
+              "AND",
+              "metric.label.state",
+              "=",
+              "used"
+            ],
+            "groupBys": [
+              "resource.label.instance_id",
+              "metric.label.device"
+            ],
+            "alignmentPeriod": "+60s",
+            "perSeriesAligner": "ALIGN_MEAN",
+            "crossSeriesReducer": "REDUCE_MAX",
+            "view": "FULL"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisCenteredZero": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Latencia del balanceador · p95",
+      "description": "Percentil 95 de latencia total HTTP; incluye recorrido hasta el backend. Métrica nativa independiente de los logs de peticiones.",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "gcp"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "gcp"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "P95 global",
+          "timeSeriesList": {
+            "projectName": "",
+            "filters": [
+              "metric.type",
+              "=",
+              "loadbalancing.googleapis.com/https/total_latencies",
+              "AND",
+              "resource.type",
+              "=",
+              "https_lb_rule",
+              "AND",
+              "resource.label.url_map_name",
+              "=",
+              "nexoruta-demo-https"
+            ],
+            "groupBys": [
+              "resource.label.url_map_name"
+            ],
+            "alignmentPeriod": "+60s",
+            "perSeriesAligner": "ALIGN_DELTA",
+            "crossSeriesReducer": "REDUCE_PERCENTILE_95",
+            "view": "FULL"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisCenteredZero": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Errores 5xx del balanceador",
+      "description": "Tasa de respuestas clase 500 observadas por el balanceador. Sin datos no se transforma en cero.",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "gcp"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "gcp"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "Respuestas 5xx/s",
+          "timeSeriesList": {
+            "projectName": "",
+            "filters": [
+              "metric.type",
+              "=",
+              "loadbalancing.googleapis.com/https/request_count",
+              "AND",
+              "resource.type",
+              "=",
+              "https_lb_rule",
+              "AND",
+              "resource.label.url_map_name",
+              "=",
+              "nexoruta-demo-https",
+              "AND",
+              "metric.label.response_code_class",
+              "=",
+              "500"
+            ],
+            "groupBys": [
+              "resource.label.url_map_name"
+            ],
+            "alignmentPeriod": "+60s",
+            "perSeriesAligner": "ALIGN_RATE",
+            "crossSeriesReducer": "REDUCE_SUM",
+            "view": "FULL"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisCenteredZero": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Conexiones PostgreSQL",
+      "description": "Conexiones de todas las bases del Cloud SQL compartido.",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "gcp"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "gcp"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "{{resource.label.database_id}}",
+          "timeSeriesList": {
+            "projectName": "",
+            "filters": [
+              "metric.type",
+              "=",
+              "cloudsql.googleapis.com/database/postgresql/num_backends",
+              "AND",
+              "resource.type",
+              "=",
+              "cloudsql_database"
+            ],
+            "groupBys": [
+              "resource.label.database_id"
+            ],
+            "alignmentPeriod": "+60s",
+            "perSeriesAligner": "ALIGN_MEAN",
+            "crossSeriesReducer": "REDUCE_SUM",
+            "view": "FULL"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisCenteredZero": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Outbox por transporte y estado",
+      "description": "Cantidad agregada. REDUCE_MAX evita sumar dos lecturas de la misma base realizadas por A y B.",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "gcp"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 27,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "gcp"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "{{metric.label.transport}} · {{metric.label.status}}",
+          "timeSeriesList": {
+            "projectName": "",
+            "filters": [
+              "metric.type",
+              "=",
+              "custom.googleapis.com/nexoruta/outbox_pending"
+            ],
+            "groupBys": [
+              "metric.label.transport",
+              "metric.label.status"
+            ],
+            "alignmentPeriod": "+60s",
+            "perSeriesAligner": "ALIGN_MEAN",
+            "crossSeriesReducer": "REDUCE_MAX",
+            "view": "FULL"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisCenteredZero": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Workers · tiempo sin contacto SQL",
+      "description": "Segundos desde el último contacto SQL publicado por los workers. La ausencia de muestras requiere investigación.",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "gcp"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 27,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "gcp"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "VM {{resource.label.instance_id}}",
+          "timeSeriesList": {
+            "projectName": "",
+            "filters": [
+              "metric.type",
+              "=",
+              "workload.googleapis.com/nexoruta.worker.sql_contact.age"
+            ],
+            "groupBys": [
+              "resource.label.instance_id"
+            ],
+            "alignmentPeriod": "+60s",
+            "perSeriesAligner": "ALIGN_MEAN",
+            "crossSeriesReducer": "REDUCE_MAX",
+            "view": "FULL"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisCenteredZero": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Reinicios de contenedores",
+      "description": "Contador del contenedor actual; puede reiniciarse al recrearlo durante el despliegue.",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "gcp"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "gcp"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "{{metric.label.node}} · {{metric.label.service}}",
+          "timeSeriesList": {
+            "projectName": "",
+            "filters": [
+              "metric.type",
+              "=",
+              "custom.googleapis.com/nexoruta/container_restarts",
+              "AND",
+              "metric.label.node",
+              "=~",
+              "$node",
+              "AND",
+              "metric.label.service",
+              "=~",
+              "$service"
+            ],
+            "groupBys": [
+              "metric.label.node",
+              "metric.label.service"
+            ],
+            "alignmentPeriod": "+60s",
+            "perSeriesAligner": "ALIGN_MEAN",
+            "crossSeriesReducer": "REDUCE_MAX",
+            "view": "FULL"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisCenteredZero": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Contenedores terminados por falta de memoria",
+      "description": "Indicador OOM del contenedor actual; conservar logs para investigar eventos anteriores.",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "gcp"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 34,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "gcp"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "{{metric.label.node}} · {{metric.label.service}}",
+          "timeSeriesList": {
+            "projectName": "",
+            "filters": [
+              "metric.type",
+              "=",
+              "custom.googleapis.com/nexoruta/container_oom",
+              "AND",
+              "metric.label.node",
+              "=~",
+              "$node",
+              "AND",
+              "metric.label.service",
+              "=~",
+              "$service"
+            ],
+            "groupBys": [
+              "metric.label.node",
+              "metric.label.service"
+            ],
+            "alignmentPeriod": "+60s",
+            "perSeriesAligner": "ALIGN_MEAN",
+            "crossSeriesReducer": "REDUCE_MAX",
+            "view": "FULL"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisCenteredZero": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "Release aplicada por nodo",
+      "description": "La etiqueta identifica la release informada por cada nodo; ambos deben coincidir al completar un despliegue.",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "gcp"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 24,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "gcp"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "{{metric.label.node}} · {{metric.label.release}}",
+          "timeSeriesList": {
+            "projectName": "",
+            "filters": [
+              "metric.type",
+              "=",
+              "custom.googleapis.com/nexoruta/applied_release",
+              "AND",
+              "metric.label.node",
+              "=~",
+              "$node"
+            ],
+            "groupBys": [
+              "metric.label.node",
+              "metric.label.release"
+            ],
+            "alignmentPeriod": "+60s",
+            "perSeriesAligner": "ALIGN_MEAN",
+            "crossSeriesReducer": "REDUCE_MAX",
+            "view": "FULL"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "gray"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Aplicada"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    }
+  ],
+  "links": []
+}

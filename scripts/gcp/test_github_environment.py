@@ -105,6 +105,7 @@ class GitHubEnvironmentTests(unittest.TestCase):
         with (
             patch.dict(os.environ, {"SMTP_USERNAME": "demo", "SMTP_PASSWORD": "private-password", "GEOAPIFY_API_KEY": "private-geo-key"}),
             patch.object(settings.session, "command", side_effect=upload) as command,
+            patch("hosting_identity.ensure"),
             contextlib.redirect_stdout(output),
         ):
             settings.sync_integrations()

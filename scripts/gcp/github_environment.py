@@ -76,9 +76,25 @@ def validate(job):
             errors.append("GCP_MANAGE_DNS")
         if (domain and not re.fullmatch(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}", domain)) or (manage_dns == "true" and not domain):
             errors.append("GCP_BASE_DOMAIN")
+    if job == "deploy" and os.environ.get("DEMO_OPERATION") in ("start", "update"):
+        try:
+            monitor_settings()
+        except ValueError as error:
+            errors.append(str(error))
     if errors:
         raise ValueError("Configure valid Variables in GitHub environment nexoruta-demo: " + ", ".join(errors))
     print(f"GitHub environment configuration is valid for {job}.")
+
+
+def monitor_settings():
+    emails = sorted(set(value.strip().lower() for value in re.split(r"[,;]", os.environ.get("MONITOR_ALLOWED_EMAILS", "")) if value.strip()))
+    if not emails or len(emails) > 25 or any(not re.fullmatch(r"[a-z0-9._+%-]+@[a-z0-9.-]+\.[a-z]{2,}", value) for value in emails):
+        raise ValueError("MONITOR_ALLOWED_EMAILS (explicit Google account list)")
+    client = os.environ.get("MONITOR_GOOGLE_CLIENT_ID", "")
+    secret = os.environ.get("MONITOR_GOOGLE_CLIENT_SECRET", "")
+    if not re.fullmatch(r"[a-zA-Z0-9-]+\.apps\.googleusercontent\.com", client) or not secret or any(c in secret for c in "\r\n\x00"):
+        raise ValueError("MONITOR_GOOGLE_CLIENT_ID and MONITOR_GOOGLE_CLIENT_SECRET")
+    return {"monitor_allowed_emails": emails, "monitor_google_client_id": client, "monitor_google_client_secret": secret}
 
 
 def integrations():
@@ -100,12 +116,16 @@ def integrations():
         raise ValueError("Configure both SMTP_USERNAME and SMTP_PASSWORD secrets, or neither")
     result["smtp_port"] = int(result["smtp_port"])
     result["smtp_ssl"] = result["smtp_ssl"].lower() == "true"
+    if os.environ.get("DEMO_OPERATION") in ("start", "update"):
+        result.update(monitor_settings())
     return result
 
 
 def sync_integrations():
     validate("deploy")
     settings = integrations()
+    from hosting_identity import ensure
+    ensure(os.environ["GCP_PROJECT_ID"])
     # The VM reads this private secret with its own identity. No GitHub token or
     # GCP runner credential is copied to the VM or application containers.
     with tempfile.TemporaryDirectory(prefix="nexoruta-integrations-") as temp:

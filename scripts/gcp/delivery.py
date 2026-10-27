@@ -89,6 +89,16 @@ def create_bundle(destination):
     with open(sql / "postflight.sql", "a", encoding="utf-8") as output:
         restricted = sorted(roles - {"nexoruta_schema_owner"})
         output.write(f"\nREVOKE CREATE ON SCHEMA public, nexoruta_app FROM {', '.join(restricted)};\n")
+    # Deploy upgrades only additive pending migrations while old/new nodes overlap.
+    safety = {}
+    for migration in migrations.glob("*.cs"):
+        if not re.match(r"^\d{14}_.+\.cs$", migration.name) or migration.name.endswith(".Designer.cs"):
+            continue
+        code = migration.read_text(encoding="utf-8-sig")
+        up = code.split("protected override void Down", 1)[0]
+        safety[migration.stem] = not bool(re.search(r"\.(?:Drop|Rename|AlterColumn)\w*\s*\(|\b(?:DROP|TRUNCATE|DELETE\s+FROM)\s", up, re.I))
+    (assets / "migration-policy.json").write_text(json.dumps({"migrations": safety}), encoding="utf-8")
+    shutil.copyfile(ROOT / "scripts/gcp/monitor_agent.py", assets / "monitor_agent.py")
     bundle = destination / "bundle.tar.gz"
     with tarfile.open(bundle, "w:gz") as archive:
         for path in sorted(assets.rglob("*")):
@@ -214,28 +224,94 @@ def deploy(config, release):
     bucket = os.environ.get("GCP_DELIVERY_BUCKET", f"{project}-nexoruta-delivery")
     if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]", bucket):
         raise ValueError("Invalid delivery bucket")
+    inventory = session.node_configs(config)
+    lease = json.loads(session.command("gcloud", "storage", "cat",
+        f"gs://{config['GCP_STATE_BUCKET']}/leases/demo.json", capture=True))
+    deadline = lease["expires_at"]
+    if deadline <= time.time():
+        raise RuntimeError("The common session deadline has expired")
     session.command("gcloud", "sql", "backups", "create", "--instance=nexoruta-demo-db", f"--project={project}", "--quiet")
-    for attempt in range(80):
+
+    def stage(node, operation):
+        if time.time() >= deadline:
+            raise RuntimeError("The deployment cannot extend the common session deadline")
+        output = session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
+            "--command=" + shlex.join(["sudo", "python3", "/srv/nexoruta/deploy/vm_deploy.py",
+                "--bucket", bucket, "--release", release, "--node", node["NODE_ID"],
+                "--deadline", str(deadline), "--stage", operation]), capture=True)
+        for line in reversed(output.splitlines()):
+            if line.startswith("{"):
+                result = json.loads(line)
+                if result.get("release") == release and result.get("status") == "healthy":
+                    return result
+        raise RuntimeError(f"Node {node['NODE_ID']} did not report stage {operation}")
+
+    prepared = {}
+    for node in inventory:
+        for attempt in range(80):
+            try:
+                session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
+                    "--command=sudo test -f /srv/nexoruta/bootstrap-ready")
+                break
+            except subprocess.CalledProcessError:
+                time.sleep(5)
+        else:
+            raise RuntimeError(f"Node {node['NODE_ID']} bootstrap did not finish")
+        session.gcloud(node, "compute", "scp", str(ROOT / "scripts/gcp/vm_deploy.py"),
+            f"{node['VM_NAME']}:/tmp/nexoruta-vm-deploy.py", "--tunnel-through-iap")
+        session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
+            "--command=sudo install -D -m 0700 /tmp/nexoruta-vm-deploy.py /srv/nexoruta/deploy/vm_deploy.py")
+        prepared[node["NODE_ID"]] = stage(node, "prepare")
+    stage(inventory[0], "migrate")
+
+    def health(node):
+        for service in ("api", "admin", "backoffice", "commerce", "tracking", "monitor"):
+            output = session.command("gcloud", "compute", "backend-services", "get-health", f"nexoruta-demo-{service}",
+                "--global", f"--project={project}", "--format=json", capture=True)
+            states = [status for backend in json.loads(output) for status in backend.get("status", {}).get("healthStatus", [])
+                      if status.get("instance", "").endswith("/" + node["VM_NAME"])]
+            if not states or any(state.get("healthState") != "HEALTHY" for state in states):
+                return False
+        return True
+
+    for node in reversed(inventory):
+        peer = next(other for other in inventory if other["NODE_ID"] != node["NODE_ID"])
+        # A first migration has no healthy second backend yet. Ordinary updates
+        # always require the surviving peer before removing a serving node.
+        if all(item.get("shared_keys_ready") for item in prepared.values()) and not health(peer):
+            raise RuntimeError(f"Peer {peer['NODE_ID']} is not healthy; refusing to drain {node['NODE_ID']}")
+        group = f"nexoruta-demo-{node['NODE_ID']}"
+        removed = False
         try:
-            session.gcloud(config, "compute", "ssh", session.VM_NAME, "--tunnel-through-iap", "--command=sudo test -f /srv/nexoruta/bootstrap-ready")
-            break
-        except subprocess.CalledProcessError:
+            session.gcloud(node, "compute", "instance-groups", "unmanaged", "remove-instances", group,
+                f"--instances={node['VM_NAME']}")
+            removed = True
+            time.sleep(35)
+            stage(node, "apply")
+        except Exception:
+            # vm_deploy restores the last compatible containers before failing.
+            # Only rejoin a restored node after its private health check succeeds.
+            if removed:
+                try:
+                    stage(node, "verify-local")
+                    session.gcloud(node, "compute", "instance-groups", "unmanaged", "add-instances", group,
+                        f"--instances={node['VM_NAME']}")
+                except Exception:
+                    pass
+            raise
+        session.gcloud(node, "compute", "instance-groups", "unmanaged", "add-instances", group,
+            f"--instances={node['VM_NAME']}")
+        for attempt in range(60):
+            if health(node):
+                break
+            if time.time() >= deadline:
+                raise RuntimeError("Session expired while waiting for load balancer health")
             time.sleep(5)
-    else:
-        raise RuntimeError("VM bootstrap did not finish before deployment")
-    session.gcloud(config, "compute", "scp", str(ROOT / "scripts/gcp/vm_deploy.py"), f"{session.VM_NAME}:/tmp/nexoruta-vm-deploy.py", "--tunnel-through-iap")
-    output = session.gcloud(
-        config, "compute", "ssh", session.VM_NAME, "--tunnel-through-iap",
-        "--command=" + shlex.join(["sudo", "python3", "/tmp/nexoruta-vm-deploy.py", "--bucket", bucket, "--release", release]),
-        capture=True,
-    )
-    for line in reversed(output.splitlines()):
-        if line.startswith("{"):
-            result = json.loads(line)
-            if result.get("release") == release and result.get("status") == "healthy":
-                print(line)
-                return result
-    raise RuntimeError("The VM did not report a healthy release")
+        else:
+            raise RuntimeError(f"Node {node['NODE_ID']} was not admitted by the load balancer")
+    result = stage(inventory[0], "verify")
+    print(json.dumps(result))
+    return result
 
 
 if __name__ == "__main__":
