@@ -101,7 +101,7 @@ def ensure(project):
     if versions.strip():
         payload = session.command(
             "gcloud", "secrets", "versions", "access", "latest", f"--secret={SECRET}",
-            f"--project={project}", "--format=default", capture=True,
+            f"--project={project}", capture=True,
         )
         try:
             value = json.loads(payload)

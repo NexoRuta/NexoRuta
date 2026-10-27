@@ -33,6 +33,7 @@ class HostingIdentityTests(unittest.TestCase):
         self.assertEqual(command.call_count, 2)
         self.assertIn("--filter=state=ENABLED", command.call_args_list[0].args)
         self.assertEqual(command.call_args_list[1].args[3:5], ("access", "latest"))
+        self.assertNotIn("--format=default", command.call_args_list[1].args)
         self.assertEqual(output.getvalue(), "")
 
     def test_malformed_existing_identity_never_replaces_credentials(self):
