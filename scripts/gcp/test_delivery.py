@@ -41,6 +41,22 @@ class DeliveryTests(unittest.TestCase):
             vm_deploy.extract(data.getvalue(), destination)
             self.assertEqual((destination / "assets/config.json").read_bytes(), b"safe release content")
 
+    def test_migration_policy_includes_only_entity_framework_migrations(self):
+        with tempfile.TemporaryDirectory() as temp:
+            migrations = Path(temp)
+            names = (
+                "20260101010101_AddFeature.cs",
+                "20260101010101_AddFeature.Designer.cs",
+                "20260101010101_AddFeature.Sql.cs",
+                "ProvisionRoles.cs",
+            )
+            for name in names:
+                (migrations / name).write_text("", encoding="utf-8")
+            self.assertEqual(
+                [path.name for path in delivery.migration_policy_files(migrations)],
+                ["20260101010101_AddFeature.cs"],
+            )
+
     def test_environment_cannot_inject_additional_lines(self):
         with self.assertRaises(ValueError):
             vm_deploy.env_line("SMTP_PASSWORD", "value\nAPI_IMAGE=attacker/image")
