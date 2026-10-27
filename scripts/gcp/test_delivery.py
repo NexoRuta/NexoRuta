@@ -67,6 +67,12 @@ class DeliveryTests(unittest.TestCase):
             "Node a stage prepare exited (1) without a report",
         )
 
+    def test_remote_stage_error_reports_qualified_exception_class_only(self):
+        self.assertEqual(
+            delivery.remote_stage_error("urllib.error.HTTPError: private detail", "a", "prepare"),
+            "Node a stage prepare failed (HTTPError)",
+        )
+
     def test_offline_update_does_not_provision_or_start_anything(self):
         config = {"DEMO_OPERATION": "update"}
         with patch.object(session, "instance", return_value=None), patch.object(session, "command") as command:
