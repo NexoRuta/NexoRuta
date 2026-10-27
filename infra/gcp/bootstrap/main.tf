@@ -83,6 +83,9 @@ locals {
     "artifactregistry.googleapis.com",
     "cloudbuild.googleapis.com",
     "cloudquotas.googleapis.com",
+    "monitoring.googleapis.com",
+    "logging.googleapis.com",
+    "cloudtrace.googleapis.com",
     "secretmanager.googleapis.com",
     "cloudscheduler.googleapis.com",
     "workflows.googleapis.com",
@@ -213,5 +216,14 @@ output "github_variables" {
     GCP_DELIVERY_BUCKET            = google_storage_bucket.delivery.name
     GCP_WORKLOAD_IDENTITY_PROVIDER = google_iam_workload_identity_pool_provider.github.name
     GCP_DEPLOY_SERVICE_ACCOUNT     = google_service_account.deployer.email
+  }
+}
+
+variable "secondary_zone" {
+  type    = string
+  default = "southamerica-west1-b"
+  validation {
+    condition     = var.secondary_zone == "southamerica-west1-b"
+    error_message = "The second demo node uses Santiago zone b."
   }
 }

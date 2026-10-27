@@ -161,3 +161,38 @@ resource "google_secret_manager_secret_version" "mobile" {
   secret      = google_secret_manager_secret.config["nexoruta-mobile-config"].id
   secret_data = base64decode(data.google_firebase_android_app_config.demo.config_file_contents)
 }
+
+# Hosting identity is generated once by the serialized manual deployment job.
+resource "google_secret_manager_secret" "hosting" {
+  secret_id = "nexoruta-demo-hosting"
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
+  }
+  depends_on = [google_project_service.required]
+}
+resource "google_secret_manager_secret_iam_member" "hosting_runtime" {
+  secret_id = google_secret_manager_secret.hosting.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.runtime.email}"
+}
+resource "google_secret_manager_secret_iam_member" "hosting_deployer" {
+  for_each  = toset(["roles/secretmanager.secretAccessor", "roles/secretmanager.secretVersionAdder", "roles/secretmanager.viewer"])
+  secret_id = google_secret_manager_secret.hosting.id
+  role      = each.key
+  member    = "serviceAccount:${google_service_account.deployer.email}"
+}
+resource "google_project_iam_member" "runtime_observability" {
+  for_each = toset(["roles/logging.logWriter", "roles/monitoring.metricWriter", "roles/cloudtrace.agent", "roles/monitoring.viewer"])
+  project  = var.project_id
+  role     = each.key
+  member   = "serviceAccount:${google_service_account.runtime.email}"
+}
+resource "google_project_iam_member" "deployer_monitoring" {
+  project = var.project_id
+  role    = "roles/monitoring.editor"
+  member  = "serviceAccount:${google_service_account.deployer.email}"
+}

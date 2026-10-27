@@ -1,0 +1,42 @@
+# Application containers use Docker json-file with rotation. Host firewall restricts
+# OTLP to the Docker bridge; 4317 must never be exposed by a public firewall rule.
+combined:
+  receivers:
+    otlp:
+      type: otlp
+      grpc_endpoint: 0.0.0.0:4317
+      metrics_mode: googlecloudmonitoring
+metrics:
+  receivers:
+    hostmetrics:
+      type: hostmetrics
+      collection_interval: 60s
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: [hostmetrics]
+      otlp:
+        receivers: [otlp]
+traces:
+  service:
+    pipelines:
+      otlp:
+        receivers: [otlp]
+logging:
+  receivers:
+    docker:
+      type: files
+      include_paths: [/srv/nexoruta/docker/containers/*/*-json.log]
+      record_log_file_path: true
+  processors:
+    docker_json:
+      type: parse_json
+    exclude_sensitive_records:
+      type: exclude_logs
+      match_any:
+        - 'jsonPayload.log =~ "(?i)(authorization|password|access_token|refresh_token|api[ _-]?key|https?://|/seguimiento/|/api/public/seguimiento/)"'
+  service:
+    pipelines:
+      docker:
+        receivers: [docker]
+        processors: [docker_json, exclude_sensitive_records]
