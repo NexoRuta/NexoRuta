@@ -4,13 +4,13 @@ Fecha: 28/10/2026, America/Montevideo.
 
 ## 1. Resultado de la revisión
 
-Baseline anterior a la aplicación: las pruebas de integración backend ocuparon **13 min 56 s** de una publicación de **21 min 17 s**. Un push principal iniciaba dos validaciones y cada publicación reconstruía seis imágenes sin importar qué cambió. La selección por SHAs, el paralelismo y la reutilización de digests descritos aquí son cambios locales; sus ahorros reales todavía necesitan runs posteriores.
+Baseline anterior a la aplicación: las pruebas de integración backend ocuparon **13 min 56 s** de una publicación de **21 min 17 s**. Un push principal iniciaba dos validaciones y cada publicación reconstruía seis imágenes sin importar qué cambió. La selección por SHAs, el paralelismo y la reutilización de digests ya están implementados; sus ahorros reales todavía necesitan runs posteriores.
 
-La mejora recomendada es eliminar primero las ejecuciones redundantes, ejecutar solo los componentes afectados con una política conservadora de dependencias, y reducir el costo del backend mediante medición y distribución de sus pruebas. Después conviene mejorar las cachés y el empaquetado Docker. Paralelizar las seis imágenes tiene un beneficio acotado: su compilación sumó aproximadamente 2 min 34 s en Cloud Build.
+La implementación elimina el CI posterior al merge, los dispatches desde los submódulos y el push de mobile a develop que repetía su PR. La publicación del root solo planifica y construye lo necesario; los tests siguen en los PRs. Las reglas de `main` exigen PR, check final y una promoción desde `develop`.
 
-La auditoría detectó dos condiciones de calidad: la compilación Android no bloqueaba la publicación integrada y las ramas no exigían checks exitosos. El código local ahora pone Android detrás del resultado integrado y define checks finales estables; los rulesets remotos siguen pendientes de activar tras integrar estos workflows.
+La auditoría también detectó que Android no bloqueaba la publicación integrada y que las ramas no exigían checks exitosos. Android ahora bloquea la integración cuando cambia su input; hay checks finales estables y rulesets activos en los cuatro repositorios.
 
-El análisis inicial describía el estado previo a los cambios. Esta revisión también sigue la aplicación del plan. Los cambios locales están implementados y validados donde se indica; no se publicó nada a GitHub ni se modificaron recursos de GCP. La aplicación de rulesets y la comparación de 20 ejecuciones quedan pendientes de que los workflows lleguen a las ramas por defecto.
+Los cambios están en `develop` del root y en `main`/`develop` de los submódulos. Las tres PRs de submódulos pasaron sus checks y se integraron; la PR integrada del root debe validar el snapshot completo. No se ejecutaron publicaciones ni se modificaron recursos de GCP. La mejora medida en tiempos requiere runs posteriores.
 
 ### Estado de aplicación del plan
 
@@ -18,11 +18,10 @@ El análisis inicial describía el estado previo a los cambios. Esta revisión t
 | --- | --- | --- |
 | Implementado en código | 01, 03, 04, 06–17 | Gate Android exacto/por inputs, planificación conservadora, tres shards backend con verificación de resultados, paralelismo, lockfiles/cachés, manifiesto con digests reutilizados, pruebas OpenAPI reales, TRX y separación de workflows. |
 | Instrumentado; optimización condicionada a mediciones | 05, 18 | Tiempos de fixtures y fases manuales; preparación por VM en paralelo. Las migraciones siguen aisladas y secuenciales. |
-| Pendiente externo | 02, 17 | Crear rulesets para los checks finales y aplicar bootstrap para que Workload Identity Federation autorice `publish.yml` y `vm-controls.yml` antes de usarlos. |
-| Pendiente de validación remota | 06 | La partición por clases usa pesos TRX y cada shard compara sus resultados con el inventario descubierto; falta un run verde en tres runners independientes. |
-| Pendiente de datos de producción | Criterio de 20 ejecuciones | Reportar p50/p95, minutos de runner y aciertos de caché requiere ejecuciones en GitHub después de publicar. |
+| Pendiente de validación remota | Root CI | La PR del root debe confirmar el plan de la combinación y el check final antes de fusionarse. |
+| Pendiente de datos de producción | 05, 06, 08–10, 18 | Reportar tiempos p50/p95, minutos de runner, caché Cloud Build y resultados de ensayos GCP requiere runs equivalentes posteriores. |
 
-Los cambios se verifican localmente antes de integrar. La publicación, activación remota de reglas y operaciones GCP no forman parte de esta ejecución.
+Los submódulos ya pasaron la CI remota de sus PRs. La integración y publicación del root aún no se han ejecutado.
 
 ## 2. Alcance y fuentes de evidencia
 
@@ -51,7 +50,7 @@ Los gitlinks del commit principal y el manifiesto de la última publicación apu
 | [Principal: publish.yml](../.github/workflows/publish.yml) | Push main | Plan ligero sobre los gitlinks fijados, imágenes afectadas, manifiesto completo y GitHub prerelease | No vuelve a ejecutar suites; publica únicamente el snapshot aprobado por PR |
 | [Principal: vm-controls.yml](../.github/workflows/vm-controls.yml) | workflow_dispatch | start/update/stop de la demo | Cola independiente; no publica imágenes |
 | [Backend: ci.yml](../backend/.github/workflows/ci.yml) | PR a develop/main | Gate de rama, scripts Python, restore, build, tests .NET y TRX | Backend CI / result es el check obligatorio de main |
-| [Frontend: ci.yml](../frontend/.github/workflows/ci.yml) | PR a develop/main | GeoJSON de backend main registrado con SHA/hash, restore, build y tests | La CI integrada valida OpenAPI contra la API del snapshot real |
+| [Frontend: ci.yml](../frontend/.github/workflows/ci.yml) | PR a develop/main | Gate de rama, GeoJSON de backend main registrado con SHA/hash, restore, build y tests | La CI integrada valida OpenAPI contra la API del snapshot real |
 | [Mobile: ci.yml](../mobile/.github/workflows/ci.yml) | PR a develop/main y manual | Gate de rama, cuatro suites portables, Android Release con R8 preparado y resultado estable | Sin push a develop ni notify a root; Mobile CI / result es el check obligatorio de main |
 
 Los entrypoints mantienen responsabilidades visibles: CI por PR, publicación automática y controles manuales. Se eliminaron los tres workflows `release.yml` y sus dispatches cruzados: el root publica desde los gitlinks del commit integrado.
@@ -163,15 +162,15 @@ Prioridades: P0 = corregir las condiciones de calidad antes de omitir validacion
 
 ### 02 — P0: las ramas no exigen los checks de CI
 
-**Estado de aplicación.** Los checks finales estables y los gates que aceptan solo PRs internos hacia `develop` o `develop` → `main` están implementados. Los rulesets de `main` se aplican en GitHub para exigir PR y los checks correspondientes, sin bypass.
+**Estado de aplicación.** Los checks finales estables y el gate que reserva `main` a PRs desde `develop` están implementados. Los rulesets de `main` se aplican en GitHub para exigir PR y los checks correspondientes, sin bypass.
 
 **Problema y evidencia.** La API consultada devuelve ausencia de protección clásica para main en los cuatro repositorios. El principal no tiene rulesets; backend/frontend/mobile tienen reglas activas para develop y main que solo impiden borrado y non-fast-forward. No exigen PR ni checks exitosos.
 
 **Cómo afecta.** Es posible incorporar cambios sin esperar el CI. Una estrategia de reutilización de resultados de componentes sería insegura si supone que main siempre está validado.
 
-**Solución.** Requerir un PR y un check final estable en cada `main`; exigir mediante CI que el PR venga de `develop`.
+**Solución.** Requerir un PR y un check final estable en cada `main`; el gate permite forks a `develop` y exige que un PR a `main` venga de `develop` del mismo repositorio.
 
-**Guía aplicada.** Los jobs finales tienen nombres únicos (`Backend CI / result`, `Frontend CI / result`, `Mobile CI / result`, `Integrated CI / result`). Los rulesets exigen PR, checks estrictos y no permiten bypass. El gate de CI rechaza PRs externos y cualquier PR a `main` cuyo origen no sea `develop`.
+**Guía aplicada.** Los jobs finales tienen nombres únicos (`Backend CI / result`, `Frontend CI / result`, `Mobile CI / result`, `Integrated CI / result`). Los rulesets exigen PR, checks estrictos de GitHub Actions y no permiten bypass. El gate de CI rechaza cualquier PR a `main` cuyo origen no sea la rama `develop` local al repositorio.
 
 **Comprobación.** Confirmar en GitHub que un push directo a `main` se rechaza, un PR desde otra rama a `main` falla por política y un check fallido impide el merge. [Referencia de protección y nombres de checks](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
 

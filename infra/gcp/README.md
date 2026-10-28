@@ -202,7 +202,7 @@ para detectar supuestos incompatibles con Cloud SQL antes del despliegue. Ese
 escenario aproxima sus permisos y no sustituye probar el servicio administrado.
 
 Si los submódulos son privados, configurar `SUBMODULES_TOKEN` de solo lectura
-sobre los tres repos en el environment `nexoruta-demo` del repo madre. Ver
+sobre los tres repos en los environments `nexoruta-demo` y `nexoruta-ci` del repo madre. Ver
 [lista de configuración](github-environment.md). El `GITHUB_TOKEN` de un repo no
 obtiene acceso a otros repos privados por sí solo.
 

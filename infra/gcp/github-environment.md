@@ -117,6 +117,8 @@ gh variable set GCP_REGION --repo NexoRuta/NexoRuta --env nexoruta-demo --body s
 gh variable set GCP_ZONE --repo NexoRuta/NexoRuta --env nexoruta-demo --body southamerica-west1-a
 
 # Sin pasar el valor sensible por argumentos: gh solicita el secret.
+gh secret set SUBMODULES_TOKEN --repo NexoRuta/NexoRuta --env nexoruta-demo
+gh secret set SUBMODULES_TOKEN --repo NexoRuta/NexoRuta --env nexoruta-ci
 gh secret set GEOAPIFY_API_KEY --repo NexoRuta/NexoRuta --env nexoruta-demo
 gh secret set SMTP_USERNAME --repo NexoRuta/NexoRuta --env nexoruta-demo
 gh secret set SMTP_PASSWORD --repo NexoRuta/NexoRuta --env nexoruta-demo
