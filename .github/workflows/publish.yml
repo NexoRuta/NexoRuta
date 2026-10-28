@@ -4,8 +4,6 @@ run-name: NexoRuta publish / ${{ github.event_name }}
 on:
   push:
     branches: [main]
-  repository_dispatch:
-    types: [nexoruta-source-changed]
 
 permissions:
   contents: read
@@ -16,20 +14,37 @@ concurrency:
   queue: max
 
 jobs:
-  verify:
-    if: >-
-      github.ref == 'refs/heads/main' &&
-      github.event_name != 'workflow_dispatch'
-    uses: ./.github/workflows/ci.yml
-    with:
-      backend_ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.repository == 'NexoRuta/NexoRuta-Backend' && github.event.client_payload.sha || 'main' }}
-      frontend_ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.repository == 'NexoRuta/NexoRuta-Frontend' && github.event.client_payload.sha || 'main' }}
-      mobile_ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.repository == 'NexoRuta/NexoRuta-Mobile' && github.event.client_payload.sha || 'main' }}
-    secrets: inherit
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: nexoruta-demo
+    permissions:
+      contents: read
+    outputs:
+      sources: ${{ steps.sources.outputs.sources }}
+      plan: ${{ steps.sources.outputs.plan }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+          persist-credentials: false
+      - name: Resolve the submodule commits pinned by this root commit
+        id: sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, subprocess
+          sources = {repo: subprocess.check_output(['git', '-C', repo, 'rev-parse', 'HEAD'], text=True).strip() for repo in ('backend', 'frontend', 'mobile')}
+          pathlib.Path('sources.json').write_text(json.dumps(sources))
+          PY
+          python3 scripts/gcp/ci_plan.py plan
 
   integration:
-    if: needs.verify.result == 'success' && fromJSON(needs.verify.outputs.plan).publish_required
-    needs: verify
+    if: needs.plan.result == 'success' && fromJSON(needs.plan.outputs.plan).publish_required
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -45,11 +60,11 @@ jobs:
       - name: Publish an immutable tag for the tested component combination
         id: snapshot
         env:
-          TESTED_SOURCES: ${{ needs.verify.outputs.sources }}
+          TESTED_SOURCES: ${{ needs.plan.outputs.sources }}
         run: python3 scripts/gcp/integration.py tag
 
   publish:
-    needs: [verify, integration]
+    needs: [plan, integration]
     runs-on: ubuntu-latest
     timeout-minutes: 55
     environment: nexoruta-demo
@@ -71,7 +86,7 @@ jobs:
       RELEASE_CHANNEL: main
       INTEGRATION_TAG: ${{ needs.integration.outputs.tag }}
       INTEGRATION_COMMIT: ${{ needs.integration.outputs.commit }}
-      TESTED_CI_PLAN: ${{ needs.verify.outputs.plan }}
+      TESTED_CI_PLAN: ${{ needs.plan.outputs.plan }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
