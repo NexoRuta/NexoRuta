@@ -1,7 +1,7 @@
 """Apply a bounded VM session, from GitHub Actions or a local terminal."""
 
 import datetime as dt
-import json
+from concurrent.futures import ThreadPoolExecutor
 import os
 from pathlib import Path
 import re
@@ -286,14 +286,18 @@ def run(config):
     now = dt.datetime.now(dt.timezone.utc).timestamp()
     measure("set_provisioning_lease", lambda: write_lease(config, now + MAX_SECONDS + 1800, now + 1800))
     try:
-        measure("start_cloud_sql", lambda: start_database(config))
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            database = executor.submit(measure, "start_cloud_sql", lambda: start_database(config))
+            tofu_setup = executor.submit(initialize_tofu, config)
+            database.result()
+            tofu_setup.result()
         measure("start_session_total", lambda: start_session(config, release))
     except Exception:
         stop_after_failure(config)
         raise
 
 
-def start_session(config, release):
+def initialize_tofu(config):
     tofu = ("tofu", f"-chdir={INFRA}")
     measure("tofu_init", lambda: command(
         *tofu, "init", "-input=false", "-lockfile=readonly",
@@ -301,6 +305,10 @@ def start_session(config, release):
         "-backend-config=prefix=demo/vm",
     ))
     measure("tofu_validate", lambda: command(*tofu, "validate"))
+
+
+def start_session(config, release):
+    tofu = ("tofu", f"-chdir={INFRA}")
     with tempfile.TemporaryDirectory(prefix="nexoruta-session-") as temp:
         inputs = Path(temp) / "session.tfvars.json"
         inputs.write_text(json.dumps({
