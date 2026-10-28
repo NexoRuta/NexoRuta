@@ -1,5 +1,6 @@
 import datetime as dt
 import json
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -8,6 +9,34 @@ import delivery
 
 
 class SessionSafetyTests(unittest.TestCase):
+    def test_tofu_setup_overlaps_database_start_and_both_finish_before_session(self):
+        database_started = threading.Event()
+        setup_started = threading.Event()
+        completed = []
+
+        def start_database(config):
+            database_started.set()
+            if not setup_started.wait(5):
+                raise AssertionError("OpenTofu setup did not run concurrently")
+            completed.append("database")
+
+        def setup(config):
+            setup_started.set()
+            if not database_started.wait(5):
+                raise AssertionError("database did not start concurrently")
+            completed.append("tofu")
+
+        def start(config, release):
+            self.assertCountEqual(completed, ["database", "tofu"])
+
+        with (patch.object(delivery, "latest_release", return_value="release-" + "a" * 32),
+              patch.object(session, "instance", return_value=None),
+              patch.object(session, "write_lease"),
+              patch.object(session, "start_database", side_effect=start_database),
+              patch.object(session, "initialize_tofu", side_effect=setup),
+              patch.object(session, "start_session", side_effect=start)):
+            session.run({"DEMO_OPERATION": "start"})
+
     def setUp(self):
         environment = patch.dict("os.environ", {"GITHUB_ACTIONS": "false"})
         environment.start()
@@ -121,6 +150,7 @@ class SessionSafetyTests(unittest.TestCase):
             patch.object(session, "instance", return_value=None),
             patch.object(session, "write_lease"),
             patch.object(session, "start_database", side_effect=lambda config: events.append("database")),
+            patch.object(session, "initialize_tofu"),
             patch.object(session, "start_session", side_effect=fail_refresh),
             patch.object(session, "stop_after_failure") as cleanup,
         ):

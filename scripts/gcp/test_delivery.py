@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tarfile
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -18,6 +19,39 @@ class DeliveryTests(unittest.TestCase):
         environment = patch.dict("os.environ", {"GITHUB_ACTIONS": "false"})
         environment.start()
         self.addCleanup(environment.stop)
+
+    def test_backup_overlaps_preparation_and_failure_blocks_drain(self):
+        release = "release-" + "a" * 32
+        nodes = [{"NODE_ID": n, "VM_NAME": "vm-" + n} for n in ("a", "b")]
+        prepared = threading.Event()
+        events = []
+
+        def command(*args, capture=False):
+            if args[1:3] == ("storage", "cat"):
+                return json.dumps({"expires_at": 2000})
+            if args[1:3] == ("sql", "backups"):
+                if not prepared.wait(5):
+                    raise AssertionError("backup did not overlap preparation")
+                raise RuntimeError("backup failed")
+            raise AssertionError(args)
+
+        def gcloud(node, *args, capture=False):
+            if args[:2] == ("compute", "ssh") and "--stage" in args[-1]:
+                events.append((node["NODE_ID"], "prepare"))
+                prepared.set()
+                return json.dumps({"release": release, "node": node["NODE_ID"],
+                                   "stage": "prepare", "status": "healthy"})
+            if args[:2] in (("compute", "ssh"), ("compute", "scp")):
+                return ""
+            raise AssertionError(f"unexpected operation: {args}")
+
+        with (patch.object(session, "node_configs", return_value=nodes),
+              patch.object(session, "command", side_effect=command),
+              patch.object(session, "gcloud", side_effect=gcloud),
+              patch.object(delivery.time, "time", return_value=1000)):
+            with self.assertRaisesRegex(RuntimeError, "backup failed"):
+                delivery.deploy({"GCP_PROJECT_ID": "demo-project", "GCP_STATE_BUCKET": "demo-state"}, release)
+        self.assertCountEqual(events, [("a", "prepare"), ("b", "prepare")])
 
     def test_release_extraction_rejects_path_traversal_and_links(self):
         for name, kind in (("../outside", tarfile.REGTYPE), ("link", tarfile.SYMTYPE)):
@@ -177,14 +211,14 @@ class DeliveryTests(unittest.TestCase):
             result = delivery.deploy(config, release)
 
         operations = [event for event in events if event[0] in ("remove-instances", "add-instances", "stage")]
-        self.assertEqual(operations, [
-            ("stage", "a", "prepare"), ("stage", "b", "prepare"),
+        self.assertCountEqual(operations[:2], [("stage", "a", "prepare"), ("stage", "b", "prepare")])
+        self.assertEqual(operations[2:], [
             ("remove-instances", "a"), ("remove-instances", "b"),
             ("stage", "a", "stop"), ("stage", "b", "stop"), ("stage", "a", "migrate"),
             ("stage", "b", "apply"), ("add-instances", "b"),
             ("stage", "a", "apply"), ("add-instances", "a"), ("stage", "a", "verify"),
         ])
-        self.assertEqual(events[4], ("sleep", 35))
+        self.assertIn(("sleep", 35), events)
         self.assertEqual(result["endpoints"]["api"], "https://api.example.test")
 
     def test_offline_update_does_not_provision_or_start_anything(self):

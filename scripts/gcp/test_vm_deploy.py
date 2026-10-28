@@ -1,5 +1,6 @@
 from contextlib import redirect_stdout
 import io
+import sys
 import json
 from pathlib import Path
 import tarfile
@@ -13,6 +14,21 @@ import vm_deploy
 
 
 class VmDeploymentTests(unittest.TestCase):
+    def test_prepare_acquires_lock_before_downloading_manifest(self):
+        args = SimpleNamespace(release="release-" + "a" * 32, deadline=2000, stage="prepare", node="a", bucket="demo")
+        lock = Mock()
+        with (tempfile.TemporaryDirectory() as temp,
+            patch.object(vm_deploy, "BASE", Path(temp)),
+            patch.object(vm_deploy.time, "time", return_value=1000),
+            patch.object(vm_deploy.os, "umask"),
+            patch("builtins.open", unittest.mock.mock_open()),
+            patch.dict(sys.modules, {"fcntl": SimpleNamespace(flock=lock, LOCK_EX=2)}),
+            patch.object(vm_deploy, "object_bytes", side_effect=RuntimeError("reached download")),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "reached download"):
+                vm_deploy.run_stage(args)
+            lock.assert_called_once()
+
     def test_public_smoke_checks_monitor_health_and_requires_auth_for_grafana_and_mail(self):
         endpoints = {name: f"https://{name}.34-0-0-1.sslip.io" for name in
                     ("api", "admin", "backoffice", "commerce", "tracking", "monitor", "mail")}
