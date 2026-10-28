@@ -33,6 +33,14 @@ MIGRATION_LOCK = 74200344171234
 OPS_AGENT_CONFIG = Path("/etc/google-cloud-ops-agent/config.yaml")
 
 
+def measure(timings, phase, operation):
+    started = time.perf_counter()
+    try:
+        return operation()
+    finally:
+        timings[phase] = round((time.perf_counter() - started) * 1000)
+
+
 def token():
     request = urllib.request.Request(
         "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
@@ -240,6 +248,10 @@ class Deploy:
     def __init__(self, directory, log):
         self.directory, self.log = directory, log
         self.lock_process = None
+        self.timings_ms = {}
+
+    def measure(self, phase, operation):
+        return measure(self.timings_ms, phase, operation)
 
     def execute(self, *args, capture=False, **kwargs):
         result = subprocess.run(args, cwd=self.directory, check=True, text=True,
@@ -326,15 +338,18 @@ class Deploy:
                             "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", query, capture=True)
 
     def migrate(self, deadline=None):
-        self.wait_sql()
+        self.measure("wait_for_sql", self.wait_sql)
+        lock_started = time.perf_counter()
         with self.migration_lock(deadline if deadline is not None else time.time() + 600):
-            for name in ("preflight.sql",):
-                self.compose("run", "--rm", "--no-deps", "db-tools", "psql", "-v", "ON_ERROR_STOP=1", "-f", "/deploy/sql/" + name)
-            self.compose("run", "--rm", "--no-deps", "migrate")
-            for name in ("runtime-roles.sql", "hosting.sql", "postflight.sql"):
-                self.compose("run", "--rm", "--no-deps", "db-tools", "psql", "-v", "ON_ERROR_STOP=1", "-f", "/deploy/sql/" + name)
-            self.compose("run", "--rm", "--no-deps", "migrate", "department-catalog-import")
-            self.compose("run", "--rm", "--no-deps", "bootstrap")
+            self.timings_ms["migration_lock_wait"] = round((time.perf_counter() - lock_started) * 1000)
+            self.measure("sql_preflight", lambda: self.compose("run", "--rm", "--no-deps", "db-tools", "psql", "-v", "ON_ERROR_STOP=1", "-f", "/deploy/sql/preflight.sql"))
+            self.measure("schema_migrations", lambda: self.compose("run", "--rm", "--no-deps", "migrate"))
+            def provision_roles_and_hosting():
+                for name in ("runtime-roles.sql", "hosting.sql", "postflight.sql"):
+                    self.compose("run", "--rm", "--no-deps", "db-tools", "psql", "-v", "ON_ERROR_STOP=1", "-f", "/deploy/sql/" + name)
+            self.measure("provision_runtime_and_hosting", provision_roles_and_hosting)
+            self.measure("import_department_catalog", lambda: self.compose("run", "--rm", "--no-deps", "migrate", "department-catalog-import"))
+            self.measure("bootstrap_data", lambda: self.compose("run", "--rm", "--no-deps", "bootstrap"))
 
 
 def metadata(path):
@@ -395,66 +410,72 @@ def bridge_subnets(deployment):
 
 
 def prepare(args, deployment, runtime, integrations, hosting, manifest, private_ip):
-    registry_host = runtime["registry"].split("/")[0]
-    deployment.execute("docker", "login", registry_host, "--username", "oauth2accesstoken", "--password-stdin", input=token() + "\n")
-    try:
-        mail_hash = deployment.execute("docker", "run", "--rm", "-i", "caddy:2.10.2-alpine", "caddy", "hash-password",
-                                       capture=True, input=runtime["passwords"]["mail"] + "\n")
-        values = environment(runtime, integrations, manifest["images"], mail_hash, hosting,
-                             args.node, private_ip, args.release, bridge_subnets(deployment))
-        private_file(deployment.directory / ".env", "".join(env_line(key, value) for key, value in values.items()))
-        private_file(deployment.directory / "bootstrap.json", json.dumps(bootstrap_config(runtime)))
-        certificate = base64.b64decode(hosting["certificate_pfx"], validate=True)
-        if not certificate:
-            raise ValueError("The shared Data Protection certificate is empty")
-        private_bytes(deployment.directory / "hosting.pfx", certificate)
-        deployment.compose("--profile", "administration", "--profile", "shared", "config", "--quiet")
-        services = APPS + ("migrate", "bootstrap", "db-tools") + (SHARED if args.node == "a" else ())
-        deployment.compose("--profile", "administration", "--profile", "shared", "pull", *services)
-    finally:
-        deployment.execute("docker", "logout", registry_host)
-
-    deployment.compose("up", "-d", "--wait", "--wait-timeout", "300", "sql-proxy")
-    if args.node == "a":
-        existing = deployment.execute("docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=nexoruta-demo", capture=True).split()
-        existing_services = {}
-        for identifier in existing:
-            service = deployment.execute("docker", "inspect", "--format", '{{index .Config.Labels "com.docker.compose.service"}}', identifier, capture=True)
-            if service in SHARED:
-                existing_services[service] = identifier
-        for service, identifier in existing_services.items():
-            deployment.execute("docker", "start", identifier)
-        missing = tuple(service for service in SHARED if service not in existing_services)
-        if missing:
-            deployment.compose("--profile", "shared", "up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", *missing)
-        for topic in ("nexoruta.envios.creados.v1", "nexoruta.password-recovery.requested.v1"):
-            deployment.compose("--profile", "shared", "exec", "-T", "kafka", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:9092",
-                               "--create", "--if-not-exists", "--topic", topic, "--partitions", "1", "--replication-factor", "1")
-    deploy_dir = BASE / "deploy"
-    deploy_dir.mkdir(exist_ok=True)
-    private_bytes(deploy_dir / "monitor_agent.py", (deployment.directory / "monitor_agent.py").read_bytes())
-    services_ip = socket.gethostbyname(runtime["services_host"])
-    if not ipaddress.IPv4Address(services_ip).is_private:
-        raise ValueError("Monitoring services must resolve to a private address")
-    private_file(BASE / "monitor.json", json.dumps({"project_id": runtime["project_id"], "node": args.node,
-                 "services_host": services_ip, "private_ip": private_ip, "expires_at": args.deadline}))
-    if OPS_AGENT_CONFIG.parent.exists():
-        private_bytes(OPS_AGENT_CONFIG, (deployment.directory / "monitoring/ops-agent.yaml").read_bytes())
+    def configure_and_pull():
+        registry_host = runtime["registry"].split("/")[0]
+        deployment.execute("docker", "login", registry_host, "--username", "oauth2accesstoken", "--password-stdin", input=token() + "\n")
         try:
-            deployment.execute("systemctl", "is-active", "--quiet", "google-cloud-ops-agent")
-        except subprocess.CalledProcessError:
-            pass
-        else:
-            deployment.execute("systemctl", "restart", "google-cloud-ops-agent")
-    deployment.execute("systemctl", "restart", "nexoruta-monitor.service")
-    private_file(deployment.directory / "prepared.json", json.dumps({"node": args.node, "deadline": args.deadline}))
+            mail_hash = deployment.execute("docker", "run", "--rm", "-i", "caddy:2.10.2-alpine", "caddy", "hash-password",
+                                           capture=True, input=runtime["passwords"]["mail"] + "\n")
+            values = environment(runtime, integrations, manifest["images"], mail_hash, hosting,
+                                 args.node, private_ip, args.release, bridge_subnets(deployment))
+            private_file(deployment.directory / ".env", "".join(env_line(key, value) for key, value in values.items()))
+            private_file(deployment.directory / "bootstrap.json", json.dumps(bootstrap_config(runtime)))
+            certificate = base64.b64decode(hosting["certificate_pfx"], validate=True)
+            if not certificate:
+                raise ValueError("The shared Data Protection certificate is empty")
+            private_bytes(deployment.directory / "hosting.pfx", certificate)
+            deployment.compose("--profile", "administration", "--profile", "shared", "config", "--quiet")
+            services = APPS + ("migrate", "bootstrap", "db-tools") + (SHARED if args.node == "a" else ())
+            deployment.compose("--profile", "administration", "--profile", "shared", "pull", *services)
+        finally:
+            deployment.execute("docker", "logout", registry_host)
+    deployment.measure("configure_validate_and_pull_images", configure_and_pull)
+
+    def start_sql_and_shared_services():
+        deployment.compose("up", "-d", "--wait", "--wait-timeout", "300", "sql-proxy")
+        if args.node == "a":
+            existing = deployment.execute("docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=nexoruta-demo", capture=True).split()
+            existing_services = {}
+            for identifier in existing:
+                service = deployment.execute("docker", "inspect", "--format", '{{index .Config.Labels "com.docker.compose.service"}}', identifier, capture=True)
+                if service in SHARED:
+                    existing_services[service] = identifier
+            for service, identifier in existing_services.items():
+                deployment.execute("docker", "start", identifier)
+            missing = tuple(service for service in SHARED if service not in existing_services)
+            if missing:
+                deployment.compose("--profile", "shared", "up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", *missing)
+            for topic in ("nexoruta.envios.creados.v1", "nexoruta.password-recovery.requested.v1"):
+                deployment.compose("--profile", "shared", "exec", "-T", "kafka", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:9092",
+                                   "--create", "--if-not-exists", "--topic", topic, "--partitions", "1", "--replication-factor", "1")
+    deployment.measure("start_sql_proxy_and_shared_services", start_sql_and_shared_services)
+    def install_monitoring_configuration():
+        deploy_dir = BASE / "deploy"
+        deploy_dir.mkdir(exist_ok=True)
+        private_bytes(deploy_dir / "monitor_agent.py", (deployment.directory / "monitor_agent.py").read_bytes())
+        services_ip = socket.gethostbyname(runtime["services_host"])
+        if not ipaddress.IPv4Address(services_ip).is_private:
+            raise ValueError("Monitoring services must resolve to a private address")
+        private_file(BASE / "monitor.json", json.dumps({"project_id": runtime["project_id"], "node": args.node,
+                     "services_host": services_ip, "private_ip": private_ip, "expires_at": args.deadline}))
+        if OPS_AGENT_CONFIG.parent.exists():
+            private_bytes(OPS_AGENT_CONFIG, (deployment.directory / "monitoring/ops-agent.yaml").read_bytes())
+            try:
+                deployment.execute("systemctl", "is-active", "--quiet", "google-cloud-ops-agent")
+            except subprocess.CalledProcessError:
+                pass
+            else:
+                deployment.execute("systemctl", "restart", "google-cloud-ops-agent")
+        deployment.execute("systemctl", "restart", "nexoruta-monitor.service")
+        private_file(deployment.directory / "prepared.json", json.dumps({"node": args.node, "deadline": args.deadline}))
+    deployment.measure("install_monitoring_and_mark_prepared", install_monitoring_configuration)
     return {}
 
 
 def apply(args, deployment, private_ip):
     try:
-        deployment.compose("up", "-d", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "300", *APPS)
-        direct_health(private_ip)
+        deployment.measure("start_and_wait_for_apps", lambda: deployment.compose("up", "-d", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "300", *APPS))
+        deployment.measure("direct_health_checks", lambda: direct_health(private_ip))
         private_file(BASE / "current-release", args.release + "\n")
     except Exception:
         print(json.dumps({"stage": "apply", "node": args.node, "release": args.release,
@@ -511,17 +532,29 @@ def main():
     parser.add_argument("--node", choices=("a", "b"), required=True)
     parser.add_argument("--deadline", type=float, required=True)
     args = parser.parse_args()
+    timings = {}
     try:
-        run_stage(args)
+        result = run_stage(args, timings)
+        print(json.dumps({"release": args.release, "node": args.node, "stage": args.stage,
+                          "status": "healthy", **result, "timings_ms": timings}))
     except Exception as error:
         print(json.dumps({"release": args.release, "node": args.node, "stage": args.stage,
                           "status": "failed", "error_type": type(error).__name__,
-                          "error_location": error_location(error)}))
+                          "error_location": error_location(error), "timings_ms": timings}))
         raise SystemExit(1) from None
 
 
-def run_stage(args):
+def run_stage(args, timings=None):
     import fcntl
+    timings = timings if timings is not None else {}
+    started = time.perf_counter()
+    try:
+        return _run_stage(args, timings)
+    finally:
+        timings["stage_total"] = round((time.perf_counter() - started) * 1000)
+
+
+def _run_stage(args, timings):
     if not re.fullmatch(r"release-[a-f0-9]{32}", args.release):
         raise ValueError("Invalid release ID")
     if not math.isfinite(args.deadline) or args.deadline <= time.time():
@@ -535,21 +568,21 @@ def run_stage(args):
         directory = BASE / "releases" / args.release
         manifest = None
         if args.stage == "prepare":
-            manifest = json.loads(object_bytes(args.bucket, f"releases/{args.release}/manifest.json"))
+            manifest = measure(timings, "download_manifest", lambda: json.loads(object_bytes(args.bucket, f"releases/{args.release}/manifest.json")))
             if manifest["release"] != args.release:
                 raise ValueError("Manifest/release mismatch")
-            bundle = object_bytes(args.bucket, f"releases/{args.release}/bundle.tar.gz")
+            bundle = measure(timings, "download_bundle", lambda: object_bytes(args.bucket, f"releases/{args.release}/bundle.tar.gz"))
             if hashlib.sha256(bundle).hexdigest() != manifest["bundle_sha256"]:
                 raise ValueError("Bundle checksum mismatch")
             directory.mkdir(parents=True, exist_ok=True)
-            extract(bundle, directory)
+            measure(timings, "verify_and_extract_bundle", lambda: extract(bundle, directory))
         else:
             prepared = json.loads((directory / "prepared.json").read_text(encoding="utf-8"))
             if prepared != {"node": args.node, "deadline": args.deadline}:
                 raise RuntimeError("The node was prepared for a different session")
-        project = metadata("project/project-id")
-        private_ip = metadata("instance/network-interfaces/0/ip")
-        runtime = secret(project, "nexoruta-demo-runtime")
+        project = measure(timings, "read_vm_project_identity", lambda: metadata("project/project-id"))
+        private_ip = measure(timings, "read_vm_private_ip", lambda: metadata("instance/network-interfaces/0/ip"))
+        runtime = measure(timings, "read_runtime_secret", lambda: secret(project, "nexoruta-demo-runtime"))
         ipaddress.IPv4Address(private_ip)
         identity = runtime["nodes"][args.node]
         if (runtime["project_id"] != project or identity["name"] != metadata("instance/name")
@@ -559,27 +592,23 @@ def run_stage(args):
         log_dir.mkdir(exist_ok=True)
         with open(log_dir / f"{args.release}.log", "a") as log:
             deployment = Deploy(directory, log)
-            try:
-                result = {}
-                if args.stage == "prepare":
-                    result = prepare(args, deployment, runtime, secret(project, "nexoruta-demo-integrations"),
-                                     secret(project, "nexoruta-demo-hosting"), manifest, private_ip)
-                elif args.stage == "stop":
-                    deployment.compose("stop", *APPS)
-                elif args.stage == "migrate":
-                    deployment.migrate(args.deadline)
-                elif args.stage == "apply":
-                    apply(args, deployment, private_ip)
-                else:
-                    direct_health(private_ip)
-                    smoke(runtime)
-                    result = {"endpoints": runtime["endpoints"]}
-                print(json.dumps({"release": args.release, "node": args.node, "stage": args.stage, "status": "healthy", **result}))
-            except Exception as error:
-                print(json.dumps({"release": args.release, "node": args.node, "stage": args.stage,
-                                  "status": "failed", "error_type": type(error).__name__,
-                                  "error_location": error_location(error)}))
-                raise SystemExit(1) from None
+            deployment.timings_ms = timings
+            result = {}
+            if args.stage == "prepare":
+                integrations = measure(timings, "read_integrations_secret", lambda: secret(project, "nexoruta-demo-integrations"))
+                hosting = measure(timings, "read_hosting_secret", lambda: secret(project, "nexoruta-demo-hosting"))
+                result = prepare(args, deployment, runtime, integrations, hosting, manifest, private_ip)
+            elif args.stage == "stop":
+                deployment.measure("stop_apps", lambda: deployment.compose("stop", *APPS))
+            elif args.stage == "migrate":
+                deployment.migrate(args.deadline)
+            elif args.stage == "apply":
+                apply(args, deployment, private_ip)
+            else:
+                deployment.measure("direct_health_checks", lambda: direct_health(private_ip))
+                deployment.measure("public_https_and_login_smoke", lambda: smoke(runtime))
+                result = {"endpoints": runtime["endpoints"]}
+            return result
 
 
 if __name__ == "__main__":

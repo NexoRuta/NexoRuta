@@ -1,0 +1,90 @@
+name: NexoRuta - manual VM controls
+run-name: NexoRuta VM / ${{ inputs.operation }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 'start: start VMs with latest published images / update: deploy latest images to active VMs / stop: VM and SQL'
+        required: true
+        default: start
+        type: choice
+        options: [start, update, stop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexoruta-gcp-demo-session
+  queue: max
+
+jobs:
+  deploy:
+    if: >-
+      always() && github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    environment: nexoruta-demo
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      api_origin: ${{ steps.session.outputs.api_origin }}
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GCP_ZONE: ${{ vars.GCP_ZONE }}
+      GCP_STATE_BUCKET: ${{ vars.GCP_STATE_BUCKET }}
+      GCP_DELIVERY_BUCKET: ${{ vars.GCP_DELIVERY_BUCKET }}
+      GCP_SECONDARY_ZONE: ${{ vars.GCP_SECONDARY_ZONE || 'southamerica-west1-b' }}
+      MONITOR_ALLOWED_EMAILS: ${{ vars.MONITOR_ALLOWED_EMAILS }}
+      MONITOR_GOOGLE_CLIENT_ID: ${{ secrets.MONITOR_GOOGLE_CLIENT_ID }}
+      MONITOR_GOOGLE_CLIENT_SECRET: ${{ secrets.MONITOR_GOOGLE_CLIENT_SECRET }}
+      GCP_BASE_DOMAIN: ${{ vars.GCP_BASE_DOMAIN }}
+      GCP_MANAGE_DNS: ${{ vars.GCP_MANAGE_DNS }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      DEMO_OPERATION: ${{ inputs.operation }}
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # VM controls use the checked-out main scripts and latest complete published image manifest.
+          ref: ${{ github.sha }}
+      - name: Validate deployment configuration
+        run: |
+          python3 scripts/gcp/github_environment.py validate deploy
+          python3 scripts/gcp/demo_session.py check
+      - name: Load public application settings from Compose
+        run: python3 scripts/gcp/github_environment.py load-app-config
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        id: auth
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          version: "590.0.0"
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2
+        with:
+          tofu_version_file: .opentofu-version
+          tofu_wrapper: false
+      - name: Configure integrations from Compose and GitHub Secrets
+        if: inputs.operation == 'start' || inputs.operation == 'update'
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          GEOAPIFY_API_KEY: ${{ secrets.GEOAPIFY_API_KEY }}
+        run: python3 scripts/gcp/github_environment.py sync-integrations
+      - name: Run the requested manual VM operation
+        id: session
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: python3 scripts/gcp/demo_session.py run

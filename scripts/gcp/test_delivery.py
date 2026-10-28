@@ -1,4 +1,5 @@
 import io
+import hashlib
 import json
 from pathlib import Path
 import tarfile
@@ -106,7 +107,7 @@ class DeliveryTests(unittest.TestCase):
     def test_vm_main_reports_errors_before_service_setup_with_safe_location(self):
         args = vm_deploy.argparse.Namespace(release="release-" + "a" * 32, node="a", stage="prepare")
 
-        def fail(_args):
+        def fail(_args, _timings=None):
             raise TypeError("private detail")
 
         with (patch.object(vm_deploy.argparse.ArgumentParser, "parse_args", return_value=args),
@@ -289,6 +290,8 @@ class DeliveryTests(unittest.TestCase):
             bundle = root / "bundle.tar.gz"
             bundle.write_bytes(b"bundle")
             outputs = root / "outputs"
+            build_id_file = root / "cloud-build-id"
+            step_summary = root / "summary"
 
             def command(*args, **kwargs):
                 if args[1:3] == ("builds", "submit"):
@@ -305,12 +308,15 @@ class DeliveryTests(unittest.TestCase):
             with (patch.object(session, "configuration", return_value={"GCP_PROJECT_ID": "demo-project"}),
                   patch.object(delivery, "ROOT", root), patch.object(delivery, "stage_sources"),
                   patch.object(delivery, "create_bundle", return_value=bundle),
+                  patch.object(delivery, "latest_manifest", return_value=None),
                   patch.object(integration, "verify_checkout", return_value=snapshot),
                   patch.object(session, "command", side_effect=command) as calls,
                   patch.object(delivery.publication, "promote", return_value=True) as promote,
                   patch.dict("os.environ", {"RELEASE_CHANNEL": "main", "INTEGRATION_TAG": snapshot["integration_tag"],
                                             "GITHUB_RUN_NUMBER": "20", "GITHUB_RUN_ATTEMPT": "2",
-                                            "GITHUB_OUTPUT": str(outputs)})):
+                                            "GITHUB_OUTPUT": str(outputs),
+                                            "GITHUB_STEP_SUMMARY": str(step_summary),
+                                            "NEXORUTA_CLOUD_BUILD_ID_FILE": str(build_id_file)})):
                 delivery.build()
                 manifest = json.loads((root / "release.json").read_text())
                 self.assertEqual(manifest["root_sha"], snapshot["root_sha"])
@@ -321,6 +327,71 @@ class DeliveryTests(unittest.TestCase):
                 self.assertEqual(promote.call_args.args[1]["integration_tag"], snapshot["integration_tag"])
                 self.assertFalse(any(call.args[0] == "git" for call in calls.call_args_list))
                 self.assertIn("manifest=", outputs.read_text())
+                self.assertEqual(build_id_file.read_text().strip(), "build-123")
+                self.assertIn("Cloud Build submitted: `build-123`", step_summary.read_text())
+
+    def test_cloud_build_cancellation_uses_the_tracked_project_and_region(self):
+        with patch.object(session, "command") as command:
+            delivery.cancel_cloud_build("build-to-cancel", "demo-project")
+        command.assert_called_once_with("gcloud", "builds", "cancel", "build-to-cancel",
+                                        "--project=demo-project", f"--region={session.REGION}", "--quiet")
+
+    def test_build_reuses_unchanged_images_and_bundle_with_a_complete_manifest(self):
+        sources = {name: char * 40 for name, char in zip(integration.COMPONENTS, "bcd")}
+        snapshot = {"integration_tag": "integration-123-1", "root_sha": "a" * 40, "sources": sources}
+        previous = self.release_manifest()
+        previous.update(sources=sources, bundle_sha256=hashlib.sha256(b"old bundle").hexdigest(),
+                        bundle_source={"root_sha": "e" * 40, "backend_sha": sources["backend"]})
+        plan = {
+            "version": 1, "current": {"root_sha": "f" * 40, "sources": sources},
+            "publish_required": True, "bundle_required": False, "images": ["api", "worker"],
+            "android_input_sha256": "1" * 64,
+            "components": {"mobile_android": {"run": False}},
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            outputs = root / "outputs"
+            seen = {}
+
+            def command(*args, **kwargs):
+                if args[1:3] == ("builds", "submit"):
+                    config = json.loads(Path(next(a.split("=", 1)[1] for a in args if a.startswith("--config="))).read_text())
+                    seen["config"] = config
+                    return json.dumps({"id": "build-selective"})
+                if args[1:3] == ("builds", "describe"):
+                    return json.dumps({"status": "SUCCESS", "results": {"images": [
+                        {"name": image, "digest": "sha256:" + "c" * 64} for image in seen["config"]["images"]]}})
+                if args[1:3] == ("storage", "cp"):
+                    if str(args[3]).startswith("gs://"):
+                        Path(args[4]).write_bytes(b"old bundle")
+                    else:
+                        self.assertIn("--if-generation-match=0", args)
+                return ""
+
+            with (patch.object(session, "configuration", return_value={"GCP_PROJECT_ID": "demo-project"}),
+                  patch.object(delivery, "ROOT", root), patch.object(delivery, "stage_sources"),
+                  patch.object(delivery, "create_bundle") as create_bundle,
+                  patch.object(delivery, "latest_manifest", return_value=previous),
+                  patch.object(integration, "verify_checkout", return_value=snapshot),
+                  patch.object(session, "command", side_effect=command),
+                  patch.object(delivery.publication, "promote", return_value=True),
+                  patch.dict("os.environ", {"RELEASE_CHANNEL": "main", "INTEGRATION_TAG": snapshot["integration_tag"],
+                                            "GITHUB_RUN_NUMBER": "21", "GITHUB_RUN_ATTEMPT": "1",
+                                            "TESTED_CI_PLAN": json.dumps(plan), "GITHUB_OUTPUT": str(outputs)})):
+                delivery.build()
+
+            manifest = json.loads((root / "release.json").read_text())
+            self.assertEqual([step["id"] for step in seen["config"]["steps"]], ["api", "worker"])
+            self.assertEqual(seen["config"]["steps"][0]["waitFor"], ["-"])
+            self.assertEqual(seen["config"]["steps"][1]["waitFor"], ["api"])
+            for step in seen["config"]["steps"]:
+                self.assertIn("--cache-from", step["args"])
+                self.assertIn("BUILDKIT_INLINE_CACHE=1", step["args"])
+            self.assertEqual(manifest["images"]["admin"], previous["images"]["admin"])
+            self.assertEqual(manifest["images"]["api"], f"{session.REGION}-docker.pkg.dev/demo-project/nexoruta/api@sha256:" + "c" * 64)
+            self.assertEqual(set(manifest["reused_images"]), {"admin", "backoffice", "commerce", "tracking"})
+            self.assertEqual(manifest["bundle_sha256"], previous["bundle_sha256"])
+            create_bundle.assert_not_called()
 
     def test_channel_tag_and_manifest_must_match(self):
         manifest = self.release_manifest()

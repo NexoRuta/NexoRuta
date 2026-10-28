@@ -40,7 +40,7 @@ y release pueden conservarse para inspección, sin convertirse en la versión de
 Se admiten las releases previas sin tag para que `update` pueda seguir usando la
 última publicación válida durante la transición. La primera publicación nueva
 agrega el tag y la información de orden al canal. Los números de ejecución se
-comparan dentro del mismo workflow `demo-vm.yml`; no publicar ese canal desde otro
+comparan dentro del mismo workflow `publish.yml`; no publicar ese canal desde otro
 workflow con una numeración independiente.
 
 `update` selecciona una sola release completa del canal. No prueba ni compila de

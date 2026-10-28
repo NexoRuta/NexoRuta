@@ -1,8 +1,10 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0.401 AS build
 ARG PROJECT
 WORKDIR /src
+COPY .restore/ ./
+RUN dotnet restore "$PROJECT" --locked-mode
 COPY . .
-RUN dotnet publish "$PROJECT" -c Release -o /out /p:UseAppHost=false
+RUN dotnet publish "$PROJECT" -c Release -o /out --no-restore /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends curl libgssapi-krb5-2 \

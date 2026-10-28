@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import json
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -18,6 +19,23 @@ VM_NAME = "nexoruta-demo"
 MAX_SECONDS = 4 * 60 * 60
 REGION = "southamerica-west1"
 ACTIVE_CONTROL_LOCK = None
+
+
+def measure(phase, operation, **dimensions):
+    started = time.perf_counter()
+    status = "passed"
+    try:
+        return operation()
+    except Exception:
+        status = "failed"
+        raise
+    finally:
+        print("NEXORUTA_SESSION_TIMING " + json.dumps({
+            "phase": phase,
+            "duration_ms": round((time.perf_counter() - started) * 1000),
+            "status": status,
+            **dimensions,
+        }, sort_keys=True), flush=True)
 
 
 def configuration():
@@ -144,7 +162,7 @@ def check_deadline(vm, now=None):
 
 
 def stop_after_failure(config):
-    errors = stop_session(config)
+    errors = measure("failure_cleanup", lambda: stop_session(config))
     for error in errors:
         print(f"Cleanup will be retried by the independent guard: {error}", file=sys.stderr)
 
@@ -154,21 +172,21 @@ def stop_session(config):
     # so one unavailable API cannot leave the other resources running indefinitely.
     errors = []
     try:
-        end_lease(config)
+        measure("close_session_lease", lambda: end_lease(config))
     except (RuntimeError, subprocess.CalledProcessError, ValueError) as error:
         errors.append(f"lease: {error}")
     for node in node_configs(config):
         try:
-            vm = instance(node)
+            vm = measure("find_vm", lambda: instance(node), node=node["NODE_ID"])
             if vm is None:
                 continue
             check_existing(vm, "stop")
             if vm.get("status") == "RUNNING":
-                gcloud(node, "compute", "instances", "stop", node["VM_NAME"])
+                measure("stop_vm", lambda: gcloud(node, "compute", "instances", "stop", node["VM_NAME"]), node=node["NODE_ID"])
         except (RuntimeError, subprocess.CalledProcessError, ValueError) as error:
             errors.append(f"{node['VM_NAME']}: {error}")
     try:
-        stop_database(config)
+        measure("stop_cloud_sql", lambda: stop_database(config))
     except (RuntimeError, subprocess.CalledProcessError, ValueError) as error:
         errors.append(f"Cloud SQL: {error}")
     return errors
@@ -253,7 +271,8 @@ def run(config):
         for vm in existing:
             check_deadline(vm)
         from delivery import deploy, latest_release
-        deployed = deploy(config, latest_release(config))
+        release = measure("select_latest_release", lambda: latest_release(config))
+        deployed = measure("application_deployment", lambda: deploy(config, release))
         for node, before in zip(nodes, existing):
             after = instance(node)
             if not after or after.get("status") != "RUNNING" or after.get("lastStartTimestamp") != before.get("lastStartTimestamp"):
@@ -263,12 +282,12 @@ def run(config):
         publish_endpoints(config, deployed["endpoints"])
         return
     from delivery import latest_release
-    release = latest_release(config)
+    release = measure("select_latest_release", lambda: latest_release(config))
     now = dt.datetime.now(dt.timezone.utc).timestamp()
-    write_lease(config, now + MAX_SECONDS + 1800, now + 1800)
+    measure("set_provisioning_lease", lambda: write_lease(config, now + MAX_SECONDS + 1800, now + 1800))
     try:
-        start_database(config)
-        start_session(config, release)
+        measure("start_cloud_sql", lambda: start_database(config))
+        measure("start_session_total", lambda: start_session(config, release))
     except Exception:
         stop_after_failure(config)
         raise
@@ -276,12 +295,12 @@ def run(config):
 
 def start_session(config, release):
     tofu = ("tofu", f"-chdir={INFRA}")
-    command(
+    measure("tofu_init", lambda: command(
         *tofu, "init", "-input=false", "-lockfile=readonly",
         f"-backend-config=bucket={config['GCP_STATE_BUCKET']}",
         "-backend-config=prefix=demo/vm",
-    )
-    command(*tofu, "validate")
+    ))
+    measure("tofu_validate", lambda: command(*tofu, "validate"))
     with tempfile.TemporaryDirectory(prefix="nexoruta-session-") as temp:
         inputs = Path(temp) / "session.tfvars.json"
         inputs.write_text(json.dumps({
@@ -293,31 +312,31 @@ def start_session(config, release):
             "manage_dns": os.environ.get("GCP_MANAGE_DNS", "false").lower() == "true",
         }), encoding="utf-8")
         plan_file = Path(temp) / "session.tfplan"
-        command(
+        measure("tofu_plan", lambda: command(
             *tofu, "plan", "-input=false", "-lock-timeout=5m",
             f"-var-file={inputs}", f"-out={plan_file}",
-        )
-        plan = json.loads(command(*tofu, "show", "-json", str(plan_file), capture=True))
-        check_plan(plan)
-        command(*tofu, "apply", "-input=false", "-lock-timeout=5m", str(plan_file))
+        ))
+        plan = measure("tofu_show_and_safety_check", lambda: json.loads(command(*tofu, "show", "-json", str(plan_file), capture=True)))
+        measure("tofu_check_plan", lambda: check_plan(plan))
+        measure("tofu_apply", lambda: command(*tofu, "apply", "-input=false", "-lock-timeout=5m", str(plan_file)))
         deadlines = []
         for node in node_configs(config):
-            vm = json.loads(gcloud(
+            vm = json.loads(measure("read_vm_deadline", lambda: gcloud(
                 node, "compute", "instances", "describe", node["VM_NAME"],
                 "--format=json", capture=True,
-            ))
+            ), node=node["NODE_ID"]))
             deadlines.append(dt.datetime.fromisoformat(check_deadline(vm).replace("Z", "+00:00")))
         deadline = min(deadlines)
-        write_lease(config, deadline.timestamp())
+        measure("set_common_session_lease", lambda: write_lease(config, deadline.timestamp()))
         from delivery import deploy
-        deploy(config, release)
+        measure("application_deployment", lambda: deploy(config, release))
         message = (
             f"Both demo VMs running with {release}. Common automatic stop: {deadline.isoformat()}.\n\n"
             "The four hours start when Compute Engine starts the VM, including bootstrap. "
             "HTTPS health and initial database-backed login checks passed.\n"
         )
     print(message)
-    publish_endpoints(config)
+    measure("publish_application_endpoints", lambda: publish_endpoints(config))
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as output:

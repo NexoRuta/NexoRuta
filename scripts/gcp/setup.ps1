@@ -126,4 +126,4 @@ if ($BaseDomain) {
 Invoke-Tool -Name gh -Arguments @('variable', 'set', 'GCP_MANAGE_DNS', '--repo', $Repository, '--env', 'nexoruta-demo', '--body', $ManageDns.IsPresent.ToString().ToLowerInvariant())
 Invoke-Tool -Name gcloud -Arguments @('compute', 'machine-types', 'describe', 'n4-highcpu-8', '--zone=southamerica-west1-a')
 Invoke-Tool -Name gcloud -Arguments @('compute', 'regions', 'describe', 'southamerica-west1', '--format=json(quotas)')
-Write-Host 'Bootstrap complete. Publish the workflows to main, then run demo-vm.yml with operation=start.'
+Write-Host 'Bootstrap complete. Publish the workflows to main, then run vm-controls.yml with operation=start.'

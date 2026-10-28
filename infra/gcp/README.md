@@ -247,22 +247,28 @@ las apps si la release seleccionada ya era la instalada.
 
 Los cambios de infraestructura se aplican al iniciar la siguiente sesión.
 Las comprobaciones CI sobre PRs no reciben credenciales GCP ni despliegan recursos.
+Al renombrar/separar workflows, aplicar primero `infra/gcp/bootstrap` para que
+Workload Identity Federation autorice `publish.yml` y `vm-controls.yml`; el provider
+no acepta el path anterior. Revisar el plan antes de aplicar.
 
 ## Operación habitual desde PowerShell
 
 ```powershell
 # Activar SQL y dos VMs y desplegar la última release completa publicada.
-gh workflow run demo-vm.yml --repo NexoRuta/NexoRuta --ref main -f operation=start
+gh workflow run vm-controls.yml --repo NexoRuta/NexoRuta --ref main -f operation=start
 
 # Descargar la última release publicada y recrear las apps de una demo activa.
-gh workflow run demo-vm.yml --repo NexoRuta/NexoRuta --ref main -f operation=update
+gh workflow run vm-controls.yml --repo NexoRuta/NexoRuta --ref main -f operation=update
 
 # Apagar antes de las cuatro horas las dos VMs y la base de datos.
-gh workflow run demo-vm.yml --repo NexoRuta/NexoRuta --ref main -f operation=stop
+gh workflow run vm-controls.yml --repo NexoRuta/NexoRuta --ref main -f operation=stop
 
-gh run list --repo NexoRuta/NexoRuta --workflow demo-vm.yml
+gh run list --repo NexoRuta/NexoRuta --workflow vm-controls.yml
 gh run watch ID_EJECUCION --repo NexoRuta/NexoRuta
-gh run download ID_EJECUCION --repo NexoRuta/NexoRuta --name nexoruta-demo-android
+
+# El APK de verificación se descarga desde una ejecución de Integrated CI,
+# usando el SHA mobile mostrado por el resumen del plan.
+gh run download ID_CI --repo NexoRuta/NexoRuta --name android-verification-SHA_MOBILE
 ```
 
 El resumen muestra las URLs y el vencimiento. Cada VM instala Docker y conserva

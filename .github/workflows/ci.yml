@@ -1,9 +1,11 @@
 name: Integrated CI
+run-name: Integrated CI / ${{ github.event.pull_request.number || github.ref_name }}
 
 on:
   pull_request:
-  push:
-    branches: [main]
+  schedule:
+    - cron: '17 8 * * 1'
+  workflow_dispatch:
   workflow_call:
     inputs:
       backend_ref: {type: string, default: ""}
@@ -14,13 +16,22 @@ on:
     outputs:
       sources:
         description: Immutable commits tested together
-        value: ${{ jobs.applications.outputs.sources }}
+        value: ${{ jobs.sources.outputs.sources }}
+      plan:
+        description: Fail-closed integrated validation plan
+        value: ${{ jobs.sources.outputs.plan }}
 
 permissions:
   contents: read
 
+concurrency:
+  group: integrated-ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   infrastructure:
+    needs: sources
+    if: fromJSON(needs.sources.outputs.plan).infrastructure.run
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -41,7 +52,8 @@ jobs:
           bash -n infra/gcp/demo/startup.sh
           python3 scripts/gcp/validate_compose.py
       - name: Validate GitHub workflows
-        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
+        # actionlint v1.7.12 does not yet recognize GitHub's documented queue: max key.
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -ignore 'unexpected key "queue" for "concurrency" section' .github/workflows/*.yml
 
   sources:
     runs-on: ubuntu-latest
@@ -50,6 +62,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       sources: ${{ steps.sources.outputs.sources }}
+      plan: ${{ steps.sources.outputs.plan }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -61,6 +74,7 @@ jobs:
           BACKEND_REF: ${{ inputs.backend_ref }}
           FRONTEND_REF: ${{ inputs.frontend_ref }}
           MOBILE_REF: ${{ inputs.mobile_ref }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [[ -n "$BACKEND_REF" ]]; then
             python3 scripts/gcp/delivery.py sources
@@ -71,19 +85,14 @@ jobs:
           pathlib.Path('sources.json').write_text(json.dumps(sources))
           PY
           fi
-          python3 - <<'PY'
-          import json, os, pathlib
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              output.write('sources=' + json.dumps(json.loads(pathlib.Path('sources.json').read_text())) + '\n')
-          PY
+          python3 scripts/gcp/ci_plan.py plan
 
-  applications:
+  backend:
     needs: sources
+    if: fromJSON(needs.sources.outputs.plan).components.backend.run
     runs-on: ubuntu-latest
     environment: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'nexoruta-demo' || 'nexoruta-ci' }}
-    timeout-minutes: 45
-    outputs:
-      sources: ${{ needs.sources.outputs.sources }}
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -98,24 +107,320 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
-      - name: Backend build and tests with isolated containers
+          cache: true
+          cache-dependency-path: backend/**/packages.lock.json
+      - name: Restore backend
+        run: dotnet restore backend/NexoRuta.sln --locked-mode
+      - name: Build backend
+        run: dotnet build backend/NexoRuta.sln -c Release --no-restore
+      - name: Test integration shard planner
+        run: python3 backend/tests/ci/test_integration_shards.py -v
+      - name: Test backend unit tests
+        run: dotnet test backend/tests/NexoRuta.UnitTests/NexoRuta.UnitTests.csproj -c Release --no-build --no-restore --logger trx --results-directory artifacts/backend/unit
+      - name: Test backend architecture
+        run: dotnet test backend/tests/NexoRuta.ArchitectureTests/NexoRuta.ArchitectureTests.csproj -c Release --no-build --no-restore --logger trx --results-directory artifacts/backend/architecture
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: backend-fast-test-results
+          path: |
+            artifacts/backend/unit/**/*.trx
+            artifacts/backend/architecture/**/*.trx
+          if-no-files-found: error
+          retention-days: 14
+
+  backend_integration:
+    needs: sources
+    if: fromJSON(needs.sources.outputs.plan).components.backend.run
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        shard: [0, 1, 2]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+      - name: Checkout the resolved source commits
+        env:
+          BACKEND_REF: ${{ fromJSON(needs.sources.outputs.sources).backend }}
+          FRONTEND_REF: ${{ fromJSON(needs.sources.outputs.sources).frontend }}
+          MOBILE_REF: ${{ fromJSON(needs.sources.outputs.sources).mobile }}
+        run: python3 scripts/gcp/delivery.py sources
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: backend/global.json
+          cache: true
+          cache-dependency-path: backend/**/packages.lock.json
+      - name: Restore and build backend
         run: |
-          dotnet restore backend/NexoRuta.sln
+          dotnet restore backend/NexoRuta.sln --locked-mode
           dotnet build backend/NexoRuta.sln -c Release --no-restore
-          dotnet test backend/NexoRuta.sln -c Release --no-build --no-restore
-      - name: Frontend build and tests
+      - name: Run the verified integration shard
+        env:
+          DOTNET_PROCESSOR_COUNT: "4"
+        run: >-
+          python3 backend/tests/ci/integration_shards.py
+          --test-project backend/tests/NexoRuta.IntegrationTests/NexoRuta.IntegrationTests.csproj
+          --results-directory artifacts/backend/integration/shard-${{ matrix.shard }}
+          --shard-index ${{ matrix.shard }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: backend-integration-shard-${{ matrix.shard }}
+          path: artifacts/backend/integration/**/*.trx
+          if-no-files-found: error
+          retention-days: 14
+
+  frontend:
+    needs: sources
+    if: fromJSON(needs.sources.outputs.plan).components.frontend.run
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'nexoruta-demo' || 'nexoruta-ci' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+      - name: Checkout the resolved source commits
+        env:
+          BACKEND_REF: ${{ fromJSON(needs.sources.outputs.sources).backend }}
+          FRONTEND_REF: ${{ fromJSON(needs.sources.outputs.sources).frontend }}
+          MOBILE_REF: ${{ fromJSON(needs.sources.outputs.sources).mobile }}
+        run: python3 scripts/gcp/delivery.py sources
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            backend/**/packages.lock.json
+            frontend/**/packages.lock.json
+      - name: Restore the resolved API for live OpenAPI validation
+        run: dotnet restore backend/src/NexoRuta.Api/NexoRuta.Api.csproj --locked-mode
+      - name: Build the resolved API
+        run: dotnet build backend/src/NexoRuta.Api/NexoRuta.Api.csproj -c Release --no-restore
+      - name: Restore frontend
+        run: dotnet restore frontend/NexoRuta.sln --locked-mode
+      - name: Build frontend
+        run: dotnet build frontend/NexoRuta.sln -c Release --no-restore
+      - name: Start API with isolated development configuration
+        working-directory: backend/src/NexoRuta.Api
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+          ASPNETCORE_URLS: http://127.0.0.1:58080
+          ConnectionStrings__Postgres: Host=127.0.0.1;Port=1;Database=unused;Username=unused;Password=unused;Timeout=1
+          DatabaseInitialization__ApplyMigrations: "false"
+          DatabaseInitialization__SeedData: "false"
+          Jwt__SigningKeyBase64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+          OpenTelemetry__Enabled: "false"
         run: |
-          dotnet restore frontend/NexoRuta.sln
-          dotnet build frontend/NexoRuta.sln -c Release --no-restore
-          dotnet test frontend/NexoRuta.sln -c Release --no-build --no-restore
+          nohup dotnet bin/Release/net10.0/NexoRuta.Api.dll > "$RUNNER_TEMP/openapi-api.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/openapi-api.pid"
+          for attempt in {1..40}; do
+            if curl --fail --silent http://127.0.0.1:58080/openapi/v1.json -o /dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat "$RUNNER_TEMP/openapi-api.pid")" 2>/dev/null; then
+              cat "$RUNNER_TEMP/openapi-api.log"
+              exit 1
+            fi
+            sleep 0.5
+          done
+          cat "$RUNNER_TEMP/openapi-api.log"
+          exit 1
+      - name: Compare the versioned OpenAPI snapshot with the resolved API
+        env:
+          NEXORUTA_OPENAPI_URL: http://127.0.0.1:58080/openapi/v1.json
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          with urllib.request.urlopen(os.environ['NEXORUTA_OPENAPI_URL'], timeout=10) as response:
+              served = json.load(response)
+          with open('frontend/contracts/nexoruta.openapi.json', encoding='utf-8') as source:
+              snapshot = json.load(source)
+          # Server URLs contain an ephemeral test port; compare the API contract itself.
+          served.pop('servers', None)
+          snapshot.pop('servers', None)
+          if served != snapshot:
+              raise SystemExit('Versioned OpenAPI differs from the API built from the resolved backend SHA.')
+          print(f"OpenAPI snapshot matches ({len(served.get('paths', {}))} paths).")
+          PY
+      - name: Test frontend
+        env:
+          NEXORUTA_OPENAPI_URL: http://127.0.0.1:58080/openapi/v1.json
+          DOTNET_PROCESSOR_COUNT: "4"
+        run: dotnet test frontend/NexoRuta.sln -c Release --no-build --no-restore --logger trx --results-directory artifacts/frontend
+      - name: Stop the temporary API
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/openapi-api.pid" ]]; then
+            kill "$(cat "$RUNNER_TEMP/openapi-api.pid")" 2>/dev/null || true
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: frontend-test-results
+          path: artifacts/frontend/**/*.trx
+          if-no-files-found: error
+          retention-days: 14
+
+  mobile_portable:
+    needs: sources
+    if: fromJSON(needs.sources.outputs.plan).components.mobile_portable.run
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'nexoruta-demo' || 'nexoruta-ci' }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+      - name: Checkout the resolved source commits
+        env:
+          BACKEND_REF: ${{ fromJSON(needs.sources.outputs.sources).backend }}
+          FRONTEND_REF: ${{ fromJSON(needs.sources.outputs.sources).frontend }}
+          MOBILE_REF: ${{ fromJSON(needs.sources.outputs.sources).mobile }}
+        run: python3 scripts/gcp/delivery.py sources
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: mobile/global.json
+          cache: true
+          cache-dependency-path: mobile/**/packages*.lock.json
+      - name: Restore mobile portable tests
+        run: dotnet restore mobile/NexoRuta.sln --locked-mode
       - name: Mobile portable tests
         run: |
           for layer in Core Api Storage Application; do
-            dotnet test "mobile/tests/NexoRuta.Mobile.$layer.Tests" -c Release
+            dotnet test "mobile/tests/NexoRuta.Mobile.$layer.Tests" -c Release --no-restore --logger trx --results-directory "artifacts/mobile/$layer"
           done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: mobile-portable-test-results
+          path: artifacts/mobile/**/*.trx
+          if-no-files-found: error
+          retention-days: 14
+
+  mobile_android:
+    needs: sources
+    if: fromJSON(needs.sources.outputs.plan).components.mobile_android.run
+    runs-on: ubuntu-24.04
+    environment: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'nexoruta-demo' || 'nexoruta-ci' }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+      - name: Checkout the resolved source commits
+        env:
+          BACKEND_REF: ${{ fromJSON(needs.sources.outputs.sources).backend }}
+          FRONTEND_REF: ${{ fromJSON(needs.sources.outputs.sources).frontend }}
+          MOBILE_REF: ${{ fromJSON(needs.sources.outputs.sources).mobile }}
+        run: python3 scripts/gcp/delivery.py sources
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: mobile/global.json
+          cache: true
+          cache-dependency-path: mobile/**/packages*.lock.json
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: microsoft
+          java-version: '21'
+      - name: Install pinned MAUI Android workload
+        run: dotnet workload install maui-android --skip-manifest-update
+      - name: Restore Android
+        run: dotnet restore mobile/src/NexoRuta.Mobile/NexoRuta.Mobile.csproj --locked-mode -p:TargetFramework=net10.0-android -p:RuntimeIdentifier=android-arm64 -p:NuGetLockFilePath=packages.android.lock.json
+      - name: Install Android dependencies
+        run: dotnet build mobile/src/NexoRuta.Mobile/NexoRuta.Mobile.csproj -t:InstallAndroidDependencies -f net10.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -p:JavaSdkDirectory="$JAVA_HOME" -p:AcceptAndroidSdkLicenses=true
+      - name: Build verification APK
+        run: |
+          r8_args=()
+          if [[ -f mobile/tools/preparar-r8.py ]]; then
+            r8_args+=("-p:AndroidR8JarPath=$(python3 mobile/tools/preparar-r8.py)")
+          fi
+          dotnet build mobile/src/NexoRuta.Mobile/NexoRuta.Mobile.csproj --configuration Release --framework net10.0-android \
+            -p:RuntimeIdentifier=android-arm64 -p:AndroidPackageFormats=apk "${r8_args[@]}" --no-restore
+      - name: Checksum APK
+        run: sha256sum mobile/src/NexoRuta.Mobile/bin/Release/net10.0-android/android-arm64/*-Signed.apk > mobile/SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-verification-${{ fromJSON(needs.sources.outputs.sources).mobile }}
+          path: |
+            mobile/src/NexoRuta.Mobile/bin/Release/net10.0-android/android-arm64/*-Signed.apk
+            mobile/SHA256SUMS
+          retention-days: 14
+
+  result:
+    name: Integrated CI / result
+    if: always()
+    needs: [infrastructure, sources, backend, backend_integration, frontend, mobile_portable, mobile_android, cloudsql]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every integrated validation
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          PLAN: ${{ needs.sources.outputs.plan }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          results = json.loads(os.environ['RESULTS'])
+          plan = json.loads(os.environ['PLAN'])
+          if results['sources']['result'] != 'success':
+              raise SystemExit('The source snapshot and fail-closed plan did not succeed.')
+          expected = {
+              'infrastructure': plan['infrastructure']['run'],
+              'backend': plan['components']['backend']['run'],
+              'backend_integration': plan['components']['backend']['run'],
+              'frontend': plan['components']['frontend']['run'],
+              'mobile_portable': plan['components']['mobile_portable']['run'],
+              'mobile_android': plan['components']['mobile_android']['run'],
+              'cloudsql': plan['cloudsql']['run'],
+          }
+          failed = {}
+          for name, required in expected.items():
+              actual = results[name]['result']
+              valid = actual == 'success' if required else actual == 'skipped'
+              if not valid:
+                  failed[name] = {'required': required, 'result': actual}
+          if failed:
+              print('Required integrated validations did not succeed:', json.dumps(failed, sort_keys=True), file=sys.stderr)
+              raise SystemExit(1)
+          summary = [
+              '# Integrated CI result',
+              '',
+              f"- Root: `{plan['current']['root_sha']}`",
+              f"- Backend: `{plan['current']['sources']['backend']}`",
+              f"- Frontend: `{plan['current']['sources']['frontend']}`",
+              f"- Mobile: `{plan['current']['sources']['mobile']}`",
+              f"- Decision: {plan['reason']}",
+              '',
+              '| Validation | Run | Reason |',
+              '| --- | --- | --- |',
+          ]
+          for name, details in [
+              ('backend', plan['components']['backend']),
+              ('frontend', plan['components']['frontend']),
+              ('mobile portable', plan['components']['mobile_portable']),
+              ('Android', plan['components']['mobile_android']),
+              ('infrastructure', plan['infrastructure']),
+              ('Cloud SQL', plan['cloudsql']),
+          ]:
+              summary.append(f"| {name} | {'yes' if details['run'] else 'no'} | {details['reason']} |")
+          summary.extend(['', f"- Images to build: {', '.join(plan['images']) or 'none'}",
+                          f"- Full validation required: {'yes' if plan['publish_required'] else 'no'}", ''])
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as output:
+              output.write('\n'.join(summary))
+          print('Integrated validation plan completed:', json.dumps(expected, sort_keys=True))
+          PY
 
   cloudsql:
     needs: sources
+    if: fromJSON(needs.sources.outputs.plan).cloudsql.run
     runs-on: ubuntu-latest
     environment: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'nexoruta-demo' || 'nexoruta-ci' }}
     timeout-minutes: 15
@@ -133,7 +438,11 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: backend/**/packages.lock.json
       - name: Build migration command
-        run: dotnet build backend/src/NexoRuta.Api/NexoRuta.Api.csproj -c Release
+        run: |
+          dotnet restore backend/src/NexoRuta.Api/NexoRuta.Api.csproj --locked-mode
+          dotnet build backend/src/NexoRuta.Api/NexoRuta.Api.csproj -c Release --no-restore
       - name: Verify migrations and runtime roles without superuser privileges
         run: python3 scripts/gcp/cloudsql_compat.py

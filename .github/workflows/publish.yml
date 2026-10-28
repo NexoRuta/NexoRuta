@@ -1,0 +1,144 @@
+name: NexoRuta - publish integration images
+run-name: NexoRuta publish / ${{ github.event_name }}
+
+on:
+  push:
+    branches: [main]
+  repository_dispatch:
+    types: [nexoruta-source-changed]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Re-plan queued events after the prior publication so identical snapshots deduplicate safely.
+  group: nexoruta-gcp-demo-publish
+  queue: max
+
+jobs:
+  verify:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event_name != 'workflow_dispatch'
+    uses: ./.github/workflows/ci.yml
+    with:
+      backend_ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.repository == 'NexoRuta/NexoRuta-Backend' && github.event.client_payload.sha || 'main' }}
+      frontend_ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.repository == 'NexoRuta/NexoRuta-Frontend' && github.event.client_payload.sha || 'main' }}
+      mobile_ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.repository == 'NexoRuta/NexoRuta-Mobile' && github.event.client_payload.sha || 'main' }}
+    secrets: inherit
+
+  integration:
+    if: needs.verify.result == 'success' && fromJSON(needs.verify.outputs.plan).publish_required
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.snapshot.outputs.tag }}
+      commit: ${{ steps.snapshot.outputs.commit }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - name: Publish an immutable tag for the tested component combination
+        id: snapshot
+        env:
+          TESTED_SOURCES: ${{ needs.verify.outputs.sources }}
+        run: python3 scripts/gcp/integration.py tag
+
+  publish:
+    needs: [verify, integration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    environment: nexoruta-demo
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      release: ${{ steps.publish.outputs.release }}
+      manifest: ${{ steps.publish.outputs.manifest }}
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GCP_ZONE: ${{ vars.GCP_ZONE }}
+      GCP_STATE_BUCKET: ${{ vars.GCP_STATE_BUCKET }}
+      GCP_DELIVERY_BUCKET: ${{ vars.GCP_DELIVERY_BUCKET }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      DEMO_OPERATION: update
+      RELEASE_CHANNEL: main
+      INTEGRATION_TAG: ${{ needs.integration.outputs.tag }}
+      INTEGRATION_COMMIT: ${{ needs.integration.outputs.commit }}
+      TESTED_CI_PLAN: ${{ needs.verify.outputs.plan }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.integration.outputs.tag }}
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+          persist-credentials: false
+      - name: Validate GitHub environment configuration
+        run: python3 scripts/gcp/github_environment.py validate publish
+      - name: Verify the tag and its pinned component commits
+        run: python3 scripts/gcp/integration.py check
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        id: auth
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          version: "590.0.0"
+      - name: Build affected images and publish the complete manifest
+        id: publish
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          NEXORUTA_CLOUD_BUILD_ID_FILE: ${{ runner.temp }}/nexoruta-cloud-build-id
+        run: python3 scripts/gcp/delivery.py build
+
+      - name: Ensure the submitted Cloud Build is not left running
+        if: always()
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION }}
+        run: |
+          build_id_file="$RUNNER_TEMP/nexoruta-cloud-build-id"
+          [[ -s "$build_id_file" ]] || exit 0
+          build_id="$(< "$build_id_file")"
+          status="$(gcloud builds describe "$build_id" --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --format='value(status)')"
+          case "$status" in
+            QUEUED|PENDING|WORKING)
+              gcloud builds cancel "$build_id" --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --quiet
+              echo "Cancelled Cloud Build $build_id after workflow cancellation." >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            CANCELLING|CANCELLED|SUCCESS|FAILURE|INTERNAL_ERROR|TIMEOUT|EXPIRED)
+              echo "Cloud Build $build_id already finished with status $status." >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "Cloud Build $build_id has unrecognized status '$status'; inspect or cancel it manually." >&2
+              exit 1
+              ;;
+          esac
+
+  github_release:
+    needs: [integration, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.integration.outputs.tag }}
+          persist-credentials: false
+      - name: Publish the integration manifest as a GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_MANIFEST: ${{ needs.publish.outputs.manifest }}
+        run: python3 scripts/gcp/integration.py release
