@@ -4,24 +4,24 @@ Fecha: 28/10/2026, America/Montevideo.
 
 ## 1. Resultado de la revisión
 
-Baseline anterior a la aplicación: las pruebas de integración backend ocuparon **13 min 56 s** de una publicación de **21 min 17 s**. Un push principal iniciaba dos validaciones y cada publicación reconstruía seis imágenes sin importar qué cambió. La selección por SHAs, el paralelismo y la reutilización de digests ya están implementados; sus ahorros reales todavía necesitan runs posteriores.
+Baseline anterior a la aplicación: las pruebas de integración backend ocuparon **13 min 56 s** de una publicación de **21 min 17 s**. Un push principal iniciaba dos validaciones y cada publicación reconstruía seis imágenes sin importar qué cambió. En la validación posterior, el CI de la PR integrada terminó en **7 min 06 s** y el publish post-merge en **4 min 41 s**, sin volver a ejecutar las suites. Es una muestra, no un benchmark ni un p50/p95.
 
 La implementación elimina el CI posterior al merge, los dispatches desde los submódulos y el push de mobile a develop que repetía su PR. La publicación del root solo planifica y construye lo necesario; los tests siguen en los PRs. Las reglas de `main` exigen PR, check final y una promoción desde `develop`.
 
 La auditoría también detectó que Android no bloqueaba la publicación integrada y que las ramas no exigían checks exitosos. Android ahora bloquea la integración cuando cambia su input; hay checks finales estables y rulesets activos en los cuatro repositorios.
 
-Los cambios están en `develop` del root y en `main`/`develop` de los submódulos. Las tres PRs de submódulos pasaron sus checks y se integraron; la PR integrada del root debe validar el snapshot completo. No se ejecutaron publicaciones ni se modificaron recursos de GCP. La mejora medida en tiempos requiere runs posteriores.
+El código está integrado en `main` del root y de los tres submódulos; sus ramas `develop` también contienen las promociones. La [PR integrada del root #35](https://github.com/NexoRuta/NexoRuta/pull/35) pasó todos los checks. Después, la [PR correctiva #37](https://github.com/NexoRuta/NexoRuta/pull/37) validó la preparación de restore y se fusionó. El [publish run 40773201978](https://github.com/NexoRuta/NexoRuta/actions/runs/40773201978) terminó en éxito. Su Cloud Build esperó **45 s** en cola y compiló las seis imágenes en **2 min 09 s** con dos cadenas. El proveedor WIF se actualizó con un plan de **1 cambio in-place, 0 recursos destruidos**. Aún hacen falta ejecuciones repetidas para estimar percentiles y variabilidad.
 
 ### Estado de aplicación del plan
 
-| Estado | Hallazgos | Resultado local |
+| Estado | Hallazgos | Resultado / validación |
 | --- | --- | --- |
-| Implementado en código | 01, 03, 04, 06–17 | Gate Android exacto/por inputs, planificación conservadora, tres shards backend con verificación de resultados, paralelismo, lockfiles/cachés, manifiesto con digests reutilizados, pruebas OpenAPI reales, TRX y separación de workflows. |
+| Implementado en código | 01, 03, 04, 06–17, 19 | Gate Android exacto/por inputs, planificación conservadora, tres shards backend con verificación de resultados, paralelismo, lockfiles/cachés, manifiesto con digests reutilizados, restore Razor reproducible, pruebas OpenAPI reales, TRX y separación de workflows. |
 | Instrumentado; optimización condicionada a mediciones | 05, 18 | Tiempos de fixtures y fases manuales; preparación por VM en paralelo. Las migraciones siguen aisladas y secuenciales. |
-| Pendiente de validación remota | Root CI | La PR del root debe confirmar el plan de la combinación y el check final antes de fusionarse. |
-| Pendiente de datos de producción | 05, 06, 08–10, 18 | Reportar tiempos p50/p95, minutos de runner, caché Cloud Build y resultados de ensayos GCP requiere runs equivalentes posteriores. |
+| Validado de forma remota | Root CI y publish | PR #37 pasó `Integrated CI / result`; publish 40773201978 autenticó por WIF, compiló/puso las seis imágenes y publicó el manifiesto y el prerelease. |
+| Pendiente de datos de producción | 05, 06, 08–10, 18 | Reportar tiempos p50/p95, minutos agregados de runner, caché Cloud Build y resultados de ensayos GCP requiere runs equivalentes posteriores. |
 
-Los submódulos ya pasaron la CI remota de sus PRs. La integración y publicación del root aún no se han ejecutado.
+La verificación integrada confirma los tres shards backend (4:13, 5:49 y 6:29), frontend (1:34), mobile portable (1:21), Android (2:48), Cloud SQL y las validaciones de infraestructura. El run de publicación no repitió esas suites.
 
 ## 2. Alcance y fuentes de evidencia
 
@@ -186,7 +186,7 @@ Prioridades: P0 = corregir las condiciones de calidad antes de omitir validacion
 
 **Guía aplicada.** `ci.yml` se dispara por PR y deja un único check estable. `publish.yml` no invoca pruebas. El ruleset impide que el push main ocurra fuera de una PR desde `develop`.
 
-**Comprobación.** Una PR ejecuta CI; el merge crea una ejecución de publicación sin suites. El siguiente run de GitHub confirmará el recorrido completo con los cambios ya publicados.
+**Comprobación.** Verificado en [CI de la PR #37](https://github.com/NexoRuta/NexoRuta/actions/runs/40772178278) y [publish post-merge](https://github.com/NexoRuta/NexoRuta/actions/runs/40773201978): CI aprobó el snapshot y publish compiló/promovió las imágenes sin ejecutar suites.
 
 ### 04 — P1: no se seleccionan componentes ni imágenes por cambios
 
@@ -220,7 +220,7 @@ La salida sources debe pasar de [jobs.applications.outputs](../.github/workflows
 
 ### 06 — P1: toda la integración backend queda en un solo runner
 
-**Estado de aplicación.** Implementado en tres shards con balance LPT por duración de clase del TRX local (456 casos). La planificación actual asigna 146/151/159 casos y un peso histórico de 651,4 s a cada shard; las clases nuevas se asignan por cantidad de casos. Cada shard descubre los tests al ejecutar y comprueba que su TRX contiene exactamente los casos de sus clases. Falta confirmar en GitHub el éxito y tiempo de la matriz en runners independientes.
+**Estado de aplicación.** Implementado en tres shards con balance LPT por duración de clase del TRX local (456 casos). La planificación actual asigna 146/151/159 casos y un peso histórico de 651,4 s a cada shard; las clases nuevas se asignan por cantidad de casos. Cada shard descubre los tests al ejecutar y comprueba que su TRX contiene exactamente los casos de sus clases. La matriz GitHub pasó en 4:13, 5:49 y 6:29; el shard más lento determina el tiempo de espera.
 
 **Problema y evidencia histórica.** El job invocaba [dotnet test sobre la solución](../.github/workflows/ci.yml) sin partición entre runners. Los 456 casos de integración de la última publicación tardaron 13:10. xUnit ya puede paralelizar clases: esto no implica que todo estuviera ejecutándose secuencialmente.
 
@@ -384,6 +384,8 @@ No trasladar bin/obj desde un runner de PR hacia una imagen privilegiada sin pro
 
 **Guía aplicada.** Mantener `ci.yml` para PRs y `publish.yml` para publicar automáticamente; `vm-controls.yml` conserva start/update/stop. Fijar acciones por SHA con comentario de versión y automatizar actualizaciones agrupadas. Ejecutar actionlint en cada repositorio. No hace falta un workflow reusable entre repositorios porque la publicación ya no vuelve a llamar al CI de los submódulos.
 
+**Pendiente operativo.** Cambiar `target-branch` en Dependabot solo afecta los PRs nuevos. Siguen abiertos PRs creados antes del cambio que apuntan a `main` (root #31–34, Backend #31, Frontend #32 y Mobile #7); el gate exige `develop` y esos PRs heredados no pueden pasar tal como están. El PR agrupado de acciones del root #36 ya se dirige a `develop`.
+
 **Comprobación.** Una persona puede seguir el flujo desde el trigger hasta el artefacto leyendo los entrypoints. Una modificación inválida del workflow mobile falla en su CI antes de compilar Android. [Reutilización](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows), [seguridad y fijación de acciones](https://docs.github.com/en/actions/reference/security/secure-use).
 
 ### 18 — P2: el arranque manual tiene otro camino crítico de unos 16 minutos
@@ -399,6 +401,18 @@ No trasladar bin/obj desde un runner de PR hacia una imagen privilegiada sin pro
 **Guía.** Emitir duración por SQL-start, tofu init/plan/apply, backup, prepare por nodo, migrate, apply y health. Separar muestras de start frío y update caliente. Ensayar prepare de ambos nodos en paralelo, validando que no modifiquen recursos compartidos a la vez. Conservar backup, bloqueo único de migraciones, drenaje y verificaciones. Sustituir una espera fija por una condición observable solo si respeta el período real de drenaje configurado. Optimizar imágenes/pulls y artefactos locales después de medir cuánto cuestan.
 
 **Comprobación.** Tests de control/despliegue y ensayo en entorno descartable acreditan el orden prepare → stop → única migración → apply/health; no hay escrituras concurrentes al esquema ni despliegues parciales promovidos.
+
+### 19 — P1: el restore aislado del contenedor omitía inputs Razor
+
+**Estado de aplicación.** Corregido y validado: `stage_sources` crea un marcador `.razor` temporal en cada proyecto que usa componentes Razor; el Dockerfile lo elimina después de `dotnet restore --locked-mode` y antes de publicar.
+
+**Problema y evidencia.** El publish run 40770070057 falló en Commerce con NU1004. La capa que aceleraba restore copiaba `.csproj` y `packages.lock.json`, pero no los `.razor`; en ese contexto el SDK resolvía dependencias implícitas distintas a las del proyecto completo. Se reprodujo con `mcr.microsoft.com/dotnet/sdk:10.0.401` y el mismo Dockerfile.
+
+**Cómo afecta.** CI de PR podía pasar y la publicación fallar al construir la imagen. Las imágenes anteriores no se promovieron porque el manifiesto no llegó a completarse.
+
+**Solución aplicada y guía.** Preservar en el contexto mínimo de restore la presencia de proyectos Razor, sin copiar sus fuentes ni invalidar la caché ante cada cambio de página. Eliminar el marcador antes de copiar/publicar el source real. Mantener `--locked-mode`.
+
+**Comprobación.** El build Docker de Commerce pasó localmente con el SDK de Cloud Build; luego el publish 40773201978 construyó las seis imágenes, completó el manifiesto y publicó el prerelease. El test existente de `stage_sources` cubre la generación del marcador.
 
 ## 6. Cómo ejecutar solo las pruebas necesarias
 
@@ -483,20 +497,20 @@ Un reusable workflow evita duplicar una definición; no evita ejecuciones duplic
 
 ## 8. Estado de implementación y estimaciones
 
-Los ahorros de las muestras históricas siguen siendo estimaciones; aún no hay mediciones de la nueva pipeline en GitHub.
+La primera medición posterior a la implementación ya existe: CI integrado 7:06 y publish post-merge 4:41. Es una muestra. No basta para estimar p50/p95, minutos agregados de runner ni una tasa de fallos.
 
 | Orden | Cambios | Beneficio esperado y límite | Riesgo |
 | --- | --- | --- | --- |
 | 1 | Hallazgos 03, 15 y 16; gate 01 | Aplicado en workflows y código; el gate Android corre antes de publicar | Bajo |
 | 2 | Plan por componente, 04/12 y check final | Aplicado con baseline fail-closed, pruebas del plan, digests reutilizados y manifiesto completo | Medio; requiere seguir observando falsos skips |
-| 3 | Paralelizar aplicaciones y grupos backend, 06/07 | Aplicaciones paralelas y tres shards ponderados por TRX implementados; medir el resultado de runners separados después de publicar | Medio; observar balance y minutos agregados |
+| 3 | Paralelizar aplicaciones y grupos backend, 06/07 | Aplicaciones paralelas y tres shards ponderados por TRX implementados y validados en runners separados; tiempos 4:13/5:49/6:29 | Medio; observar balance y minutos agregados |
 | 4 | Medir/optimizar fixtures, 05 | Instrumentación aplicada; la optimización por plantillas queda condicionada a demostrar ahorro y mantener owners, permisos y RLS | Medio/alto por seguridad y aislamiento |
-| 5 | Cachés NuGet/Docker y dos grupos de imágenes, 08/09/10 | Código aplicado; comparar builds fríos/repetidos y el tiempo de Cloud Build después de integrar | Medio |
-| 6 | Toolchain/contratos/lectura/controles, 11/13/14/17/18 | Aplicado; reglas remotas y ensayo GCP siguen pendientes | Variable |
+| 5 | Cachés NuGet/Docker y dos grupos de imágenes, 08/09/10 | Código aplicado; Cloud Build exitoso en 2:09 de ejecución y 0:45 de cola; faltan muestras frías/repetidas | Medio |
+| 6 | Toolchain/contratos/lectura/controles, 11/13/14/17/18/19 | Aplicado; rulesets y WIF verificados; falta ensayo GCP de start/update/stop | Variable |
 
 Objetivo de evaluación: que un cambio documental no ejecute suites ni imágenes innecesarias; que uno mobile/frontend aislado no pague toda la integración backend; y que un cambio backend siga validándose completo, con menor duración medida. Para backend completo, una meta piloto de validación de 6–9 minutos puede usarse para evaluar grupos/fixtures; **no es una predicción ni un compromiso**, y no incluye publicación o arranque manual.
 
-Siguientes optimizaciones después de integrar:
+Siguientes validaciones y optimizaciones:
 
 1. Recoger TRX y métricas de caché durante al menos 20 ejecuciones equivalentes.
 2. Confirmar que los tres shards pasan y comparar duración total/minutos agregados de runner con el baseline.
@@ -504,7 +518,7 @@ Siguientes optimizaciones después de integrar:
 4. Ensayar start frío y update caliente en entorno descartable; comprobar el paralelismo de prepare sin tocar esquema ni LB en paralelo.
 5. Medir builds Cloud Build fríos y repetidos antes de ampliar cadenas o cambiar la caché.
 
-Las reglas de rama ya están aplicadas; las mediciones y los ensayos GCP siguen pendientes.
+Las reglas de rama están aplicadas. Las métricas percentiles, el ensayo GCP de start/update/stop y la limpieza de los PRs Dependabot heredados siguen pendientes.
 
 El workflow manual y el schedule semanal ejecutan todas las validaciones. Si un run selectivo omite un input que la ejecución completa detecta, corregir el clasificador e invalidar evidencia de esa versión.
 
@@ -516,7 +530,7 @@ El workflow manual y el schedule semanal ejecutan todas las validaciones. Si un 
 - [x] Contratos, persistencia, toolchain y cambios de inputs compartidos invalidan sus suites consumidoras.
 - [x] Android se compila desde el SHA resuelto cuando cambian sus inputs; un digest de inputs idéntico puede reutilizarse para cambios solo de tests/docs.
 - [x] Los rulesets impiden push directo a `main` y exigen el check final estable.
-- [ ] Un run de la matriz confirma en GitHub la cobertura ejecutada de los tres shards y registra sus tiempos; el host local no soportó la ejecución concurrente por su límite de inotify.
+- [x] La matriz confirma en GitHub la cobertura de los tres shards y registra 4:13, 5:49 y 6:29; el host local no soportó ejecución concurrente por su límite de inotify.
 - [x] Cachés NuGet/Docker ausentes afectan tiempo, no resultado; restore/build es reproducible por lockfile.
 - [x] Las imágenes sin cambios conservan digest/procedencia y el manifiesto publicado está completo.
 - [x] El ID del Cloud Build async se persiste; la cancelación/timeout limpia el build activo o deja su ID e instrucción explícita para cancelarlo.
@@ -543,6 +557,6 @@ El manifiesto de release permite relacionar los SHAs, build_id y digests con los
 
 ## 11. Límites del análisis
 
-Se inspeccionaron workflows, scripts GCP, Dockerfiles, fixtures, contratos, logs históricos, rulesets y Cloud Build. Validación local: Python GCP 101 pasaron/3 omitidas; planificador backend 3 pasaron; backend 174 unitarias + 3 de arquitectura; integración backend 456/456 en 8:47 con `DOTNET_PROCESSOR_COUNT=2` y 1.582 registros de fases de fixture en TRX; frontend 324/324 en 12 s; mobile 182 pruebas portables; compilación frontend correcta con advertencias NU1510 y CS8629; APK Release Android generado con checksum y 3 advertencias XA0141 por bibliotecas nativas Mapbox 1.8.0. El plan de shards asignó las 456 pruebas a una matriz sin huecos ni duplicados. Ejecutar tres shards a la vez en esta máquina compartida agotó el límite local de inotify, así que no se obtuvo aquí un run verde concurrente; eso debe confirmarse en los runners separados de GitHub. El smoke local del OpenAPI servido también pasó. No se ejecutaron publicaciones, builds Cloud Build ni operaciones GCP. La implementación no es todavía un benchmark de ahorro: p50/p95, hit/miss real de cachés y efectos del paralelismo deben medirse después de integrar. No se hizo una auditoría completa del código de negocio.
+Se inspeccionaron workflows, scripts GCP, Dockerfiles, fixtures, contratos, logs históricos, rulesets y Cloud Build. Validación local histórica: Python GCP 101 pasaron/3 omitidas; planificador backend 3 pasaron; backend 174 unitarias + 3 de arquitectura; integración backend 456/456 en 8:47 con `DOTNET_PROCESSOR_COUNT=2` y 1.582 registros de fases de fixture en TRX; frontend 324/324 en 12 s; mobile 182 pruebas portables; compilación frontend correcta con advertencias NU1510 y CS8629; APK Release Android generado con checksum y 3 advertencias XA0141 por bibliotecas nativas Mapbox 1.8.0. Seguimiento remoto: PR #37 pasó todos los checks integrados; los shards duraron 4:13/5:49/6:29, frontend 1:34, mobile portable 1:21, Android 2:48, Cloud SQL 1:10 e infraestructura 0:36. El build local Docker de Commerce reprodujo y verificó el fix Razor. El publish 40773201978 terminó exitosamente: Cloud Build construyó las seis imágenes y el job publicó el manifiesto/prerelease. Para corregir la autenticación se actualizó WIF con un plan OpenTofu de 1 cambio in-place y 0 destrucciones. El host local agotó inotify al ejecutar los tres shards en paralelo, pero GitHub los ejecutó en runners separados. No es todavía un benchmark: p50/p95, hit/miss real de cachés y efectos del paralelismo requieren al menos 20 ejecuciones equivalentes. No se hizo una auditoría completa del código de negocio.
 
 Las causas estructurales están respaldadas por los archivos citados; los tiempos por test y job están medidos. La distribución interna del costo de las fixtures, el beneficio de las cachés, el paralelismo óptimo y el desglose del arranque manual necesitan las mediciones propuestas. Las reglas y los tiempos remotos pueden cambiar después de la fecha de esta revisión.
