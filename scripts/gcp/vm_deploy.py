@@ -545,7 +545,6 @@ def main():
 
 
 def run_stage(args, timings=None):
-    import fcntl
     timings = timings if timings is not None else {}
     started = time.perf_counter()
     try:
@@ -555,6 +554,7 @@ def run_stage(args, timings=None):
 
 
 def _run_stage(args, timings):
+    import fcntl
     if not re.fullmatch(r"release-[a-f0-9]{32}", args.release):
         raise ValueError("Invalid release ID")
     if not math.isfinite(args.deadline) or args.deadline <= time.time():

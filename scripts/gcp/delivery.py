@@ -408,9 +408,6 @@ def deploy(config, release):
     deadline = lease["expires_at"]
     if deadline <= time.time():
         raise RuntimeError("The common session deadline has expired")
-    measure("cloud_sql_backup", lambda: session.command(
-        "gcloud", "sql", "backups", "create", "--instance=nexoruta-demo-db", f"--project={project}", "--quiet"))
-
     def stage(node, operation):
         started = time.perf_counter()
         status = "failed"
@@ -452,17 +449,20 @@ def deploy(config, release):
                 "duration_ms": round((time.perf_counter() - started) * 1000), "status": status,
             }, sort_keys=True), flush=True)
 
-    def prepare_node(node):
+    def wait_for_bootstrap(node):
+        for attempt in range(80):
+            try:
+                session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
+                    "--command=sudo test -f /srv/nexoruta/bootstrap-ready")
+                return
+            except subprocess.CalledProcessError:
+                time.sleep(5)
+        raise RuntimeError(f"Node {node['NODE_ID']} bootstrap did not finish")
+
+    def prepare_node(node, bootstrap_ready=False):
         def prepare_node_access():
-            for attempt in range(80):
-                try:
-                    session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
-                        "--command=sudo test -f /srv/nexoruta/bootstrap-ready")
-                    break
-                except subprocess.CalledProcessError:
-                    time.sleep(5)
-            else:
-                raise RuntimeError(f"Node {node['NODE_ID']} bootstrap did not finish")
+            if not bootstrap_ready:
+                wait_for_bootstrap(node)
             session.gcloud(node, "compute", "scp", str(ROOT / "scripts/gcp/vm_deploy.py"),
                 f"{node['VM_NAME']}:/tmp/nexoruta-vm-deploy.py", "--tunnel-through-iap")
             session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
@@ -472,10 +472,16 @@ def deploy(config, release):
         # monitoring agent. It does not touch database schema or load-balancer state.
         return measure("prepare_node", lambda: stage(node, "prepare"), node=node["NODE_ID"])
 
-    with ThreadPoolExecutor(max_workers=min(2, len(inventory))) as executor:
-        pending = [executor.submit(prepare_node, node) for node in inventory]
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        backup = executor.submit(measure, "cloud_sql_backup", lambda: session.command(
+            "gcloud", "sql", "backups", "create", "--instance=nexoruta-demo-db", f"--project={project}", "--quiet"))
+        # Let gcloud create its default SSH key before any concurrent SSH/SCP calls.
+        measure("initial_ssh_bootstrap", lambda: wait_for_bootstrap(inventory[0]), node=inventory[0]["NODE_ID"])
+        pending = [executor.submit(prepare_node, node, index == 0) for index, node in enumerate(inventory)]
         for future in pending:
             future.result()
+        # No load balancer changes or migrations until the backup has succeeded.
+        backup.result()
     def health(node):
         for service in ("api", "admin", "backoffice", "commerce", "tracking", "monitor"):
             output = session.command("gcloud", "compute", "backend-services", "get-health", f"nexoruta-demo-{service}",
