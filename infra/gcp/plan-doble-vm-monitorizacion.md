@@ -135,7 +135,7 @@ Ante un fallo antes de terminar las migraciones, las aplicaciones permanecen det
 - `update`: no reinicia hosts, no amplía el plazo y no arranca nodos caídos. Si falta un nodo, informar degradación y no declarar la actualización de ambos completada.
 - La caída de A o B antes del vencimiento no debe provocar que el guard apague el nodo sano o SQL. El guard actual consulta solo A y debe cambiar antes de habilitar la topología nueva.
 - `stop`/vencimiento: cerrar la sesión, retirar tráfico, detener workers y ambas VMs, confirmar sus estados y apagar SQL. Reintentar limpieza aunque falle una de las operaciones; no crear recursos al detener.
-- El APK de `start` usa el origen HTTPS estable del balanceador. `update` conserva el comportamiento actual de no generar un nuevo APK.
+- El APK de pruebas se construye por separado. `start` solo selecciona una release publicada, enciende SQL y las dos VMs y despliega sus imágenes.
 
 El balanceador y la IP se mantienen entre sesiones para conservar nombres y certificados. Detener las VMs no elimina esos recursos ni su posible facturación. Al apagar ambas, el panel propio también queda fuera de servicio; el histórico y las alertas del control permanecen en Google Cloud.
 

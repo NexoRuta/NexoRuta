@@ -1,7 +1,7 @@
 # Requisitos acordados para la demo
 
 - GCP con crédito de USD 300 y horizonte de hasta tres meses, cerrando el proyecto
-  antes de que expire. Evitar cómputo permanente; conservar datos entre sesiones.
+  antes de que expire. Evitar cómputo permanente; conservar datos entre sesiónes.
 - Hasta cinco usuarios simultáneos. VM de **16 GiB**, priorizando CPU y tiempos de
   respuesta. No dimensionar a 32 GiB sin mediciones que lo justifiquen.
 - Cercanía a Uruguay: Santiago elegido tras comparar HTTP desde el equipo local.
@@ -17,12 +17,13 @@
   migraciones, datos iniciales, API, cuatro webs, workers Rabbit/Kafka/Push,
   RabbitMQ, Kafka, MongoDB, correo de prueba, HTTPS y APK.
 - El inicio de una nueva sesión es manual y dura cuatro horas desde el arranque
-  de la VM. Las actualizaciones de código no deben reiniciar ni ampliar la sesión.
-- Un push a `main` solo ejecuta CI y publica imágenes; no opera la VM, ni siquiera
-  cuando está encendida. El botón manual `update` usa la última release completa
-  del registry, descarga sus imágenes y recrea los contenedores sin recompilar.
+  de la VM. Las actualizaciones no reinician ni amplían la sesión.
+- Un push a `main` solo ejecuta CI y publica imágenes; no opera la VM. `start`
+  enciende la sesión y despliega la última release completa publicada. `update`
+  despliega esa release en una sesión activa. Ninguna operación manual vuelve
+  a correr CI ni recompila las imágenes.
 - Apagar Cloud SQL junto con la VM, incluso ante cancelación/fallo del runner.
-  Mantener backups, claves, contraseñas, datos y volúmenes entre sesiones.
+  Mantener backups, claves, contraseñas, datos y volúmenes entre sesiónes.
 - Autenticación de GitHub mediante WIF, sin claves JSON permanentes de GCP.
   Variables GCP y secrets externos en el environment de GitHub `nexoruta-demo`,
   sin duplicar variables del proyecto a nivel del repositorio. Configuración

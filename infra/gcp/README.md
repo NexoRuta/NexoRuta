@@ -52,11 +52,13 @@ No interviene en el tráfico de los usuarios. Firebase/IAM son servicios globale
 
 ```mermaid
 flowchart LR
-    A[Push a main o start manual] --> B[CI de los tres main e infraestructura]
+    A[Push a main o cambio de componente] --> B[CI de los tres main e infraestructura]
     B --> C[Cloud Build en Santiago]
     C --> D[Artifact Registry: seis imágenes por digest]
     D --> E[Publicar release completa del canal main]
-    E -->|solo start manual| F[OpenTofu: Cloud SQL y dos VMs]
+    S[start manual] --> P[Seleccionar última release completa]
+    E --> P
+    P --> F[OpenTofu: Cloud SQL y dos VMs]
     U[Botón update manual] --> V[Leer última release publicada]
     E -.-> V
     V -->|sesión activa| G[Actualizar A y B en rotación]
@@ -64,7 +66,7 @@ flowchart LR
     F --> H[Migraciones, RLS y datos iniciales]
     G --> H
     H --> I[HTTPS y smoke tests]
-    I -->|solo start| J[APK con la URL real de la API]
+    I -->|start manual| Q[Publicar endpoints de la sesión]
     K[GCE: cuatro horas] --> L[Apagar las dos VMs]
     M[Scheduler y Workflows] --> L
     L --> N[Apagar Cloud SQL y conservar datos]
@@ -229,13 +231,13 @@ con branch `main`, y elegir una operación:
 
 | Operación | Comportamiento |
 | --- | --- |
-| `start` | Obtiene lo último de los tres `main`, ejecuta CI, construye/publica imágenes e inicia dos VMs por cuatro horas con esa release. |
+| `start` | Selecciona la última release completa ya publicada e inicia dos VMs por cuatro horas con esas imágenes. No ejecuta CI ni construye imágenes. |
 | `update` | Lee la última release completa publicada de `main` y rota el despliegue por B y A. No compila ni enciende VMs detenidas; conserva el vencimiento. |
 | `stop` | Apaga las dos VMs y Cloud SQL, conservando datos. |
 
 El canal `main` se registra en `channels/main.json` del bucket privado de delivery
-solo después de publicar las seis imágenes y los assets de la release. `update`
-lee ese puntero una sola vez y valida el manifiesto: así todas las apps usan una
+solo después de publicar las seis imágenes y los assets de la release. `start` y `update`
+leen ese puntero una sola vez y validan el manifiesto: así todas las apps usan una
 misma release por digest, aunque se publique otra durante la descarga. No mezcla
 tags `latest` de distintos builds. Si una publicación está fallando o en curso,
 se usa la última completa; esperar a que termine el workflow de publicación para
@@ -249,7 +251,7 @@ Las comprobaciones CI sobre PRs no reciben credenciales GCP ni despliegan recurs
 ## Operación habitual desde PowerShell
 
 ```powershell
-# Tomar los tres main, probar, construir, activar SQL y dos VMs, desplegar y generar APK.
+# Activar SQL y dos VMs y desplegar la última release completa publicada.
 gh workflow run demo-vm.yml --repo NexoRuta/NexoRuta --ref main -f operation=start
 
 # Descargar la última release publicada y recrear las apps de una demo activa.

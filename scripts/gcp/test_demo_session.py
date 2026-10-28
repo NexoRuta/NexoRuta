@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch
 
 import demo_session as session
+import delivery
 
 
 class SessionSafetyTests(unittest.TestCase):
@@ -82,7 +83,7 @@ class SessionSafetyTests(unittest.TestCase):
             "GCP_ZONE": "us-central1-a", "GCP_STATE_BUCKET": "demo-state",
         }
         with (
-            patch.dict("os.environ", {"DEMO_RELEASE": "release-" + "a" * 32}),
+            patch.object(delivery, "latest_release", return_value="release-" + "a" * 32),
             patch.object(session, "instance", return_value=None),
             patch.object(session, "write_lease"),
             patch.object(session, "start_database"),
@@ -112,11 +113,11 @@ class SessionSafetyTests(unittest.TestCase):
 
     def test_start_cleanup_also_covers_a_failed_infrastructure_refresh(self):
         events = []
-        def fail_refresh(config):
+        def fail_refresh(config, release):
             events.append("refresh")
             raise RuntimeError("refresh failed")
         with (
-            patch.dict("os.environ", {"DEMO_RELEASE": "release-" + "a" * 32}),
+            patch.object(delivery, "latest_release", return_value="release-" + "a" * 32),
             patch.object(session, "instance", return_value=None),
             patch.object(session, "write_lease"),
             patch.object(session, "start_database", side_effect=lambda config: events.append("database")),

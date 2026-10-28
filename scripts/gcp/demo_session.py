@@ -262,19 +262,19 @@ def run(config):
         print("Application updated without extending the existing four-hour session.")
         publish_endpoints(config, deployed["endpoints"])
         return
-    if not re.fullmatch(r"release-[a-f0-9]{32}", os.environ.get("DEMO_RELEASE", "")):
-        raise ValueError("A tested, published DEMO_RELEASE is required before starting the VM")
+    from delivery import latest_release
+    release = latest_release(config)
     now = dt.datetime.now(dt.timezone.utc).timestamp()
     write_lease(config, now + MAX_SECONDS + 1800, now + 1800)
     try:
         start_database(config)
-        start_session(config)
+        start_session(config, release)
     except Exception:
         stop_after_failure(config)
         raise
 
 
-def start_session(config):
+def start_session(config, release):
     tofu = ("tofu", f"-chdir={INFRA}")
     command(
         *tofu, "init", "-input=false", "-lockfile=readonly",
@@ -310,9 +310,9 @@ def start_session(config):
         deadline = min(deadlines)
         write_lease(config, deadline.timestamp())
         from delivery import deploy
-        deploy(config, os.environ["DEMO_RELEASE"])
+        deploy(config, release)
         message = (
-            f"Both demo VMs running. Common automatic stop: {deadline.isoformat()}.\n\n"
+            f"Both demo VMs running with {release}. Common automatic stop: {deadline.isoformat()}.\n\n"
             "The four hours start when Compute Engine starts the VM, including bootstrap. "
             "HTTPS health and initial database-backed login checks passed.\n"
         )
