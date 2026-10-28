@@ -38,7 +38,7 @@ jobs:
       tag: ${{ steps.snapshot.outputs.tag }}
       commit: ${{ steps.snapshot.outputs.commit }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -73,7 +73,7 @@ jobs:
       INTEGRATION_COMMIT: ${{ needs.integration.outputs.commit }}
       TESTED_CI_PLAN: ${{ needs.verify.outputs.plan }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.integration.outputs.tag }}
           submodules: recursive
@@ -133,7 +133,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.integration.outputs.tag }}
           persist-credentials: false
