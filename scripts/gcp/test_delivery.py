@@ -254,6 +254,14 @@ class DeliveryTests(unittest.TestCase):
                     member = tarfile.TarInfo("src/ZonasCobertura/Data/departamentos-uruguay.geojson")
                     member.size = len(payload)
                     output.addfile(member, io.BytesIO(payload))
+                else:
+                    for name, payload in (
+                        ("src/NexoRuta.Commerce/NexoRuta.Commerce.csproj", b"<Project />"),
+                        ("src/NexoRuta.Commerce/Pages/Inicio.razor", b"@page \"/\""),
+                    ):
+                        member = tarfile.TarInfo(name)
+                        member.size = len(payload)
+                        output.addfile(member, io.BytesIO(payload))
             return data.getvalue()
 
         with tempfile.TemporaryDirectory() as temp:
@@ -262,8 +270,11 @@ class DeliveryTests(unittest.TestCase):
                 delivery.stage_sources(destination)
             canonical = destination / "backend/src/ZonasCobertura/Data/departamentos-uruguay.geojson"
             bundled = destination / "frontend/.build/departamentos-uruguay.geojson"
+            restore_marker = destination / "frontend/.restore/src/NexoRuta.Commerce/__nexoruta_restore_shape.razor"
             self.assertEqual(canonical.read_bytes(), bundled.read_bytes())
             self.assertTrue((destination / "frontend/Dockerfile.deploy").is_file())
+            self.assertTrue(restore_marker.is_file())
+            self.assertTrue((destination / "frontend/src/NexoRuta.Commerce/Pages/Inicio.razor").is_file())
 
     def release_manifest(self):
         release = "release-" + "a" * 32

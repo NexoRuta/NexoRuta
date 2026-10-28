@@ -106,6 +106,7 @@ def stage_sources(destination):
             shutil.rmtree(context / excluded, ignore_errors=True)
         (context / "README.md").unlink(missing_ok=True)
         restore_inputs = context / ".restore"
+        razor_projects = set()
         for path in context.rglob("*"):
             if not path.is_file() or restore_inputs in path.parents:
                 continue
@@ -114,6 +115,14 @@ def stage_sources(destination):
                 target = restore_inputs / path.relative_to(context)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(path, target)
+            if path.suffix == ".razor":
+                project = next((parent for parent in path.parents if any(parent.glob("*.csproj"))), None)
+                if project is not None:
+                    razor_projects.add(project.relative_to(context))
+        for project in razor_projects:
+            marker = restore_inputs / project / "__nexoruta_restore_shape.razor"
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("@* Preserves implicit Razor dependencies during locked restore. *@\n", encoding="utf-8")
         shutil.copyfile(ROOT / "deploy/gcp/Dockerfile", context / "Dockerfile.deploy")
 
     # Docker builds each archived repository in isolation. Package the canonical

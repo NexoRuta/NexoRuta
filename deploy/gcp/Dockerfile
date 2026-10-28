@@ -2,7 +2,8 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0.401 AS build
 ARG PROJECT
 WORKDIR /src
 COPY .restore/ ./
-RUN dotnet restore "$PROJECT" --locked-mode
+RUN dotnet restore "$PROJECT" --locked-mode \
+    && find . -type f -name '__nexoruta_restore_shape.razor' -delete
 COPY . .
 RUN dotnet publish "$PROJECT" -c Release -o /out --no-restore /p:UseAppHost=false
 
