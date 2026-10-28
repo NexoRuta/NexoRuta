@@ -13,11 +13,6 @@ import integration
 ROOT = Path(__file__).resolve().parents[2]
 COMPONENTS = ("backend", "frontend", "mobile")
 SERVICES = ("api", "worker", "admin", "backoffice", "commerce", "tracking")
-DISPATCH_REPOSITORIES = {
-    "NexoRuta/NexoRuta-Backend": "backend",
-    "NexoRuta/NexoRuta-Frontend": "frontend",
-    "NexoRuta/NexoRuta-Mobile": "mobile",
-}
 SHA = re.compile(r"[a-f0-9]{40}\Z")
 
 
@@ -107,30 +102,6 @@ def release_baseline():
             raise ValueError("Latest integration release is missing a complete image manifest")
         return manifest
     return None
-
-
-def validate_dispatch(event, sources):
-    if os.environ.get("GITHUB_EVENT_NAME") != "repository_dispatch":
-        return
-    payload = event.get("client_payload")
-    if not isinstance(payload, dict):
-        raise ValueError("repository_dispatch must include a client_payload")
-    repository, sha = payload.get("repository"), payload.get("sha")
-    component = DISPATCH_REPOSITORIES.get(repository)
-    if component is None or not isinstance(sha, str) or not SHA.fullmatch(sha):
-        raise ValueError("repository_dispatch source is not an allowed main-branch commit")
-    if sources.get(component) != sha:
-        raise ValueError("Resolved source does not match repository_dispatch SHA")
-    checkout = ROOT / component
-    # Prove the notified commit is reachable from that repository's main branch.
-    shallow = git(checkout, "rev-parse", "--is-shallow-repository").stdout.strip() == "true"
-    args = ["fetch", "--no-tags"]
-    if shallow:
-        args.append("--unshallow")
-    args.extend(["origin", "main"])
-    git(checkout, *args)
-    if git(checkout, "merge-base", "--is-ancestor", sha, "FETCH_HEAD", check=False).returncode:
-        raise ValueError("repository_dispatch SHA is not reachable from the component main branch")
 
 
 def make_plan(root_sha, sources, baseline, root_paths, component_paths, android_key, force_full_reason=None):
@@ -235,7 +206,6 @@ def plan():
     root_sha = git(ROOT, "rev-parse", "HEAD").stdout.strip()
     event_path = os.environ.get("GITHUB_EVENT_PATH")
     event = json.loads(Path(event_path).read_text(encoding="utf-8")) if event_path else {}
-    validate_dispatch(event, sources)
 
     baseline = None
     root_base = None

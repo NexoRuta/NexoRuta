@@ -194,7 +194,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "assertion.ref == 'refs/heads/main'",
     "assertion.sub in ['repo:${var.github_repository}:environment:nexoruta-demo', 'repo:${split("/", var.github_repository)[0]}@${var.github_owner_id}/${split("/", var.github_repository)[1]}@${var.github_repository_id}:environment:nexoruta-demo']",
     "assertion.workflow_ref in ['${var.github_repository}/.github/workflows/publish.yml@refs/heads/main', '${var.github_repository}/.github/workflows/vm-controls.yml@refs/heads/main']",
-    "assertion.event_name in ['workflow_dispatch', 'push', 'repository_dispatch']",
+    "assertion.event_name in ['workflow_dispatch', 'push']",
   ])
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"

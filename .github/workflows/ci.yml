@@ -3,23 +3,11 @@ run-name: Integrated CI / ${{ github.event.pull_request.number || github.ref_nam
 
 on:
   pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches: [develop, main]
   schedule:
     - cron: '17 8 * * 1'
   workflow_dispatch:
-  workflow_call:
-    inputs:
-      backend_ref: {type: string, default: ""}
-      frontend_ref: {type: string, default: ""}
-      mobile_ref: {type: string, default: ""}
-    secrets:
-      SUBMODULES_TOKEN: {required: false}
-    outputs:
-      sources:
-        description: Immutable commits tested together
-        value: ${{ jobs.sources.outputs.sources }}
-      plan:
-        description: Fail-closed integrated validation plan
-        value: ${{ jobs.sources.outputs.plan }}
 
 permissions:
   contents: read
@@ -29,6 +17,28 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  source_policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require develop as the source for main
+        if: github.event_name == 'pull_request'
+        env:
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPOSITORY: ${{ github.repository }}
+          BASE_BRANCH: ${{ github.base_ref }}
+        run: |
+          if [[ "$BASE_BRANCH" == main ]]; then
+            if [[ "$PR_HEAD_REPOSITORY" != "$BASE_REPOSITORY" ]]; then
+              echo "Pull requests into main must come from this repository's develop branch." >&2
+              exit 1
+            fi
+            if [[ "$PR_HEAD_REF" != develop ]]; then
+              echo "Pull requests into main must come from develop." >&2
+              exit 1
+            fi
+          fi
+
   infrastructure:
     needs: sources
     if: fromJSON(needs.sources.outputs.plan).infrastructure.run
@@ -56,6 +66,7 @@ jobs:
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -ignore 'unexpected key "queue" for "concurrency" section' .github/workflows/*.yml
 
   sources:
+    needs: source_policy
     runs-on: ubuntu-latest
     # PR code uses a separate environment without deployment credentials.
     environment: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'nexoruta-demo' || 'nexoruta-ci' }}
@@ -71,20 +82,13 @@ jobs:
       - name: Resolve exact source commits
         id: sources
         env:
-          BACKEND_REF: ${{ inputs.backend_ref }}
-          FRONTEND_REF: ${{ inputs.frontend_ref }}
-          MOBILE_REF: ${{ inputs.mobile_ref }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [[ -n "$BACKEND_REF" ]]; then
-            python3 scripts/gcp/delivery.py sources
-          else
-            python3 - <<'PY'
+          python3 - <<'PY'
           import json, pathlib, subprocess
           sources = {repo: subprocess.check_output(['git', '-C', repo, 'rev-parse', 'HEAD'], text=True).strip() for repo in ('backend', 'frontend', 'mobile')}
           pathlib.Path('sources.json').write_text(json.dumps(sources))
           PY
-          fi
           python3 scripts/gcp/ci_plan.py plan
 
   backend:
@@ -361,7 +365,7 @@ jobs:
   result:
     name: Integrated CI / result
     if: always()
-    needs: [infrastructure, sources, backend, backend_integration, frontend, mobile_portable, mobile_android, cloudsql]
+    needs: [source_policy, infrastructure, sources, backend, backend_integration, frontend, mobile_portable, mobile_android, cloudsql]
     runs-on: ubuntu-latest
     steps:
       - name: Require every integrated validation
@@ -372,6 +376,8 @@ jobs:
           python3 - <<'PY'
           import json, os, sys
           results = json.loads(os.environ['RESULTS'])
+          if results['source_policy']['result'] != 'success':
+              raise SystemExit('Pull request source policy failed.')
           plan = json.loads(os.environ['PLAN'])
           if results['sources']['result'] != 'success':
               raise SystemExit('The source snapshot and fail-closed plan did not succeed.')

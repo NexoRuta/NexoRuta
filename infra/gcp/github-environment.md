@@ -99,45 +99,15 @@ JWT/cifrado y las credenciales de firma Android se generan y conservan mediante
 OpenTofu/Secret Manager. No necesitan entradas manuales en GitHub. Tampoco se
 copia la sesión personal de `gcloud` del PC al runner.
 
-## Secrets de los tres repos de aplicaciones
-
-En **cada uno** de `NexoRuta-Backend`, `NexoRuta-Frontend` y `NexoRuta-Mobile`, crear
-también el environment **`nexoruta-demo`**, permitido desde `main`, con este secret:
-
-| Nombre | Valor |
-| --- | --- |
-| `NEXORUTA_INTEGRATION_TOKEN` | Token con acceso al repo madre: `Contents: write` si es fine-grained, o scope `repo` si es OAuth/clásico, para enviar `repository_dispatch`. Preferir uno dedicado. |
-
-Esos jobs solo notifican una publicación de imágenes. No necesitan variables ni
-credenciales de GCP y no inician la VM.
-
-Este secret es necesario para publicar automáticamente al pushear en los repos de
-aplicaciones. Los botones manuales `start`, `update` y `stop` del repo madre pueden
-usarse sin él. La CLI `gh` guarda secrets, pero no crea PATs nuevos: un PAT dedicado
-se genera en GitHub con acceso únicamente a `NexoRuta/NexoRuta` y luego se carga
-en los tres environments. También es posible usar un token OAuth existente con
-scope `repo`, teniendo en cuenta que conserva todos sus permisos originales.
-
-Para cargar el token dedicado con una sola entrada privada en la terminal:
-
-```powershell
-./scripts/gcp/setup-integration-token.ps1
-```
-
-Crear el fine-grained PAT con Resource owner `NexoRuta`, **Only select repositories**
-seleccionando únicamente `NexoRuta/NexoRuta`, `Contents: Read and write` y hasta
-90 días de vigencia. El script pide el valor sin mostrarlo, comprueba el permiso
-de dispatch con un evento de prueba fuera de los tipos de delivery, lo carga en
-los tres environments y verifica su existencia. Usa la sesión administrativa de
-`gh` para guardar secrets; el PAT nuevo no necesita administrar los repos de apps.
-
 ## CI de pull requests
 
 El CI de código de PR usa un environment independiente **`nexoruta-ci`**, sin
 credenciales de despliegue ni secrets de aplicaciones. Si necesita descargar
 submódulos privados, agregar allí únicamente `SUBMODULES_TOKEN` con lectura.
-El CI de `main`, incluyendo el workflow reutilizado por delivery, usa
-`nexoruta-demo`. No se habilita OIDC de GCP en los jobs de pruebas.
+Las ejecuciones manuales o semanales del CI root sobre `main` y el plan/publicación
+automáticos usan `nexoruta-demo` para leer sus variables y el token de submódulos.
+Los jobs de pruebas no reciben permiso OIDC de GCP; solo los jobs de despliegue lo
+solicitan.
 
 ## Configurar desde la terminal
 
@@ -148,6 +118,7 @@ gh variable set GCP_ZONE --repo NexoRuta/NexoRuta --env nexoruta-demo --body sou
 
 # Sin pasar el valor sensible por argumentos: gh solicita el secret.
 gh secret set SUBMODULES_TOKEN --repo NexoRuta/NexoRuta --env nexoruta-demo
+gh secret set SUBMODULES_TOKEN --repo NexoRuta/NexoRuta --env nexoruta-ci
 gh secret set GEOAPIFY_API_KEY --repo NexoRuta/NexoRuta --env nexoruta-demo
 gh secret set SMTP_USERNAME --repo NexoRuta/NexoRuta --env nexoruta-demo
 gh secret set SMTP_PASSWORD --repo NexoRuta/NexoRuta --env nexoruta-demo

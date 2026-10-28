@@ -4,13 +4,13 @@ Fecha: 28/10/2026, America/Montevideo.
 
 ## 1. Resultado de la revisión
 
-Baseline anterior a la aplicación: las pruebas de integración backend ocuparon **13 min 56 s** de una publicación de **21 min 17 s**. Un push principal iniciaba dos validaciones y cada publicación reconstruía seis imágenes sin importar qué cambió. La selección por SHAs, el paralelismo y la reutilización de digests descritos aquí son cambios locales; sus ahorros reales todavía necesitan runs posteriores.
+Baseline anterior a la aplicación: las pruebas de integración backend ocuparon **13 min 56 s** de una publicación de **21 min 17 s**. Un push principal iniciaba dos validaciones y cada publicación reconstruía seis imágenes sin importar qué cambió. La selección por SHAs, el paralelismo y la reutilización de digests ya están implementados; sus ahorros reales todavía necesitan runs posteriores.
 
-La mejora recomendada es eliminar primero las ejecuciones redundantes, ejecutar solo los componentes afectados con una política conservadora de dependencias, y reducir el costo del backend mediante medición y distribución de sus pruebas. Después conviene mejorar las cachés y el empaquetado Docker. Paralelizar las seis imágenes tiene un beneficio acotado: su compilación sumó aproximadamente 2 min 34 s en Cloud Build.
+La implementación elimina el CI posterior al merge, los dispatches desde los submódulos y el push de mobile a develop que repetía su PR. La publicación del root solo planifica y construye lo necesario; los tests siguen en los PRs. Las reglas de `main` exigen PR, check final y una promoción desde `develop`.
 
-La auditoría detectó dos condiciones de calidad: la compilación Android no bloqueaba la publicación integrada y las ramas no exigían checks exitosos. El código local ahora pone Android detrás del resultado integrado y define checks finales estables; los rulesets remotos siguen pendientes de activar tras integrar estos workflows.
+La auditoría también detectó que Android no bloqueaba la publicación integrada y que las ramas no exigían checks exitosos. Android ahora bloquea la integración cuando cambia su input; hay checks finales estables y rulesets activos en los cuatro repositorios.
 
-El análisis inicial describía el estado previo a los cambios. Esta revisión también sigue la aplicación del plan. Los cambios locales están implementados y validados donde se indica; no se publicó nada a GitHub ni se modificaron recursos de GCP. La aplicación de rulesets y la comparación de 20 ejecuciones quedan pendientes de que los workflows lleguen a las ramas por defecto.
+Los cambios están en `develop` del root y en `main`/`develop` de los submódulos. Las tres PRs de submódulos pasaron sus checks y se integraron; la PR integrada del root debe validar el snapshot completo. No se ejecutaron publicaciones ni se modificaron recursos de GCP. La mejora medida en tiempos requiere runs posteriores.
 
 ### Estado de aplicación del plan
 
@@ -18,11 +18,10 @@ El análisis inicial describía el estado previo a los cambios. Esta revisión t
 | --- | --- | --- |
 | Implementado en código | 01, 03, 04, 06–17 | Gate Android exacto/por inputs, planificación conservadora, tres shards backend con verificación de resultados, paralelismo, lockfiles/cachés, manifiesto con digests reutilizados, pruebas OpenAPI reales, TRX y separación de workflows. |
 | Instrumentado; optimización condicionada a mediciones | 05, 18 | Tiempos de fixtures y fases manuales; preparación por VM en paralelo. Las migraciones siguen aisladas y secuenciales. |
-| Pendiente externo | 02, 17 | Crear rulesets para los checks finales y aplicar bootstrap para que Workload Identity Federation autorice `publish.yml` y `vm-controls.yml` antes de usarlos. |
-| Pendiente de validación remota | 06 | La partición por clases usa pesos TRX y cada shard compara sus resultados con el inventario descubierto; falta un run verde en tres runners independientes. |
-| Pendiente de datos de producción | Criterio de 20 ejecuciones | Reportar p50/p95, minutos de runner y aciertos de caché requiere ejecuciones en GitHub después de publicar. |
+| Pendiente de validación remota | Root CI | La PR del root debe confirmar el plan de la combinación y el check final antes de fusionarse. |
+| Pendiente de datos de producción | 05, 06, 08–10, 18 | Reportar tiempos p50/p95, minutos de runner, caché Cloud Build y resultados de ensayos GCP requiere runs equivalentes posteriores. |
 
-Los cambios se verifican localmente antes de integrar. La publicación, activación remota de reglas y operaciones GCP no forman parte de esta ejecución.
+Los submódulos ya pasaron la CI remota de sus PRs. La integración y publicación del root aún no se han ejecutado.
 
 ## 2. Alcance y fuentes de evidencia
 
@@ -47,34 +46,29 @@ Los gitlinks del commit principal y el manifiesto de la última publicación apu
 
 | Archivo | Disparadores | Trabajo principal | Relación con los demás |
 | --- | --- | --- | --- |
-| [Principal: ci.yml](../.github/workflows/ci.yml) | PR y workflow_call | Plan de SHAs, jobs paralelos para backend, frontend, suites portables mobile y Android, infraestructura y compatibilidad SQL | Restaura cada proyecto portable por separado para no exigir el workload Android; reutilizado por publicación |
-| [Principal: publish.yml](../.github/workflows/publish.yml) | Push main y repository_dispatch | CI → tag integrado → imágenes afectadas → manifiesto completo → GitHub prerelease | Cola de publicación; evita duplicar runs idénticos ya completados |
+| [Principal: ci.yml](../.github/workflows/ci.yml) | PR a develop/main, schedule y ejecución manual | Gate de rama, plan de SHAs, jobs paralelos para backend, frontend, mobile portable y Android, infraestructura y compatibilidad SQL | Única validación integrada; el resultado final también comprueba la política develop → main |
+| [Principal: publish.yml](../.github/workflows/publish.yml) | Push main | Plan ligero sobre los gitlinks fijados, imágenes afectadas, manifiesto completo y GitHub prerelease | No vuelve a ejecutar suites; publica únicamente el snapshot aprobado por PR |
 | [Principal: vm-controls.yml](../.github/workflows/vm-controls.yml) | workflow_dispatch | start/update/stop de la demo | Cola independiente; no publica imágenes |
-| [Backend: ci.yml](../backend/.github/workflows/ci.yml) | PR a develop/main | Scripts Python, restore, build y tests .NET; publica TRX | La base PostgreSQL sin uso fue retirada |
-| [Backend: release.yml](../backend/.github/workflows/release.yml) | Push main y manual | Notifica repository_dispatch con el SHA backend | La suite Python queda en Backend CI |
-| [Frontend: ci.yml](../frontend/.github/workflows/ci.yml) | PR a develop/main | GeoJSON de backend main registrado con SHA/hash, restore, build y tests | La CI integrada valida OpenAPI contra la API del snapshot real |
-| [Frontend: release.yml](../frontend/.github/workflows/release.yml) | Push main y manual | Envía repository_dispatch | El verde confirma que se envió el evento |
-| [Mobile: ci.yml](../mobile/.github/workflows/ci.yml) | Push develop, PR a develop/main y manual | Cuatro suites portables, Android Release con R8 preparado y resultado estable | Push main duplicado retirado; el CI integrado conserva el gate Android |
-| [Mobile: release.yml](../mobile/.github/workflows/release.yml) | Push main y manual | Notifica repository_dispatch con el SHA mobile | No declara por sí solo la validación Android |
+| [Backend: ci.yml](../backend/.github/workflows/ci.yml) | PR a develop/main | Gate de rama, scripts Python, restore, build, tests .NET y TRX | Backend CI / result es el check obligatorio de main |
+| [Frontend: ci.yml](../frontend/.github/workflows/ci.yml) | PR a develop/main | Gate de rama, GeoJSON de backend main registrado con SHA/hash, restore, build y tests | La CI integrada valida OpenAPI contra la API del snapshot real |
+| [Mobile: ci.yml](../mobile/.github/workflows/ci.yml) | PR a develop/main y manual | Gate de rama, cuatro suites portables, Android Release con R8 preparado y resultado estable | Sin push a develop ni notify a root; Mobile CI / result es el check obligatorio de main |
 
-Los entrypoints mantienen responsabilidades visibles: CI PR/reusable/manual/periódico, publicación automática y controles manuales. Los tres notify muestran componente y SHA; los checks finales tienen nombres estables.
+Los entrypoints mantienen responsabilidades visibles: CI por PR, publicación automática y controles manuales. Se eliminaron los tres workflows `release.yml` y sus dispatches cruzados: el root publica desde los gitlinks del commit integrado.
 
 ### Flujo automático
 
 ~~~mermaid
 flowchart TD
-    C["Push main de un componente"] --> N["release.yml: repository_dispatch"]
-    R["Push main del principal"] --> D["publish.yml"]
-    R --> I["(sin CI paralelo)"]
-    N --> D
-    D --> V["verify: llama ci.yml"]
-    V --> S["Resolver una combinación de SHAs"]
-    S --> A["backend ∥ frontend ∥ mobile portable ∥ Android"]
-    S --> Q["cloudsql: build API y comprobación SQL"]
-    V --> F["Validación infraestructura y workflows"]
-    A --> T["Tag integrado inmutable"]
-    Q --> T
-    F --> T
+    P["PR a develop/main"] --> I["ci.yml: Integrated CI"]
+    I --> A["backend ∥ frontend ∥ mobile portable ∥ Android"]
+    I --> Q["cloudsql: build API y comprobación SQL"]
+    I --> F["Validación infraestructura y workflows"]
+    A --> M["Integrated CI / result"]
+    Q --> M
+    F --> M
+    M -->|"merge permitido desde develop"| R["Push main"]
+    R --> D["publish.yml: plan ligero"]
+    D --> T["Tag integrado inmutable"]
     T --> B["Cloud Build: imágenes afectadas en dos cadenas"]
     B --> M["Manifiesto completo y promoción del canal"]
     M --> G["GitHub prerelease"]
@@ -154,57 +148,57 @@ Prioridades: P0 = corregir las condiciones de calidad antes de omitir validacion
 
 ### 01 — P0: Android no bloquea la publicación integrada
 
-**Estado de aplicación.** Implementado: el resultado integrado exige Android cuando cambian sus inputs de build; el APK se construye desde el SHA resuelto antes del tag.
+**Estado de aplicación.** Implementado: el resultado integrado exige Android cuando cambian sus inputs de build; el APK se construye desde el SHA resuelto antes del tag. `publish.yml` ya no repite CI después del merge.
 
-**Problema y evidencia histórica.** [Mobile release](../mobile/.github/workflows/release.yml) despacha sin depender de [Mobile CI](../mobile/.github/workflows/ci.yml). El [CI integrado](../.github/workflows/ci.yml) solo ejecuta las pruebas portables. Publicación puede terminar correctamente aunque el código Android no compile.
+**Problema y evidencia histórica.** El antiguo [Mobile release](../mobile/.github/workflows/release.yml) despachaba sin depender de [Mobile CI](../mobile/.github/workflows/ci.yml). El [CI integrado](../.github/workflows/ci.yml) ejecutaba solo pruebas portables. Publicación podía terminar correctamente aunque Android no compilara.
 
-**Cómo afecta.** Un cambio de permisos, XAML, Java o dependencias nativas puede producir una combinación integrada verde y seis imágenes web/backend publicadas sin un APK válido. El notify verde solo confirma el HTTP 204 del dispatch.
+**Cómo afecta.** Un cambio de permisos, XAML, Java o dependencias nativas podía producir una combinación integrada verde y seis imágenes web/backend publicadas sin un APK válido. El notify verde solo confirmaba el HTTP 204 del dispatch.
 
-**Solución.** Definir un único responsable de validar Android para cada SHA mobile que se incorpora.
+**Solución aplicada.** El CI integrado compila Android en el SHA exacto de mobile cuando cambian sus inputs, y `Integrated CI / result` bloquea el merge si esa validación falla. Se eliminó el notify independiente.
 
-**Guía.** En el diseño central recomendado, ejecutar Android en el principal cuando cambia mobile o su toolchain, antes de aprobar el tag/canal. Convertir el job existente mobile en una implementación reutilizable con checkout explícito de repositorio y SHA. Si se mantiene el build en el repo mobile, esperar y verificar su resultado exitoso para ese SHA y workflow autorizado; no aceptar el último run verde de otra revisión. Quitar el push main duplicado cuando el principal ya ejecute esta misma validación.
+**Guía aplicada.** Mantener el gate Android en el CI integrado sobre el SHA fijado por el gitlink. El CI del submódulo mobile sigue validando sus PRs propios, y no se dispara otra vez al hacer push a develop.
 
 **Comprobación.** Introducir deliberadamente un error exclusivo de Android: la publicación debe bloquearse; frontend/backend sin cambios no deben reconstruirse por ese fallo.
 
 ### 02 — P0: las ramas no exigen los checks de CI
 
-**Estado de aplicación.** Checks finales estables implementados en los cuatro repositorios; backend/frontend aceptan PRs de ramas del mismo repo hacia develop y reservan develop → main para promoción. Pendiente externo: activar rulesets después de publicar los workflows, cuando los checks aparezcan en las ramas por defecto.
+**Estado de aplicación.** Los checks finales estables y el gate que reserva `main` a PRs desde `develop` están implementados. Los rulesets de `main` se aplican en GitHub para exigir PR y los checks correspondientes, sin bypass.
 
 **Problema y evidencia.** La API consultada devuelve ausencia de protección clásica para main en los cuatro repositorios. El principal no tiene rulesets; backend/frontend/mobile tienen reglas activas para develop y main que solo impiden borrado y non-fast-forward. No exigen PR ni checks exitosos.
 
 **Cómo afecta.** Es posible incorporar cambios sin esperar el CI. Una estrategia de reutilización de resultados de componentes sería insegura si supone que main siempre está validado.
 
-**Solución.** Requerir un check final estable y PR en las ramas de integración, según el circuito de trabajo acordado.
+**Solución.** Requerir un PR y un check final estable en cada `main`; el gate permite forks a `develop` y exige que un PR a `main` venga de `develop` del mismo repositorio.
 
-**Guía.** Los jobs finales tienen nombres únicos (`Backend CI / result`, `Frontend CI / result`, `Mobile CI / result`, `Integrated CI / result`) y backend/frontend aceptan validación previa hacia develop. En Settings → Rules → Rulesets, exigir esos checks y PR; revisar permisos de bypass. Trasladar la política de ramas a rulesets, en vez de fallar después de iniciar el runner.
+**Guía aplicada.** Los jobs finales tienen nombres únicos (`Backend CI / result`, `Frontend CI / result`, `Mobile CI / result`, `Integrated CI / result`). Los rulesets exigen PR, checks estrictos de GitHub Actions y no permiten bypass. El gate de CI rechaza cualquier PR a `main` cuyo origen no sea la rama `develop` local al repositorio.
 
-**Comprobación.** Un check fallido debe impedir el merge. Un cambio documental clasificado correctamente debe terminar con el check final exitoso, sin quedar pendiente. [Referencia de protección y nombres de checks](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
+**Comprobación.** Confirmar en GitHub que un push directo a `main` se rechaza, un PR desde otra rama a `main` falla por política y un check fallido impide el merge. [Referencia de protección y nombres de checks](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
 
 ### 03 — P1: un push al principal ejecuta dos CI
 
-**Estado de aplicación.** Implementado: ci.yml ya no escucha push main; publish.yml es el único disparador de CI de publicación.
+**Estado de aplicación.** Implementado: `ci.yml` solo valida PRs, schedule y ejecución manual; después del merge `publish.yml` hace planificación ligera y publicación, sin reejecutar pruebas.
 
 **Problema y evidencia histórica.** [ci.yml](../.github/workflows/ci.yml) escuchaba push main; [publish.yml](../.github/workflows/publish.yml) escucha el mismo push y vuelve a llamar a ci.yml en verify. La pareja de runs 40625541965/40625541980 confirma la duplicación.
 
 **Cómo afecta.** Repite infraestructura, builds, bases y suites; consume runners y puede alargar colas. Cancelar a mano el run extra no recupera lo ya consumido.
 
-**Solución.** Conservar PR + workflow_call en ci.yml y dejar que publicación sea el único punto de entrada automático en main.
+**Solución aplicada.** Eliminar la llamada de `publish.yml` a CI. El resultado obligatorio de la PR es la validación; `publish.yml` consume el snapshot fijado por los gitlinks y publica solo imágenes afectadas.
 
-**Guía.** Retirar únicamente el trigger push main de ci.yml. Mantener verify como requisito de integración/publicación. Revisar los checks requeridos para PR antes de renombrarlos. Documentar que PR valida la combinación propuesta y main valida/publica su combinación resuelta.
+**Guía aplicada.** `ci.yml` se dispara por PR y deja un único check estable. `publish.yml` no invoca pruebas. El ruleset impide que el push main ocurra fuera de una PR desde `develop`.
 
-**Comprobación.** Un push main crea una sola familia de jobs de validación. Un PR sigue validándose y un fallo de verify impide publicar. No esperar una reducción del 50% del tiempo individual: gran parte de la duplicación corría en paralelo.
+**Comprobación.** Una PR ejecuta CI; el merge crea una ejecución de publicación sin suites. El siguiente run de GitHub confirmará el recorrido completo con los cambios ya publicados.
 
 ### 04 — P1: no se seleccionan componentes ni imágenes por cambios
 
 **Estado de aplicación.** Implementado: el plan fail-closed clasifica los SHAs y devuelve suites/imágenes afectadas; baseline dudoso selecciona todo.
 
-**Problema y evidencia histórica.** El flujo anterior ejecutaba siempre los tres componentes y construía siempre los seis servicios. El clasificador actual valida repositorio/SHA del dispatch y selecciona componentes e imágenes a partir de diffs y del último manifiesto completo.
+**Problema y evidencia histórica.** El flujo anterior ejecutaba siempre los tres componentes y construía siempre los seis servicios. El clasificador actual selecciona componentes e imágenes a partir de los gitlinks del commit principal, el diff y el último manifiesto completo.
 
 **Cómo afecta.** Un cambio solo de mobile o frontend vuelve a pagar los 9–14 minutos del backend. Un cambio de mobile genera seis imágenes que no contienen la app móvil.
 
 **Solución.** Añadir un plan de ejecución calculado sobre SHAs completos y dependencias reales; conservar resultados y digests de componentes que no cambiaron.
 
-**Guía.** Resolver los tres SHAs una sola vez. Compararlos con el último manifiesto exitoso y comparar también sus inputs de infraestructura/toolchain. Para cambios del principal, leer sus gitlinks: un submódulo cambiado aparece como backend, frontend o mobile, no como todos sus archivos internos. Para dispatch, validar la allowlist de repositorios y el SHA; calcular el diff dentro de ese repositorio. Ante baseline ausente, historia insuficiente o clasificación incierta, ejecutar todo. Aplicar la matriz de la sección 6.
+**Guía.** Resolver los tres SHAs una sola vez desde los gitlinks. Compararlos con el último manifiesto exitoso y con los inputs de infraestructura/toolchain. Si falta baseline, historia o certeza en la clasificación, ejecutar todo. Aplicar la matriz de la sección 6.
 
 La salida sources debe pasar de [jobs.applications.outputs](../.github/workflows/ci.yml) a jobs.sources.outputs antes de permitir omitir applications. El manifiesto debe seguir conteniendo seis digests válidos; reutilizar los anteriores donde no haya cambios, con su procedencia.
 
@@ -310,19 +304,19 @@ No trasladar bin/obj desde un runner de PR hacia una imagen privilegiada sin pro
 
 **Comprobación.** El ID de build queda disponible para seguimiento y los tests locales verifican registro/cancelación; falta ensayar cancelación real en GCP. El CAS sigue impidiendo promover un manifiesto incompleto. Las colas y cancelación de PR siguen sujetas a verificación posterior en GitHub. [Semántica vigente de concurrency y queue](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency).
 
-### 12 — P1: distintos eventos pueden publicar la misma combinación
+### 12 — P1: los dispatches de submódulos repetían el flujo integrado
 
-**Estado de aplicación.** Implementado para eventos serializados: después de cada publicación la planificación vuelve a comparar contra el manifiesto completo y omite el mismo snapshot; un fallo parcial no aporta evidencia.
+**Estado de aplicación.** Implementado: los submódulos ya no disparan `repository_dispatch`; la publicación tiene un único punto de entrada, el push a main del root. La planificación ligera omite una combinación ya publicada.
 
-**Problema y evidencia histórica.** Cada componente enviaba repository_dispatch y el principal publicaba con su propio push. Cada run genera un tag y release nuevos, aunque al resolver main obtenga los mismos SHAs que otro evento.
+**Problema y evidencia histórica.** Cada componente enviaba `repository_dispatch` y el root publicaba también con su propio push. Si se integraban varios componentes juntos, se iniciaban varias ejecuciones para snapshots iguales.
 
-**Cómo afecta.** Integrar varios componentes o actualizar gitlinks cerca de sus merges puede repetir toda la validación y las seis imágenes. El candado de concurrencia serializa trabajo; no deduplica combinaciones.
+**Cómo afecta.** Se repetían planificación, validación y publicación de imágenes, aumentando la cola de Actions y Cloud Build.
 
-**Solución.** Identificar la combinación y sus inputs de pipeline antes del trabajo caro.
+**Solución aplicada.** Retirar los workflows `release.yml` de los submódulos y las rutas de dispatch. `publish.yml` usa solo los gitlinks aprobados en la PR del root y no ejecuta pruebas de nuevo.
 
-**Guía.** Calcular una huella de root SHA, los tres SHAs y la versión/configuración efectiva del pipeline. Bajo una exclusión breve, consultar si esa combinación ya tiene una publicación completa exitosa o está procesándose. Si ya existe, enlazarla; si está activa, evitar iniciar otra validación equivalente. Un run fallido o parcial nunca sirve como resultado reutilizable. Para eventos atrasados, decidir y documentar si se procesa el SHA notificado o si se agrupan cambios resolviendo los últimos main; el comportamiento actual es el segundo.
+**Guía aplicada.** Mantener el plan y la comprobación del manifiesto en `ci_plan.py`; el flujo de publicación se activa una vez al actualizar root `main`. Los pushes de submódulos no publican por sí mismos.
 
-**Comprobación.** Dos notificaciones de la misma combinación producen una publicación. Cambiar un SHA o un input de build obliga a revalidar. Mantener el control CAS y publication_order del canal.
+**Comprobación.** Un merge de submódulo no inicia una publicación; el PR que actualiza su gitlink en root valida la combinación y el merge a root `main` inicia una sola publicación.
 
 ### 13 — P1: la integración no conecta todos los inputs de productor y consumidor
 
@@ -380,15 +374,15 @@ No trasladar bin/obj desde un runner de PR hacia una imagen privilegiada sin pro
 
 ### 17 — P2: responsabilidades, convenciones y lint están dispersos
 
-**Estado de aplicación.** Implementado: entrypoints separados, nombres de notify explícitos, actionlint en todos los repos, Dependabot para Actions/NuGet y condición OIDC de bootstrap limitada a `publish.yml`/`vm-controls.yml`. Pendiente aplicar esa condición al provider de GCP antes de ejecutar los nuevos workflows con credenciales.
+**Estado de aplicación.** Implementado: entrypoints separados, actionlint en los cuatro repositorios, Dependabot apunta a `develop` y agrupa actualizaciones compatibles; la condición OIDC de bootstrap permite solo `publish.yml`/`vm-controls.yml`.
 
-**Problema y evidencia histórica.** Un solo workflow mezclaba publish y controles manuales, los notify tenían nombres ambiguos y faltaba lint/dependabot uniforme. Ahora publish y vm-controls están separados, los notify declaran componente/SHA, actionlint corre en los cuatro repositorios y Dependabot revisa las acciones/dependencias.
+**Problema y evidencia histórica.** Un solo workflow mezclaba publish y controles manuales; no había lint ni política uniforme de Dependabot. Ahora `publish.yml` y `vm-controls.yml` están separados, actionlint corre en los cuatro repositorios y Dependabot dirige cambios a `develop`.
 
 **Cómo afecta.** Es más difícil saber qué publica un verde, mantener flags iguales y detectar errores YAML antes del paso caro.
 
 **Solución.** Separar por responsabilidad y reutilizar únicamente lo que deba cambiar junto.
 
-**Guía.** Mantener ci.yml para validación reusable/PR, publish.yml para publicación automática y vm-controls.yml para start/update/stop. Renombrar el notify como Notificar integración y mostrar un run-name con componente/SHA/operación. Extraer una implementación común de jobs .NET solo si evita divergencia real; no crear una acción por cada comando de dos líneas. En reusable workflows entre repositorios, fijar la revisión del workflow y pasar repository/ref al checkout: el checkout predeterminado puede ser el repositorio llamador. Fijar acciones por SHA con comentario de versión y actualizaciones automatizadas revisables. Ejecutar actionlint en los cuatro repositorios, con versión/caché de herramienta controlada.
+**Guía aplicada.** Mantener `ci.yml` para PRs y `publish.yml` para publicar automáticamente; `vm-controls.yml` conserva start/update/stop. Fijar acciones por SHA con comentario de versión y automatizar actualizaciones agrupadas. Ejecutar actionlint en cada repositorio. No hace falta un workflow reusable entre repositorios porque la publicación ya no vuelve a llamar al CI de los submódulos.
 
 **Comprobación.** Una persona puede seguir el flujo desde el trigger hasta el artefacto leyendo los entrypoints. Una modificación inválida del workflow mobile falla en su CI antes de compilar Android. [Reutilización](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows), [seguridad y fijación de acciones](https://docs.github.com/en/actions/reference/security/secure-use).
 
@@ -434,20 +428,20 @@ Las filas son acumulativas: un PR que cambia backend y mobile ejecuta la unión.
 
 1. Crear un único plan con root SHA, sources, baseline, componentes afectados, motivo de cada decisión e imágenes a construir/reutilizar.
 2. Para PR del principal, comparar merge-base con la revisión propuesta e inspeccionar gitlinks. Para publicación, comparar con el manifiesto exitoso previo y resolver los main una vez.
-3. Para dispatch, aceptar solo los tres repositorios conocidos y SHAs válidos de su main autorizado. No interpolar el payload directamente en shell ni permitir ejecutar workflows de un fork con secretos.
+3. Para la publicación, tomar únicamente los SHAs fijados por los gitlinks del commit root; no aceptar eventos externos que sustituyan el snapshot.
 4. Descargar los commits necesarios para comparar; si fetch-depth:1 no alcanza, profundizar específicamente. No interpretar un diff fallido como ausencia de cambios.
 5. Mantener reglas explícitas para archivos compartidos y contratos. El plan fallido o sin baseline debe producir ejecución completa o fallo, nunca un skip silencioso.
 6. Los jobs leen ese plan y un check final verifica que cada validación requerida tuvo éxito. Si un job requerido aparece skipped, canceled o sin resultado, el check falla. Un job opcional omitido debe tener motivo explícito.
 7. Antes de publicar, exigir tests vigentes para todos los componentes del snapshot, ya sean ejecutados ahora o procedentes de un resultado confiable reutilizado. La clave debe incluir fuente, toolchain, workflow y dependencias externas relevantes.
 
-Los filtros de evento paths pueden servir para repositorios aislados, pero no resuelven por sí solos los dispatch entre repositorios ni los gitlinks. Para checks obligatorios conviene que el workflow de planificación siempre se ejecute y decida sus jobs; omitir por completo el workflow puede dejar un check pendiente. [Filtros de GitHub Actions](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore).
+Los filtros de evento paths pueden servir para repositorios aislados, pero no resuelven por sí solos la dependencia entre submódulos y gitlinks. Para checks obligatorios conviene que el workflow de planificación siempre se ejecute y decida sus jobs; omitir por completo el workflow puede dejar un check pendiente. [Filtros de GitHub Actions](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore).
 
 ### Qué repetir y qué reutilizar
 
 | Trabajo | Decisión |
 | --- | --- |
 | CI directo y CI reusable del mismo push principal/snapshot | Eliminar el duplicado |
-| Mismo snapshot notificado por dos eventos | Deduplicar |
+| Push de un submódulo y push de root | Submódulos no notifican; publicar desde el merge del root |
 | PR probado y merge posterior | La segunda prueba puede ser necesaria: el árbol de merge puede diferir |
 | Componente sin cambios entre publicaciones | Reutilizar evidencia confiable del SHA exacto y sus inputs |
 | Caché NuGet | Reutilizar paquetes; ejecutar restore y pruebas cuando correspondan |
@@ -455,15 +449,15 @@ Los filtros de evento paths pueden servir para repositorios aislados, pero no re
 | Build API de cloudsql frente al de backend | Duplicado técnico pequeño y paralelo. Reusar artefacto solo si no obliga a esperar toda la suite de 14 minutos |
 | Build de CI frente a publish Docker | Hay trabajo repetido, pero también otra frontera de empaquetado. Optimizar con caché o artefactos con procedencia; no borrar esa validación sin reemplazo |
 | Cuatro suites portables mobile | Son proyectos diferentes con cobertura distinta; no eliminar una por compartir dependencias |
-| Scripts notify de unas veinte líneas en tres repositorios | Boilerplate pequeño; no justifica por sí solo un servicio o framework de sincronización |
+| Workflows de notificación duplicados en submódulos | Eliminados; la publicación usa el snapshot del root |
 
 No se recomienda comenzar con un sistema que decide éxito a partir de “solo se modificaron estos métodos”. Para este proyecto, primero rinde más evitar backend cuando no está afectado y distribuirlo correctamente cuando sí debe ejecutarse.
 
-## 7. Flujo implementado y pendientes
+## 7. Flujo implementado
 
 ~~~mermaid
 flowchart TD
-    E["PR o evento de publicación"] --> P["Resolver snapshot y plan de cambios"]
+    E["PR hacia develop/main"] --> P["Resolver snapshot y plan de cambios"]
     P --> I["Infra/SQL cuando corresponda"]
     P --> U["Backend rápido"]
     P --> B["Backend: unitarias + arquitectura + integración"]
@@ -474,8 +468,8 @@ flowchart TD
     B --> Q
     F --> Q
     M --> Q
-    Q --> A{"Publicación autorizada desde main"}
-    A -->|sí| D["Tag con SHAs aprobados"]
+    Q --> A{"PR válida desde develop hacia main"}
+    A -->|merge| D["Push main: publish.yml planifica sin correr tests"]
     D --> C["Construir solo imágenes afectadas con caché"]
     C --> S["Verificación de manifiesto y bundle"]
     S --> R["Manifiesto completo: nuevos + reutilizados"]
@@ -502,28 +496,26 @@ Los ahorros de las muestras históricas siguen siendo estimaciones; aún no hay 
 
 Objetivo de evaluación: que un cambio documental no ejecute suites ni imágenes innecesarias; que uno mobile/frontend aislado no pague toda la integración backend; y que un cambio backend siga validándose completo, con menor duración medida. Para backend completo, una meta piloto de validación de 6–9 minutos puede usarse para evaluar grupos/fixtures; **no es una predicción ni un compromiso**, y no incluye publicación o arranque manual.
 
-Siguiente secuencia después de integrar:
+Siguientes optimizaciones después de integrar:
 
-1. Aplicar y revisar la actualización de `infra/gcp/bootstrap` que autoriza los paths nuevos de workflow en Workload Identity Federation.
-2. Activar los rulesets con los checks finales listados en el hallazgo 02.
-3. Recoger TRX y métricas de caché durante al menos 20 ejecuciones equivalentes.
-4. Confirmar que los tres shards pasan y comparar duración total/minutos agregados de runner con el baseline.
-5. Comparar la preparación PostgreSQL antes de considerar una base plantilla.
-6. Ensayar start frío y update caliente en entorno descartable; comprobar el paralelismo de prepare sin tocar esquema ni LB en paralelo.
-7. Medir builds Cloud Build fríos y repetidos antes de ampliar cadenas o cambiar la caché.
+1. Recoger TRX y métricas de caché durante al menos 20 ejecuciones equivalentes.
+2. Confirmar que los tres shards pasan y comparar duración total/minutos agregados de runner con el baseline.
+3. Comparar la preparación PostgreSQL antes de considerar una base plantilla.
+4. Ensayar start frío y update caliente en entorno descartable; comprobar el paralelismo de prepare sin tocar esquema ni LB en paralelo.
+5. Medir builds Cloud Build fríos y repetidos antes de ampliar cadenas o cambiar la caché.
 
-No activar las reglas de ramas ni las optimizaciones restantes de datos/performance antes de contar con los checks y evidencia que se describen arriba.
+Las reglas de rama ya están aplicadas; las mediciones y los ensayos GCP siguen pendientes.
 
 El workflow manual y el schedule semanal ejecutan todas las validaciones. Si un run selectivo omite un input que la ejecución completa detecta, corregir el clasificador e invalidar evidencia de esa versión.
 
 ## 9. Criterios de cierre
 
-- [x] Un push principal inicia una sola validación integrada.
+- [x] Un PR ejecuta la validación integrada una vez; el merge a main publica sin volver a ejecutar suites.
 - [x] Los eventos idénticos se vuelven a planificar después de la publicación completa y se omiten si el snapshot/inputs ya están verificados.
 - [x] Todo skip tiene motivo y el check final falla si falta una validación requerida.
 - [x] Contratos, persistencia, toolchain y cambios de inputs compartidos invalidan sus suites consumidoras.
 - [x] Android se compila desde el SHA resuelto cuando cambian sus inputs; un digest de inputs idéntico puede reutilizarse para cambios solo de tests/docs.
-- [ ] Los rulesets impiden merge con checks fallidos; falta activarlos en GitHub después de integrar los workflows.
+- [x] Los rulesets impiden push directo a `main` y exigen el check final estable.
 - [ ] Un run de la matriz confirma en GitHub la cobertura ejecutada de los tres shards y registra sus tiempos; el host local no soportó la ejecución concurrente por su límite de inotify.
 - [x] Cachés NuGet/Docker ausentes afectan tiempo, no resultado; restore/build es reproducible por lockfile.
 - [x] Las imágenes sin cambios conservan digest/procedencia y el manifiesto publicado está completo.

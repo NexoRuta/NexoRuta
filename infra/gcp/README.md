@@ -189,12 +189,11 @@ No se suben la keystore ni su contraseña como artifacts.
 
 ## CI/CD entre los cuatro repositorios
 
-Las fuentes de demo se seleccionan una vez desde los `main` de backend, frontend
-y mobile. CI prueba esos SHAs y, si pasa, se crea un commit del madre con los
-gitlinks actualizados y el tag `integration-<run-id>-<intento>`. Cloud Build hace
-checkout de ese tag, sin volver a resolver ramas. La release registra el tag,
-los SHAs, build ID, checksum del bundle e imágenes fijadas por digest. El tag
-conserva el snapshot sin modificar las ramas del madre. No se construye código en la VM.
+El root fija por gitlink los SHAs de backend, frontend y mobile. La PR del root
+prueba esa combinación; después del merge, `publish.yml` planifica imágenes desde
+los mismos gitlinks sin volver a ejecutar tests. Cloud Build hace checkout del tag
+integrado. La release registra el tag, los SHAs, build ID, checksum del bundle e
+imágenes fijadas por digest. No se construye código en la VM.
 
 `.github/workflows/ci.yml` valida OpenTofu, workflows, Compose y scripts; compila y
 prueba backend/frontend y las cuatro capas portables móviles. También ejecuta la
@@ -202,28 +201,14 @@ cadena de migraciones contra PostGIS con un administrador **sin superusuario**,
 para detectar supuestos incompatibles con Cloud SQL antes del despliegue. Ese
 escenario aproxima sus permisos y no sustituye probar el servicio administrado.
 
-Los workflows `release.yml` de backend/frontend/mobile notifican al repo madre en
-pushes a `main`. Reemplazan el despliegue anterior por SSH a una VPS ajena
-a esta infraestructura. Requieren un token dedicado con permiso para enviar
-`repository_dispatch` al repo madre:
+Si los submódulos son privados, configurar `SUBMODULES_TOKEN` de solo lectura
+sobre los tres repos en los environments `nexoruta-demo` y `nexoruta-ci` del repo madre. Ver
+[lista de configuración](github-environment.md). El `GITHUB_TOKEN` de un repo no
+obtiene acceso a otros repos privados por sí solo.
 
-```powershell
-# gh solicita el valor de forma interactiva; no poner el token en argumentos.
-gh secret set NEXORUTA_INTEGRATION_TOKEN --repo NexoRuta/NexoRuta-Backend --env nexoruta-demo
-gh secret set NEXORUTA_INTEGRATION_TOKEN --repo NexoRuta/NexoRuta-Frontend --env nexoruta-demo
-gh secret set NEXORUTA_INTEGRATION_TOKEN --repo NexoRuta/NexoRuta-Mobile --env nexoruta-demo
-```
-
-El token debe tener acceso al repo madre y el permiso requerido por GitHub para
-repository dispatch (Contents: write). Si los submódulos son privados, configurar
-además `SUBMODULES_TOKEN` de solo lectura sobre los tres repos en el environment
-`nexoruta-demo` del repo madre. Crear ese environment también en cada componente
-para su token de notificación. Ver [lista de configuración](github-environment.md).
-El `GITHUB_TOKEN` de un repo no obtiene acceso a otros repos privados por sí solo.
-Los cambios deben publicarse en **cada repo**, y los workflows del madre en `main`.
-
-Un push a `main` prueba y publica una release nueva. **No inicia la VM ni actualiza
-una demo activa.** Iniciar, actualizar y apagar requieren `workflow_dispatch`;
+Las PRs a `develop` o `main` ejecutan el CI antes de integrar. Solo se aceptan PRs
+de `develop` a `main`; su merge dispara la publicación, sin repetir las pruebas.
+**No inicia la VM ni actualiza una demo activa.** Iniciar, actualizar y apagar requieren `workflow_dispatch`;
 el script también rechaza operaciones de VM originadas en eventos automáticos.
 
 En GitHub: **Actions → NexoRuta - publish images / manual VM controls → Run workflow**,
