@@ -220,7 +220,7 @@ jobs:
         run: |
           nohup dotnet bin/Release/net10.0/NexoRuta.Api.dll > "$RUNNER_TEMP/openapi-api.log" 2>&1 &
           echo "$!" > "$RUNNER_TEMP/openapi-api.pid"
-          for attempt in {1..40}; do
+          for ((attempt=0; attempt<40; attempt++)); do
             if curl --fail --silent http://127.0.0.1:58080/openapi/v1.json -o /dev/null; then
               exit 0
             fi
@@ -291,7 +291,10 @@ jobs:
           cache: true
           cache-dependency-path: mobile/**/packages*.lock.json
       - name: Restore mobile portable tests
-        run: dotnet restore mobile/NexoRuta.sln --locked-mode
+        run: |
+          for layer in Core Api Storage Application; do
+            dotnet restore "mobile/tests/NexoRuta.Mobile.$layer.Tests" --locked-mode
+          done
       - name: Mobile portable tests
         run: |
           for layer in Core Api Storage Application; do

@@ -47,7 +47,7 @@ Los gitlinks del commit principal y el manifiesto de la última publicación apu
 
 | Archivo | Disparadores | Trabajo principal | Relación con los demás |
 | --- | --- | --- | --- |
-| [Principal: ci.yml](../.github/workflows/ci.yml) | PR y workflow_call | Plan de SHAs, jobs paralelos para backend, frontend, mobile y Android, infraestructura y compatibilidad SQL | Reutilizado por publicación; el push a main no lo ejecuta por separado |
+| [Principal: ci.yml](../.github/workflows/ci.yml) | PR y workflow_call | Plan de SHAs, jobs paralelos para backend, frontend, suites portables mobile y Android, infraestructura y compatibilidad SQL | Restaura cada proyecto portable por separado para no exigir el workload Android; reutilizado por publicación |
 | [Principal: publish.yml](../.github/workflows/publish.yml) | Push main y repository_dispatch | CI → tag integrado → imágenes afectadas → manifiesto completo → GitHub prerelease | Cola de publicación; evita duplicar runs idénticos ya completados |
 | [Principal: vm-controls.yml](../.github/workflows/vm-controls.yml) | workflow_dispatch | start/update/stop de la demo | Cola independiente; no publica imágenes |
 | [Backend: ci.yml](../backend/.github/workflows/ci.yml) | PR a develop/main | Scripts Python, restore, build y tests .NET; publica TRX | La base PostgreSQL sin uso fue retirada |
