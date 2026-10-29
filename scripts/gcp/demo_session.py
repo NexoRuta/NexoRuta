@@ -63,7 +63,7 @@ def configuration():
     return values
 
 
-def command(*args, capture=False):
+def command(*args, capture=False, timeout=None):
     if ACTIVE_CONTROL_LOCK is not None:
         ACTIVE_CONTROL_LOCK.check()
     # Resolve .cmd wrappers on Windows as well as native Linux executables.
@@ -71,7 +71,7 @@ def command(*args, capture=False):
     if not executable:
         raise RuntimeError(f"Install {args[0]} and refresh the terminal PATH first.")
     result = subprocess.run(
-        [executable, *args[1:]], check=True, text=True, capture_output=capture,
+        [executable, *args[1:]], check=True, text=True, capture_output=capture, timeout=timeout,
     )
     return result.stdout if capture else None
 

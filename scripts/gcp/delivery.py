@@ -398,6 +398,17 @@ def remote_stage_error(output, node, operation):
     return f"Node {node} stage {operation} failed without a structured report"
 
 
+def wait_for_load_balancer_health(node, deadline, health):
+    until = time.monotonic() + 300
+    while time.monotonic() < until and time.time() < deadline:
+        if health(node):
+            return
+        time.sleep(min(5, max(0, until - time.monotonic())))
+    if time.time() >= deadline:
+        raise RuntimeError("Session expired while waiting for load balancer health")
+    raise RuntimeError(f"Node {node['NODE_ID']} was not admitted by the load balancer")
+
+
 def deploy(config, release):
     if not re.fullmatch(r"release-[a-f0-9]{32}", release):
         raise ValueError("Invalid release identifier")
@@ -489,7 +500,7 @@ def deploy(config, release):
             services += ("mail",)
         def service_healthy(service):
             output = session.command("gcloud", "compute", "backend-services", "get-health", f"nexoruta-demo-{service}",
-                "--global", f"--project={project}", "--format=json", capture=True)
+                "--global", f"--project={project}", "--format=json", capture=True, timeout=15)
             states = [status for backend in json.loads(output) for status in backend.get("status", {}).get("healthStatus", [])
                       if status.get("instance", "").endswith("/" + node["VM_NAME"])]
             return bool(states) and all(state.get("healthState") == "HEALTHY" for state in states)
@@ -521,23 +532,12 @@ def deploy(config, release):
         measure("load_balancer_admit", lambda: session.gcloud(
             node, "compute", "instance-groups", "unmanaged", "add-instances", group,
             f"--instances={node['VM_NAME']}"), node=node["NODE_ID"])
-        healthy = False
-        def await_load_balancer_health():
-            nonlocal healthy
-            for attempt in range(60):
-                if health(node):
-                    healthy = True
-                    break
-                if time.time() >= deadline:
-                    break
-                time.sleep(5)
-        measure("load_balancer_health", await_load_balancer_health, node=node["NODE_ID"])
-        if not healthy:
+        try:
+            measure("load_balancer_health", lambda: wait_for_load_balancer_health(node, deadline, health), node=node["NODE_ID"])
+        except Exception:
             session.gcloud(node, "compute", "instance-groups", "unmanaged", "remove-instances", group,
                 f"--instances={node['VM_NAME']}")
-            if time.time() >= deadline:
-                raise RuntimeError("Session expired while waiting for load balancer health")
-            raise RuntimeError(f"Node {node['NODE_ID']} was not admitted by the load balancer")
+            raise
     result = stage(inventory[0], "verify")
     print(json.dumps(result))
     return result
