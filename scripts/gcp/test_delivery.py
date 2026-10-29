@@ -20,6 +20,14 @@ class DeliveryTests(unittest.TestCase):
         environment.start()
         self.addCleanup(environment.stop)
 
+    def test_load_balancer_health_wait_has_wall_clock_limit(self):
+        with (patch.object(delivery.time, "monotonic", side_effect=[0, 0, 0, 301]),
+              patch.object(delivery.time, "time", return_value=1000),
+              patch.object(delivery.time, "sleep") as sleep):
+            with self.assertRaisesRegex(RuntimeError, "not admitted"):
+                delivery.wait_for_load_balancer_health({"NODE_ID": "a"}, 2000, lambda node: False)
+        sleep.assert_called_once_with(5)
+
     def test_release_extraction_rejects_path_traversal_and_links(self):
         for name, kind in (("../outside", tarfile.REGTYPE), ("link", tarfile.SYMTYPE)):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temp:
@@ -155,7 +163,7 @@ class DeliveryTests(unittest.TestCase):
                 return ""
             raise AssertionError(args)
 
-        def command(*args, capture=False):
+        def command(*args, capture=False, timeout=None):
             if args[1:3] == ("storage", "cat"):
                 return json.dumps({"expires_at": 2000})
             if args[1:3] == ("sql", "backups"):
