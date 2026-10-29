@@ -19,9 +19,9 @@ resource "google_sql_database_instance" "demo" {
   deletion_protection = true
   settings {
     edition                     = "ENTERPRISE"
-    tier                        = "db-custom-2-8192"
+    tier                        = "db-g1-small"
     availability_type           = "ZONAL"
-    activation_policy           = var.running ? "ALWAYS" : "NEVER"
+    activation_policy           = "ALWAYS"
     disk_type                   = "PD_SSD"
     disk_size                   = 20
     disk_autoresize             = true
@@ -33,15 +33,8 @@ resource "google_sql_database_instance" "demo" {
       ssl_mode        = "ENCRYPTED_ONLY"
     }
     backup_configuration {
-      enabled                        = true
-      point_in_time_recovery_enabled = true
-      start_time                     = "06:00"
-      location                       = local.region
-      transaction_log_retention_days = 3
-      backup_retention_settings {
-        retained_backups = 7
-        retention_unit   = "COUNT"
-      }
+      enabled                        = false
+      point_in_time_recovery_enabled = false
     }
     maintenance_window {
       day          = 7
