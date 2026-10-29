@@ -103,7 +103,7 @@ Las credenciales del archivo Compose son públicas y no deben reutilizarse fuera
 
 Admin is available at `http://localhost:5104`. The API maps the ignored `.env` keys `NEXORUTA_ADMIN_MAIL` and `NEXORUTA_ADMIN_PASSWORD` to `PlatformInitialization__Email/Password`. Only `NEXORUTA_PLATFORM_BOOTSTRAP=true` enables platform initialization; it defaults to false and is independent of demonstration data. Keep habitual `NEXORUTA_APPLY_MIGRATIONS=false` and `NEXORUTA_SEED_DATA=false`.
 
-Apply reviewed migrations explicitly to the confirmed local Compose PostgreSQL with the old API and workers stopped; then recreate them together from the same checkout. Do not delete volumes or reset data. API startup creates the account atomically, or validates an existing account without replacing its password. No manual `platform-admin create` is required in this configured local flow. See the [backend procedure](backend/docs/workflow/platform-administration.md).
+Apply reviewed migrations explicitly to the confirmed local Compose PostgreSQL with the old API and workers stopped; then recreate them together from the same checkout. Do not delete volumes or reset data. The configured `local-bootstrap` command creates the account atomically and synchronizes an existing matching platform account to the configured password. No manual `platform-admin create` is required in this configured local flow. See the [backend procedure](backend/docs/workflow/platform-administration.md).
 
 ## Estructura del repositorio
 
