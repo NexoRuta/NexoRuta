@@ -242,14 +242,24 @@ class VmDeploymentTests(unittest.TestCase):
             deployment.execute = Mock(side_effect=execute)
             deployment.compose = Mock()
             args = SimpleNamespace(node="a", release="release-" + "a" * 32, deadline=12345)
-            with patch.object(vm_deploy, "token", return_value="token"), patch.object(vm_deploy, "bridge_subnets", return_value=["172.22.0.0/16"]), patch.object(vm_deploy, "OPS_AGENT_CONFIG", root / "ops-agent.yaml"):
+            response = Mock()
+            response.__enter__ = Mock(return_value=SimpleNamespace(status=200))
+            response.__exit__ = Mock(return_value=False)
+            with (patch.object(vm_deploy, "token", return_value="token"),
+                  patch.object(vm_deploy, "bridge_subnets", return_value=["172.22.0.0/16"]),
+                  patch.object(vm_deploy, "OPS_AGENT_CONFIG", root / "ops-agent.yaml"),
+                  patch.object(vm_deploy.urllib.request, "urlopen", return_value=response) as urlopen):
                 result = vm_deploy.prepare(args, deployment, runtime, integrations, hosting, {"images": images}, "10.0.0.1")
             self.assertEqual(result, {})
             up_calls = [call.args for call in deployment.compose.call_args_list if "up" in call.args]
-            self.assertEqual(len(up_calls), 1)
-            self.assertEqual(up_calls[0][-1], "sql-proxy")
+            self.assertIn(("up", "-d", "--wait", "--wait-timeout", "300", "sql-proxy"), up_calls)
+            self.assertIn(("--profile", "shared", "up", "-d", "--no-deps", "--force-recreate",
+                           "--wait", "--wait-timeout", "300", "proxy"), up_calls)
             started = [call.args[-1] for call in deployment.execute.call_args_list if call.args[:2] == ("docker", "start")]
-            self.assertEqual(set(started), set(identifiers))
+            self.assertEqual(set(started), set(identifiers) - {identifiers[services.index("proxy")]})
+            request = urlopen.call_args.args[0]
+            self.assertEqual(request.full_url, "http://10.0.0.1:18025/healthz")
+            self.assertEqual(request.get_header("Host"), "mail.34-0-0-1.sslip.io")
             for call in deployment.execute.call_args_list:
                 self.assertNotIn(runtime["passwords"]["mail"], call.args)
             config = json.loads((root / "monitor.json").read_text())

@@ -399,6 +399,27 @@ def direct_health(private_ip, attempts=18):
             raise RuntimeError("Direct node health failed for " + name)
 
 
+def direct_mail_health(private_ip, endpoint, attempts=3):
+    host = urllib.parse.urlsplit(endpoint).hostname
+    if not host:
+        raise RuntimeError("The mail health check has no valid host")
+    request = urllib.request.Request(
+        f"http://{private_ip}:18025/healthz", headers={"Host": host},
+    )
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                if response.status == 200:
+                    return
+                raise RuntimeError(f"Direct node health failed for mail (HTTP {response.status})")
+        except urllib.error.HTTPError as error:
+            raise RuntimeError(f"Direct node health failed for mail (HTTP {error.code})") from None
+        except (urllib.error.URLError, TimeoutError):
+            if attempt + 1 < attempts:
+                time.sleep(2)
+    raise RuntimeError("Direct node health failed for mail")
+
+
 def bridge_subnets(deployment):
     try:
         networks = json.loads(deployment.execute("docker", "network", "inspect", "nexoruta-demo_default", capture=True))
@@ -445,10 +466,19 @@ def prepare(args, deployment, runtime, integrations, hosting, manifest, private_
                 if service in SHARED:
                     existing_services[service] = identifier
             for service, identifier in existing_services.items():
-                deployment.execute("docker", "start", identifier)
-            missing = tuple(service for service in SHARED if service not in existing_services)
+                if service != "proxy":
+                    deployment.execute("docker", "start", identifier)
+            missing = tuple(service for service in SHARED if service not in existing_services and service != "proxy")
             if missing:
                 deployment.compose("--profile", "shared", "up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", *missing)
+            # Reconcile Caddy with this release's Compose file so its bind mount
+            # and published 18025/tcp mapping are applied. Named Caddy volumes
+            # remain attached because this does not remove volumes.
+            deployment.measure("reconcile_mail_proxy", lambda: deployment.compose(
+                "--profile", "shared", "up", "-d", "--no-deps", "--force-recreate",
+                "--wait", "--wait-timeout", "300", "proxy"))
+            deployment.measure("direct_mail_health_check", lambda: direct_mail_health(
+                private_ip, runtime["endpoints"]["mail"]))
             for topic in ("nexoruta.envios.creados.v1", "nexoruta.password-recovery.requested.v1"):
                 deployment.compose("--profile", "shared", "exec", "-T", "kafka", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:9092",
                                    "--create", "--if-not-exists", "--topic", topic, "--partitions", "1", "--replication-factor", "1")

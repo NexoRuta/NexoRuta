@@ -494,18 +494,28 @@ def deploy(config, release):
         pending = [executor.submit(prepare_node, node, index == 0) for index, node in enumerate(inventory)]
         for future in pending:
             future.result()
+    last_health_report = {}
     def health(node):
         services = ("api", "admin", "backoffice", "commerce", "tracking", "monitor")
         if node["NODE_ID"] == "a":
             services += ("mail",)
-        def service_healthy(service):
+        def service_health_states(service):
             output = session.command("gcloud", "compute", "backend-services", "get-health", f"nexoruta-demo-{service}",
                 "--global", f"--project={project}", "--format=json", capture=True, timeout=15)
             states = [status for backend in json.loads(output) for status in backend.get("status", {}).get("healthStatus", [])
                       if status.get("instance", "").endswith("/" + node["VM_NAME"])]
-            return bool(states) and all(state.get("healthState") == "HEALTHY" for state in states)
+            return service, [state.get("healthState", "UNKNOWN") for state in states]
         with ThreadPoolExecutor(max_workers=len(services)) as executor:
-            return all(executor.map(service_healthy, services))
+            states_by_service = dict(executor.map(service_health_states, services))
+        unhealthy = {service: states for service, states in states_by_service.items()
+                     if not states or any(state != "HEALTHY" for state in states)}
+        signature = json.dumps(unhealthy, sort_keys=True)
+        if unhealthy and last_health_report.get(node["NODE_ID"]) != signature:
+            print("NEXORUTA_LB_HEALTH " + json.dumps({
+                "node": node["NODE_ID"], "unhealthy_services": unhealthy,
+            }, sort_keys=True), flush=True)
+        last_health_report[node["NODE_ID"]] = signature
+        return not unhealthy
 
     # Schema changes may break the previous application release. Drain both
     # nodes and stop their apps before applying migrations or either new image.
