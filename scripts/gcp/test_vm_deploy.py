@@ -49,6 +49,50 @@ class VmDeploymentTests(unittest.TestCase):
         self.assertIn(endpoints["monitor"] + "/api/search?query=nexoruta", requests)
         self.assertIn(endpoints["mail"] + "/", requests)
 
+    def test_mail_smoke_retries_transient_error_but_requires_401(self):
+        endpoints = {name: f"https://{name}.example.test" for name in
+                     ("api", "admin", "backoffice", "commerce", "tracking", "monitor", "mail")}
+        response = Mock()
+        response.__enter__ = Mock(return_value=SimpleNamespace(status=200))
+        response.__exit__ = Mock(return_value=False)
+        mail_statuses = iter((503, 401))
+
+        def open_url(url, timeout):
+            if url == endpoints["mail"] + "/":
+                raise urllib.error.HTTPError(url, next(mail_statuses), "error", {}, None)
+            if "/api/search?" in url:
+                raise urllib.error.HTTPError(url, 401, "unauthorized", {}, None)
+            return response
+
+        with (patch.object(vm_deploy.urllib.request, "urlopen", side_effect=open_url),
+              patch.object(vm_deploy.time, "sleep") as sleep):
+            vm_deploy.smoke({"endpoints": endpoints}, check_accounts=False)
+        sleep.assert_called_once_with(5)
+
+    def test_failed_measure_records_phase(self):
+        timings = {}
+        with self.assertRaises(RuntimeError) as caught:
+            vm_deploy.measure(timings, "public_https_and_login_smoke", lambda: (_ for _ in ()).throw(RuntimeError()))
+        self.assertEqual(caught.exception.nexoruta_phase, "public_https_and_login_smoke")
+        self.assertIn("public_https_and_login_smoke", timings)
+
+    def test_mail_smoke_rejects_public_access_and_reports_http_status(self):
+        endpoints = {name: f"https://{name}.example.test" for name in
+                     ("api", "admin", "backoffice", "commerce", "tracking", "monitor", "mail")}
+        response = Mock()
+        response.__enter__ = Mock(return_value=SimpleNamespace(status=200))
+        response.__exit__ = Mock(return_value=False)
+
+        def open_url(url, timeout):
+            if "/api/search?" in url:
+                raise urllib.error.HTTPError(url, 401, "unauthorized", {}, None)
+            return response
+
+        with patch.object(vm_deploy.urllib.request, "urlopen", side_effect=open_url):
+            with self.assertRaises(vm_deploy.MailSmokeError) as caught:
+                vm_deploy.smoke({"endpoints": endpoints}, check_accounts=False)
+        self.assertEqual(caught.exception.http_status, 200)
+
     def test_release_extraction_makes_only_grafana_provisioning_readable_by_its_container_user(self):
         archive_data = io.BytesIO()
         with tarfile.open(fileobj=archive_data, mode="w:gz") as archive:
