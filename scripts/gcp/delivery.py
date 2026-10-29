@@ -477,28 +477,24 @@ def deploy(config, release):
         # monitoring agent. It does not touch database schema or load-balancer state.
         return measure("prepare_node", lambda: stage(node, "prepare"), node=node["NODE_ID"])
 
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        backup = executor.submit(measure, "cloud_sql_backup", lambda: session.command(
-            "gcloud", "sql", "backups", "create", "--instance=nexoruta-demo-db", f"--project={project}", "--quiet"))
-        # Let gcloud create its default SSH key before any concurrent SSH/SCP calls.
-        measure("initial_ssh_bootstrap", lambda: wait_for_bootstrap(inventory[0]), node=inventory[0]["NODE_ID"])
+    # Let gcloud create its default SSH key before any concurrent SSH/SCP calls.
+    measure("initial_ssh_bootstrap", lambda: wait_for_bootstrap(inventory[0]), node=inventory[0]["NODE_ID"])
+    with ThreadPoolExecutor(max_workers=2) as executor:
         pending = [executor.submit(prepare_node, node, index == 0) for index, node in enumerate(inventory)]
         for future in pending:
             future.result()
-        # No load balancer changes or migrations until the backup has succeeded.
-        backup.result()
     def health(node):
         services = ("api", "admin", "backoffice", "commerce", "tracking", "monitor")
         if node["NODE_ID"] == "a":
             services += ("mail",)
-        for service in services:
+        def service_healthy(service):
             output = session.command("gcloud", "compute", "backend-services", "get-health", f"nexoruta-demo-{service}",
                 "--global", f"--project={project}", "--format=json", capture=True)
             states = [status for backend in json.loads(output) for status in backend.get("status", {}).get("healthStatus", [])
                       if status.get("instance", "").endswith("/" + node["VM_NAME"])]
-            if not states or any(state.get("healthState") != "HEALTHY" for state in states):
-                return False
-        return True
+            return bool(states) and all(state.get("healthState") == "HEALTHY" for state in states)
+        with ThreadPoolExecutor(max_workers=len(services)) as executor:
+            return all(executor.map(service_healthy, services))
 
     # Schema changes may break the previous application release. Drain both
     # nodes and stop their apps before applying migrations or either new image.

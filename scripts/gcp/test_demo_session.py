@@ -1,6 +1,7 @@
 import datetime as dt
 import json
 import threading
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
@@ -9,6 +10,39 @@ import delivery
 
 
 class SessionSafetyTests(unittest.TestCase):
+    def test_stop_runs_both_vms_concurrently_without_stopping_sql(self):
+        barrier = threading.Barrier(2)
+        calls = []
+        vm = {"status": "RUNNING", "labels": {"application": "nexoruta", "managed_by": "opentofu"}}
+
+        def stop(node, *args, **kwargs):
+            calls.append(node["NODE_ID"])
+            barrier.wait(timeout=3)
+
+        with (patch.object(session, "end_lease"), patch.object(session, "instance", return_value=vm),
+              patch.object(session, "gcloud", side_effect=stop), patch.object(session, "command") as command):
+            self.assertEqual(session.stop_session({}), [])
+            command.assert_not_called()
+        self.assertCountEqual(calls, ["a", "b"])
+
+    def test_guard_leaves_sql_running(self):
+        guard = (Path(__file__).parents[2] / "infra/gcp/bootstrap/guard.yaml.tftpl").read_text()
+        self.assertNotIn("sqladmin.googleapis.com", guard)
+        self.assertIn("/instances/\" + node.name + \"/stop", guard)
+
+    def test_stop_continues_if_lease_or_one_node_fails(self):
+        nodes = session.node_configs({})
+        def lookup(node):
+            if node["NODE_ID"] == "a":
+                raise RuntimeError("unavailable")
+            return {"status": "RUNNING", "labels": {"application": "nexoruta", "managed_by": "opentofu"}}
+        with (patch.object(session, "end_lease", side_effect=RuntimeError("lease failure")),
+              patch.object(session, "instance", side_effect=lookup),
+              patch.object(session, "gcloud") as gcloud):
+            errors = session.stop_session({})
+        self.assertEqual(len(errors), 2)
+        self.assertEqual(gcloud.call_args.args[0], nodes[1])
+
     def test_tofu_setup_overlaps_database_start_and_both_finish_before_session(self):
         database_started = threading.Event()
         setup_started = threading.Event()
@@ -164,12 +198,10 @@ class SessionSafetyTests(unittest.TestCase):
         with (
             patch.object(session, "instance", return_value=self.vm),
             patch.object(session, "end_lease"),
-            patch.object(session, "stop_database") as database,
             patch.object(session, "command") as command,
             patch.object(session, "gcloud") as vm_command,
         ):
             session.run({"DEMO_OPERATION": "stop"})
-            database.assert_called_once()
             command.assert_not_called()
             vm_command.assert_not_called()
 

@@ -1,5 +1,10 @@
 # Costos de la demo en Santiago
 
+La configuración nueva mantiene Cloud SQL `db-g1-small` encendido todo el mes.
+Su cómputo estimado es de USD 36/mes, más disco SQL y otros recursos. Los
+backups automáticos y la recuperación puntual están deshabilitados. Los cálculos
+históricos siguientes no reflejan esta configuración.
+
 Estimación histórica en USD, sin impuestos, consultada el 22/10/2026. La tabla
 original describe **una VM** y ya no es el total de la arquitectura aprobada de
 dos `n4-custom-6-16384`; no usar sus totales para estimar las nuevas sesiones.
