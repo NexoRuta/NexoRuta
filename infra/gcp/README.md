@@ -30,8 +30,8 @@ Hyperdisk Balanced de 80 GiB. La VM A conserva su disco y datos. La entrada púb
 usa un Application Load Balancer global con IP fija; los nombres `*.IP.sslip.io`
 apuntan a esa dirección. N4 no admite Persistent Disk: no cambiar estos discos a
 `pd-balanced`.
-Cloud SQL es PostgreSQL 18 Enterprise, 2 vCPU y 8 GiB, 20 GiB SSD, sin HA,
-solo IP privada, backups y recuperación puntual. Su memoria es independiente.
+Cloud SQL es PostgreSQL 18 Enterprise `db-g1-small`, 20 GiB SSD, sin HA,
+con IP privada y siempre encendido. La demo no tiene backups ni recuperación puntual.
 
 **Excepción de ubicación:** Cloud Scheduler no está disponible en Santiago.
 El temporizador de control se crea en São Paulo e invoca Workflows en Santiago.
@@ -69,7 +69,7 @@ flowchart LR
     I -->|start manual| Q[Publicar endpoints de la sesión]
     K[GCE: cuatro horas] --> L[Apagar las dos VMs]
     M[Scheduler y Workflows] --> L
-    L --> N[Apagar Cloud SQL y conservar datos]
+    L --> N[Cloud SQL permanece encendido]
 ```
 
 ## Herramientas de terminal
@@ -218,7 +218,7 @@ con branch `main`, y elegir una operación:
 | --- | --- |
 | `start` | Selecciona la última release completa ya publicada e inicia dos VMs por cuatro horas con esas imágenes. No ejecuta CI ni construye imágenes. |
 | `update` | Lee la última release completa publicada de `main` y rota el despliegue por B y A. No compila ni enciende VMs detenidas; conserva el vencimiento. |
-| `stop` | Apaga las dos VMs y Cloud SQL, conservando datos. |
+| `stop` | Apaga las dos VMs y conserva Cloud SQL encendido. |
 
 El canal `main` se registra en `channels/main.json` del bucket privado de delivery
 solo después de publicar las seis imágenes y los assets de la release. `start` y `update`
@@ -227,10 +227,11 @@ misma release por digest, aunque se publique otra durante la descarga. No mezcla
 tags `latest` de distintos builds. Si una publicación está fallando o en curso,
 se usa la última completa; esperar a que termine el workflow de publicación para
 actualizar a ese cambio. Con ambas VMs apagadas, `update` termina sin ejecutarlo.
-El update incluye backup, migraciones y comprobaciones de salud; también reinicia
+El update incluye migraciones y comprobaciones de salud; también reinicia
 las apps si la release seleccionada ya era la instalada.
 
-Los cambios de infraestructura se aplican al iniciar la siguiente sesión.
+Los cambios de infraestructura de demo se aplican al iniciar la siguiente sesión.
+Aplicar primero `infra/gcp/bootstrap` para actualizar el guard y evitar que apague SQL.
 Las comprobaciones CI sobre PRs no reciben credenciales GCP ni despliegan recursos.
 Al renombrar/separar workflows, aplicar primero `infra/gcp/bootstrap` para que
 Workload Identity Federation autorice `publish.yml` y `vm-controls.yml`; el provider
@@ -245,7 +246,7 @@ gh workflow run vm-controls.yml --repo NexoRuta/NexoRuta --ref main -f operation
 # Descargar la última release publicada y recrear las apps de una demo activa.
 gh workflow run vm-controls.yml --repo NexoRuta/NexoRuta --ref main -f operation=update
 
-# Apagar antes de las cuatro horas las dos VMs y la base de datos.
+# Apagar las dos VMs antes de las cuatro horas; SQL queda encendido.
 gh workflow run vm-controls.yml --repo NexoRuta/NexoRuta --ref main -f operation=stop
 
 gh run list --repo NexoRuta/NexoRuta --workflow vm-controls.yml
@@ -258,8 +259,7 @@ gh run download ID_CI --repo NexoRuta/NexoRuta --name android-verification-SHA_M
 
 El resumen muestra las URLs y el vencimiento. Cada VM instala Docker y conserva
 su disco y volúmenes; los servicios persistentes (RabbitMQ, Kafka y MongoDB) viven
-solo en A y B los consume por la red privada. El despliegue crea un backup SQL,
-prepara permisos de migración, aplica migraciones, aprovisiona
+solo en A y B los consume por la red privada. El despliegue prepara permisos de migración, aplica migraciones, aprovisiona
 logins runtime sin `cloudsqlsuperuser`/`BYPASSRLS`, importa el catálogo de Uruguay,
 crea cuentas/organizaciones iniciales y levanta todos los servicios.
 
@@ -273,7 +273,7 @@ las apps, migra una vez y aplica la release objetivo. Si falla una migración, l
 apps quedan detenidas; si falla un nodo después, queda fuera del balanceador y
 el otro nodo nuevo puede seguir atendiendo. No se recuperan automáticamente
 contenedores anteriores ni se revierten migraciones; corregir el código y
-desplegar una release nueva. El backup sirve para recuperación manual deliberada.
+desplegar una release nueva. No hay recuperación mediante backups de la demo.
 
 ## Plazo y costos residuales
 
@@ -285,12 +285,11 @@ el plazo.
 
 Antes de provisionar se escribe una lease con un máximo de 30 minutos de gracia
 para preparar SQL/VM. Al arrancar se registra su vencimiento real. Workflows
-comprueba cada minuto si la VM se apagó o venció la lease y ordena detener Cloud
-SQL. Si el runner falla antes de crear la VM, también cierra la base tras esa
-gracia. Las transiciones de GCE y el apagado de SQL pueden agregar algunos minutos
-de facturación. Las operaciones usan concurrency en GitHub y bloqueo del estado.
+comprueba cada minuto si venció la lease y ordena detener las VMs. Cloud SQL
+permanece encendido y se factura continuamente. Las operaciones usan concurrency
+en GitHub y bloqueo del estado.
 
-Apagar conserva discos, IP, backups, secretos e imágenes: esos recursos siguen
+Apagar conserva discos, IP, secretos e imágenes: esos recursos siguen
 cobrando. Los precios anteriores de Iowa no corresponden a Santiago ni a N4.
 El crédito de USD 300 dura 90 días desde el alta y se comparte con otros consumos
 de la cuenta. La alerta de USD 80/mes deja margen para un proyecto de hasta tres

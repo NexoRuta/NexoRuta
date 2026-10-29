@@ -1,13 +1,13 @@
 resource "google_service_account" "guard" {
   account_id   = "nexoruta-demo-guard"
-  display_name = "Stop expired demo sessions and Cloud SQL"
+  display_name = "Stop expired demo sessions"
   depends_on   = [google_project_service.required]
 }
 
 resource "google_project_iam_custom_role" "guard" {
   role_id     = "nexorutaDemoGuard"
   title       = "NexoRuta demo session guard"
-  permissions = ["compute.instances.get", "compute.instances.stop", "cloudsql.instances.get", "cloudsql.instances.update"]
+  permissions = ["compute.instances.get", "compute.instances.stop"]
 }
 
 resource "google_project_iam_member" "guard" {

@@ -20,39 +20,6 @@ class DeliveryTests(unittest.TestCase):
         environment.start()
         self.addCleanup(environment.stop)
 
-    def test_backup_overlaps_preparation_and_failure_blocks_drain(self):
-        release = "release-" + "a" * 32
-        nodes = [{"NODE_ID": n, "VM_NAME": "vm-" + n} for n in ("a", "b")]
-        prepared = threading.Event()
-        events = []
-
-        def command(*args, capture=False):
-            if args[1:3] == ("storage", "cat"):
-                return json.dumps({"expires_at": 2000})
-            if args[1:3] == ("sql", "backups"):
-                if not prepared.wait(5):
-                    raise AssertionError("backup did not overlap preparation")
-                raise RuntimeError("backup failed")
-            raise AssertionError(args)
-
-        def gcloud(node, *args, capture=False):
-            if args[:2] == ("compute", "ssh") and "--stage" in args[-1]:
-                events.append((node["NODE_ID"], "prepare"))
-                prepared.set()
-                return json.dumps({"release": release, "node": node["NODE_ID"],
-                                   "stage": "prepare", "status": "healthy"})
-            if args[:2] in (("compute", "ssh"), ("compute", "scp")):
-                return ""
-            raise AssertionError(f"unexpected operation: {args}")
-
-        with (patch.object(session, "node_configs", return_value=nodes),
-              patch.object(session, "command", side_effect=command),
-              patch.object(session, "gcloud", side_effect=gcloud),
-              patch.object(delivery.time, "time", return_value=1000)):
-            with self.assertRaisesRegex(RuntimeError, "backup failed"):
-                delivery.deploy({"GCP_PROJECT_ID": "demo-project", "GCP_STATE_BUCKET": "demo-state"}, release)
-        self.assertCountEqual(events, [("a", "prepare"), ("b", "prepare")])
-
     def test_release_extraction_rejects_path_traversal_and_links(self):
         for name, kind in (("../outside", tarfile.REGTYPE), ("link", tarfile.SYMTYPE)):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temp:
@@ -487,46 +454,9 @@ class DeliveryTests(unittest.TestCase):
                 delivery.latest_release({"GCP_PROJECT_ID": "demo-project"})
             self.assertEqual(command.call_count, 1)
 
-    def test_database_cleanup_still_runs_if_the_vm_stop_fails(self):
-        with (
-            patch.object(session, "instance", side_effect=RuntimeError("Compute unavailable")),
-            patch.object(session, "end_lease") as lease,
-            patch.object(session, "stop_database") as sql,
-        ):
-            session.stop_after_failure({})
-            lease.assert_called_once()
-            sql.assert_called_once()
-
-    def test_unmanaged_database_cannot_be_stopped(self):
-        database = [{"name": "nexoruta-demo-db", "settings": {"userLabels": {}, "activationPolicy": "ALWAYS"}}]
-        with patch.object(session, "command", return_value=json.dumps(database)) as command:
-            with self.assertRaisesRegex(RuntimeError, "not owned"):
-                session.stop_database({"GCP_PROJECT_ID": "demo-project"})
-            self.assertEqual(command.call_count, 1)
-
-    def test_stop_with_a_missing_vm_still_stops_sql_without_provisioning(self):
-        with (
-            patch.object(session, "instance", return_value=None),
-            patch.object(session, "end_lease"),
-            patch.object(session, "stop_database") as sql,
-            patch.object(session, "command") as command,
-        ):
-            session.run({"DEMO_OPERATION": "stop"})
-            sql.assert_called_once()
-            command.assert_not_called()
-
     def test_stop_cannot_recreate_deleted_resources(self):
         with self.assertRaisesRegex(RuntimeError, "must not create"):
             session.check_plan({"resource_changes": [{"address": "database", "change": {"actions": ["create"]}}]}, "stop")
-
-    def test_sql_cleanup_is_independent_of_lease_write_failure(self):
-        with (
-            patch.object(session, "instance", return_value=None),
-            patch.object(session, "end_lease", side_effect=RuntimeError("Storage unavailable")),
-            patch.object(session, "stop_database") as sql,
-        ):
-            session.stop_after_failure({})
-            sql.assert_called_once()
 
     def test_region_is_not_silently_deployed_in_the_us(self):
         with patch.dict("os.environ", {

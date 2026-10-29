@@ -168,27 +168,27 @@ def stop_after_failure(config):
 
 
 def stop_session(config):
-    # Close the lease first. Cleanup continues independently for both VMs and SQL
-    # so one unavailable API cannot leave the other resources running indefinitely.
+    # Close the lease first; stop both VMs independently and leave SQL running.
     errors = []
     try:
         measure("close_session_lease", lambda: end_lease(config))
     except (RuntimeError, subprocess.CalledProcessError, ValueError) as error:
         errors.append(f"lease: {error}")
-    for node in node_configs(config):
+    def stop_node(node):
         try:
             vm = measure("find_vm", lambda: instance(node), node=node["NODE_ID"])
             if vm is None:
-                continue
+                return None
             check_existing(vm, "stop")
             if vm.get("status") == "RUNNING":
                 measure("stop_vm", lambda: gcloud(node, "compute", "instances", "stop", node["VM_NAME"]), node=node["NODE_ID"])
         except (RuntimeError, subprocess.CalledProcessError, ValueError) as error:
-            errors.append(f"{node['VM_NAME']}: {error}")
-    try:
-        measure("stop_cloud_sql", lambda: stop_database(config))
-    except (RuntimeError, subprocess.CalledProcessError, ValueError) as error:
-        errors.append(f"Cloud SQL: {error}")
+            return f"{node['VM_NAME']}: {error}"
+        return None
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        for error in executor.map(stop_node, node_configs(config)):
+            if error:
+                errors.append(error)
     return errors
 
 
@@ -203,19 +203,6 @@ def write_lease(config, expires_at, provisioning_until=0):
 
 def end_lease(config):
     write_lease(config, 0)
-
-
-def stop_database(config):
-    project = config["GCP_PROJECT_ID"]
-    databases = json.loads(command("gcloud", "sql", "instances", "list", f"--project={project}",
-                                   "--filter=name=nexoruta-demo-db", "--format=json", capture=True))
-    for database in databases:
-        if database["name"] == "nexoruta-demo-db":
-            if database.get("settings", {}).get("userLabels", {}).get("managed_by") != "opentofu":
-                raise RuntimeError("Refusing to stop a database not owned by this deployment")
-            if database["settings"]["activationPolicy"] != "NEVER":
-                command("gcloud", "sql", "instances", "patch", "nexoruta-demo-db", f"--project={project}",
-                        "--activation-policy=NEVER", "--quiet")
 
 
 def start_database(config):
@@ -251,7 +238,7 @@ def run(config):
         errors = stop_session(config)
         if errors:
             raise RuntimeError("Cleanup incomplete; independent guard will retry: " + "; ".join(errors))
-        message = "Both demo VMs and Cloud SQL stopped or absent. Persistent storage and load balancer retained.\n"
+        message = "Both demo VMs stopped or absent. Cloud SQL remains running.\n"
         print(message)
         if os.environ.get("GITHUB_STEP_SUMMARY"):
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
