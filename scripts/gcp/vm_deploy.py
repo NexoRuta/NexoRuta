@@ -37,6 +37,10 @@ def measure(timings, phase, operation):
     started = time.perf_counter()
     try:
         return operation()
+    except Exception as error:
+        if not hasattr(error, "nexoruta_phase"):
+            error.nexoruta_phase = phase
+        raise
     finally:
         timings[phase] = round((time.perf_counter() - started) * 1000)
 
@@ -483,6 +487,12 @@ def apply(args, deployment, private_ip):
         raise RuntimeError("Node application update failed; it remains out of the load balancer") from None
 
 
+class MailSmokeError(RuntimeError):
+    def __init__(self, message, http_status=None):
+        super().__init__(message)
+        self.http_status = http_status
+
+
 def smoke(runtime, check_accounts=True):
     endpoints = runtime["endpoints"]
     for name in ("api", "admin", "backoffice", "commerce", "tracking", "monitor"):
@@ -507,13 +517,23 @@ def smoke(runtime, check_accounts=True):
             raise RuntimeError("The monitoring dashboard API must require Google authentication") from None
     else:
         raise RuntimeError("The monitoring dashboard API is publicly accessible")
-    try:
-        urllib.request.urlopen(endpoints["mail"] + "/", timeout=10)
-    except urllib.error.HTTPError as error:
-        if error.code != 401:
-            raise RuntimeError("The demo mail inbox must remain password-protected") from None
+    last_status = None
+    for attempt in range(60):
+        try:
+            with urllib.request.urlopen(endpoints["mail"] + "/", timeout=10) as response:
+                raise MailSmokeError("The demo mail inbox is publicly accessible", response.status)
+        except urllib.error.HTTPError as error:
+            last_status = error.code
+            if error.code == 401:
+                break
+            if not 500 <= error.code <= 599:
+                raise MailSmokeError("The demo mail inbox must remain password-protected", error.code) from None
+        except (urllib.error.URLError, TimeoutError):
+            last_status = None
+        if attempt < 59:
+            time.sleep(5)
     else:
-        raise RuntimeError("The demo mail inbox is publicly accessible")
+        raise MailSmokeError("The demo mail inbox did not become available", last_status)
     # A database-backed login exercises the migrated schema and runtime RLS role.
     accounts = (("admin", "admin@nexoruta.test"), ("operator", "operador@nexoruta.test"), ("commerce", "comercio@nexoruta.test")) if check_accounts else ()
     for role, email in accounts:
@@ -538,9 +558,13 @@ def main():
         print(json.dumps({"release": args.release, "node": args.node, "stage": args.stage,
                           "status": "healthy", **result, "timings_ms": timings}))
     except Exception as error:
+        failed_phase = getattr(error, "nexoruta_phase", "")
+        http_status = getattr(error, "http_status", None)
         print(json.dumps({"release": args.release, "node": args.node, "stage": args.stage,
                           "status": "failed", "error_type": type(error).__name__,
-                          "error_location": error_location(error), "timings_ms": timings}))
+                          "error_location": error_location(error), "failed_phase": failed_phase,
+                          "http_status": http_status if type(http_status) is int and 100 <= http_status <= 599 else None,
+                          "timings_ms": timings}))
         raise SystemExit(1) from None
 
 

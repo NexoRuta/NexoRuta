@@ -389,6 +389,9 @@ def remote_stage_error(output, node, operation):
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*:[0-9]{1,5}", location):
                 location = ""
             suffix = f" at {location}" if location else ""
+            http_status = result.get("http_status")
+            if type(http_status) is int and 100 <= http_status <= 599:
+                suffix += f", HTTP {http_status}"
             return f"Node {node} stage {operation} failed ({error_type}{suffix})"
     if exit_code is not None:
         return f"Node {node} stage {operation} exited ({exit_code}) without a report"
@@ -436,7 +439,9 @@ def deploy(config, release):
                         or result.get("stage") != operation):
                     continue
                 for phase, duration in result.get("timings_ms", {}).items():
-                    report_timing("vm_" + operation + "_" + phase, duration, node=node["NODE_ID"])
+                    failed = result.get("status") == "failed" and phase in (result.get("failed_phase"), "stage_total")
+                    report_timing("vm_" + operation + "_" + phase, duration,
+                                  status="failed" if failed else "passed", node=node["NODE_ID"])
                 if result.get("status") == "healthy":
                     status = "passed"
                     return result
@@ -483,7 +488,10 @@ def deploy(config, release):
         # No load balancer changes or migrations until the backup has succeeded.
         backup.result()
     def health(node):
-        for service in ("api", "admin", "backoffice", "commerce", "tracking", "monitor"):
+        services = ("api", "admin", "backoffice", "commerce", "tracking", "monitor")
+        if node["NODE_ID"] == "a":
+            services += ("mail",)
+        for service in services:
             output = session.command("gcloud", "compute", "backend-services", "get-health", f"nexoruta-demo-{service}",
                 "--global", f"--project={project}", "--format=json", capture=True)
             states = [status for backend in json.loads(output) for status in backend.get("status", {}).get("healthStatus", [])
@@ -496,9 +504,13 @@ def deploy(config, release):
     # nodes and stop their apps before applying migrations or either new image.
     groups = {node["NODE_ID"]: f"nexoruta-demo-{node['NODE_ID']}" for node in inventory}
     def drain_nodes():
-        for node in inventory:
+        def remove(node):
             session.gcloud(node, "compute", "instance-groups", "unmanaged", "remove-instances", groups[node["NODE_ID"]],
                 f"--instances={node['VM_NAME']}")
+        with ThreadPoolExecutor(max_workers=len(inventory)) as executor:
+            pending = [executor.submit(remove, node) for node in inventory]
+            for future in pending:
+                future.result()
         # Preserve the configured load-balancer drain interval.
         time.sleep(35)
     measure("load_balancer_drain", drain_nodes)

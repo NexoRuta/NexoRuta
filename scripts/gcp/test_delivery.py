@@ -212,14 +212,20 @@ class DeliveryTests(unittest.TestCase):
 
         operations = [event for event in events if event[0] in ("remove-instances", "add-instances", "stage")]
         self.assertCountEqual(operations[:2], [("stage", "a", "prepare"), ("stage", "b", "prepare")])
-        self.assertEqual(operations[2:], [
-            ("remove-instances", "a"), ("remove-instances", "b"),
+        self.assertCountEqual(operations[2:4], [("remove-instances", "a"), ("remove-instances", "b")])
+        self.assertEqual(operations[4:], [
             ("stage", "a", "stop"), ("stage", "b", "stop"), ("stage", "a", "migrate"),
             ("stage", "b", "apply"), ("add-instances", "b"),
             ("stage", "a", "apply"), ("add-instances", "a"), ("stage", "a", "verify"),
         ])
         self.assertIn(("sleep", 35), events)
         self.assertEqual(result["endpoints"]["api"], "https://api.example.test")
+
+    def test_remote_error_reports_safe_http_status(self):
+        output = json.dumps({"node": "a", "stage": "verify", "status": "failed",
+                             "error_type": "MailSmokeError", "error_location": "smoke:520", "http_status": 503})
+        self.assertEqual(delivery.remote_stage_error(output, "a", "verify"),
+                         "Node a stage verify failed (MailSmokeError at smoke:520, HTTP 503)")
 
     def test_offline_update_does_not_provision_or_start_anything(self):
         config = {"DEMO_OPERATION": "update"}
