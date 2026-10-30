@@ -21,3 +21,4 @@ mobile/google-services.json
 # Local infrastructure secrets (never version real values).
 .env
 secrets/
+.~lock.*#

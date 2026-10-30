@@ -377,6 +377,8 @@ services:
       Portales__BackofficeLoginUrl: http://localhost:5101/ingresar
       Portales__AdminLoginUrl: http://localhost:5104/ingresar
       Tracking__BaseAddress: http://localhost:5103/
+      Mapbox__PublicAccessToken: "${Mapbox__PublicAccessToken:-}"
+      Mapbox__StyleUrl: "${Mapbox__StyleUrl:-}"
     ports:
       - "5102:8080"
     depends_on:
