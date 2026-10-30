@@ -1,5 +1,9 @@
 # CU-07 — Commerce, importación CSV y verificación integrada
 
+> **Nota de vigencia (30/10/2026):** las pruebas exitosas de este corte siguen siendo evidencia histórica del entorno entonces usado, no identifican la imagen Docker actual. El informe `11-auditoria-final-cierre.md` contiene el resultado más reciente; la re-ejecución Kestrel/Chromium no fue concluyente por un error al limpiar el perfil temporal. El fallo del listado restringido de `Mis envíos` se separa de los POST de alta e importación.
+
+> **Nota de vigencia (30/10/2026):** las pruebas exitosas de este corte siguen siendo evidencia histórica del entorno entonces usado, no identifican la imagen Docker actual. El informe `11-auditoria-final-cierre.md` contiene el resultado más reciente; detecta una denegación de privilegios en el listado restringido y una re-ejecución Kestrel/Chromium no concluyente por error de limpieza.
+
 **Fecha:** 24/10/2026  
 **Estado:** ApiClient y Commerce integrados con el backend existente; verificados con API Kestrel, Commerce y PostgreSQL efímero. La pantalla individual también se recorrió funcionalmente en navegador. Los requisitos directos R01–R04 tienen evidencia actual; la trazabilidad global conserva pendientes transversales y no se declara cerrado todo CU-07.
 

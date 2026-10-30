@@ -1,5 +1,9 @@
 # CU-07 — hallazgos
 
+> **Vigencia (30/10/2026):** este documento preserva hallazgos y cortes históricos. La lista priorizada vigente y la evidencia actual están en `11-auditoria-final-cierre.md`; el permiso denegado al consultar `GET /api/envios` con el rol API restringido es un defecto adyacente del listado de Commerce, no prueba de fallo en POST de alta/importación.
+
+> **Vigencia (30/10/2026):** este documento preserva hallazgos y cortes históricos. La lista priorizada vigente y la evidencia actual están en `11-auditoria-final-cierre.md`; H-01 de ese informe demuestra que el listado Commerce falla con el rol API restringido. Las afirmaciones anteriores de integración/verificación no sustituyen esa comprobación.
+
 ## Estado del bloque backend CSV (24/10/2026)
 
 Los hallazgos H-01 y H-02 describían correctamente las brechas de la auditoría inicial. El backend quedó implementado/verificado en `08-backend-importacion.md`, y la entrada Commerce quedó implementada/verificada en `09-commerce-importacion-y-verificacion.md`; por tanto, sus afirmaciones históricas de ausencia de importación e interfaz pendiente quedan reemplazadas para el checkout actual. La trazabilidad directa R01–R04 está cubierta; los límites transversales X02/X04/X05/X06 siguen vigentes y no se declara cerrado todo CU-07.

@@ -1,5 +1,9 @@
 # CU-07 — revisión técnica manual del cambio acumulado
 
+> **Estado posterior (30/10/2026):** esta revisión manual histórica no equivale a cierre vigente. Ver `11-auditoria-final-cierre.md` para el contraste más reciente, evidencia de pruebas y límites de verificación de Docker/navegador.
+
+> **Estado posterior (30/10/2026):** esta revisión manual histórica no equivale a cierre vigente. Ver `11-auditoria-final-cierre.md` para el contraste más reciente, el defecto `GET /api/envios` bajo rol restringido y las limitaciones de verificación de Docker/navegador.
+
 **Fecha:** 25/10/2026. **Resultado:** revisión manual completada con una corrección puntual de presentación. No es aprobación nativa, cierre global de CU-07 ni cierre de CU-08, máquina de estados o mensajería transversal.
 
 ## Alcance y estado revisado
