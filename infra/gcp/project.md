@@ -43,8 +43,10 @@ projects/1090571196455/locations/global/workloadIdentityPools/nexoruta-github/pr
 La infraestructura de aplicación se gestiona desde `infra/gcp/demo` con estado
 GCS independiente en `demo/vm`. El workflow manual crea o inicia Cloud SQL y la
 VM, despliega contenedores por digest, ejecuta migraciones y comprueba HTTPS.
-Los endpoints y el vencimiento real aparecen en el resumen de
-[Actions](https://github.com/NexoRuta/NexoRuta/actions/workflows/demo-vm.yml).
+Los endpoints y el vencimiento real aparecen en el resumen del workflow
+[vm-controls](https://github.com/NexoRuta/NexoRuta/actions/workflows/vm-controls.yml).
+Las publicaciones automáticas viven en el workflow
+[publish](https://github.com/NexoRuta/NexoRuta/actions/workflows/publish.yml).
 Consultar ese resumen o `tofu output -json endpoints` para conocer las URLs;
 el estado encendido/apagado cambia entre sesiones de cuatro horas.
 

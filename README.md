@@ -62,11 +62,12 @@ docker compose ps
 Aplicar una migración local es una operación administrativa separada: revisar previamente el SQL y confirmar que el destino es el PostgreSQL de este Compose. Sin cambiar `NEXORUTA_SEED_DATA=false`, habilitar solo la migración para el primer arranque de API y después volver a la configuración protegida:
 
 ```powershell
+docker compose stop api admin backoffice commerce tracking worker worker-kafka
 $env:NEXORUTA_APPLY_MIGRATIONS = 'true'
 docker compose up -d --no-deps --force-recreate api
 docker compose ps api  # esperar a que la API quede healthy
 Remove-Item Env:NEXORUTA_APPLY_MIGRATIONS
-docker compose up -d --no-deps --force-recreate api
+docker compose up -d --build api admin backoffice commerce tracking worker worker-kafka
 ```
 
 No dejar el override de proceso habilitado luego de la aplicación. No se versionan credenciales ni cadenas de conexión; `.env` permanece local e ignorado.
@@ -102,7 +103,7 @@ Las credenciales del archivo Compose son públicas y no deben reutilizarse fuera
 
 Admin is available at `http://localhost:5104`. The API maps the ignored `.env` keys `NEXORUTA_ADMIN_MAIL` and `NEXORUTA_ADMIN_PASSWORD` to `PlatformInitialization__Email/Password`. Only `NEXORUTA_PLATFORM_BOOTSTRAP=true` enables platform initialization; it defaults to false and is independent of demonstration data. Keep habitual `NEXORUTA_APPLY_MIGRATIONS=false` and `NEXORUTA_SEED_DATA=false`.
 
-Review/apply pending additive migrations explicitly to the confirmed local Compose PostgreSQL **before** recreating the updated API. Do not delete volumes or reset data. API startup creates the account atomically, or validates an existing compatible account without replacing its password. No manual `platform-admin create` is required in this configured local flow. See the [backend procedure](backend/docs/workflow/platform-administration.md).
+Apply reviewed migrations explicitly to the confirmed local Compose PostgreSQL with the old API and workers stopped; then recreate them together from the same checkout. Do not delete volumes or reset data. The configured `local-bootstrap` command creates the account atomically and synchronizes an existing matching platform account to the configured password. No manual `platform-admin create` is required in this configured local flow. See the [backend procedure](backend/docs/workflow/platform-administration.md).
 
 ## Estructura del repositorio
 

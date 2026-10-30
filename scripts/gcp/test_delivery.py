@@ -1,8 +1,10 @@
 import io
+import hashlib
 import json
 from pathlib import Path
 import tarfile
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -18,6 +20,14 @@ class DeliveryTests(unittest.TestCase):
         environment.start()
         self.addCleanup(environment.stop)
 
+    def test_load_balancer_health_wait_has_wall_clock_limit(self):
+        with (patch.object(delivery.time, "monotonic", side_effect=[0, 0, 0, 301]),
+              patch.object(delivery.time, "time", return_value=1000),
+              patch.object(delivery.time, "sleep") as sleep):
+            with self.assertRaisesRegex(RuntimeError, "not admitted"):
+                delivery.wait_for_load_balancer_health({"NODE_ID": "a"}, 2000, lambda node: False)
+        sleep.assert_called_once_with(5)
+
     def test_release_extraction_rejects_path_traversal_and_links(self):
         for name, kind in (("../outside", tarfile.REGTYPE), ("link", tarfile.SYMTYPE)):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temp:
@@ -29,10 +39,168 @@ class DeliveryTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     vm_deploy.extract(data.getvalue(), Path(temp))
 
+    def test_grafana_dashboard_queries_use_selected_cloud_monitoring_project(self):
+        dashboard_path = Path(__file__).parents[2] / "deploy/gcp/grafana/provisioning/dashboards/nexoruta.json"
+        dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+        variables = {item["name"]: item for item in dashboard["templating"]["list"]}
+        self.assertEqual(variables["project"]["query"]["selectedQueryType"], "projects")
+        self.assertEqual(variables["project"]["hide"], 2)
+        self.assertEqual(variables["service"]["query"]["projectName"], "$project")
+        queries = [target["timeSeriesList"] for panel in dashboard["panels"]
+                   for target in panel.get("targets", []) if target.get("queryType") == "timeSeriesList"]
+        self.assertTrue(queries)
+        self.assertTrue(all(query.get("projectName") == "$project" for query in queries))
+
     def test_environment_cannot_inject_additional_lines(self):
         with self.assertRaises(ValueError):
             vm_deploy.env_line("SMTP_PASSWORD", "value\nAPI_IMAGE=attacker/image")
         self.assertEqual(vm_deploy.env_line("PASSWORD", "a'b$cd"), "PASSWORD='a\\'b$cd'\n")
+
+    def test_remote_stage_error_reports_only_the_structured_error_type(self):
+        output = '\n'.join([
+            '{"node":"a","stage":"prepare","status":"failed","error_type":"PermissionError","error":"sensitive"}',
+            '{"node":"a","stage":"prepare","status":"failed","error_type":"invalid type; leak"}',
+        ])
+        self.assertEqual(
+            delivery.remote_stage_error(output, "a", "prepare"),
+            "Node a stage prepare failed (PermissionError)",
+        )
+        self.assertEqual(
+            delivery.remote_stage_error('{"node":"b","stage":"apply","status":"failed"}', "a", "prepare"),
+            "Node a stage prepare failed without a structured report",
+        )
+
+    def test_remote_stage_error_can_read_stderr_report(self):
+        output = '{"node":"a","stage":"prepare","status":"failed","error_type":"PermissionError"}'
+        self.assertEqual(
+            delivery.remote_stage_error(output, "a", "prepare"),
+            "Node a stage prepare failed (PermissionError)",
+        )
+
+    def test_remote_stage_error_reports_python_exception_class_only(self):
+        self.assertEqual(
+            delivery.remote_stage_error("Traceback:\nPermissionError: private detail", "a", "prepare"),
+            "Node a stage prepare failed (PermissionError)",
+        )
+
+    def test_remote_stage_error_reports_exit_code_without_output(self):
+        self.assertEqual(
+            delivery.remote_stage_error("__NEXORUTA_STAGE_EXIT__=1", "a", "prepare"),
+            "Node a stage prepare exited (1) without a report",
+        )
+
+    def test_remote_stage_error_reads_report_before_exit_marker(self):
+        output = '\n'.join([
+            '{"node":"a","stage":"prepare","status":"failed","error_type":"PermissionError"}',
+            "__NEXORUTA_STAGE_EXIT__=1",
+        ])
+        self.assertEqual(
+            delivery.remote_stage_error(output, "a", "prepare"),
+            "Node a stage prepare failed (PermissionError)",
+        )
+
+    def test_remote_stage_error_reports_safe_source_location(self):
+        output = '{"node":"a","stage":"prepare","status":"failed","error_type":"TypeError","error_location":"environment:177","error":"sensitive"}'
+        self.assertEqual(
+            delivery.remote_stage_error(output, "a", "prepare"),
+            "Node a stage prepare failed (TypeError at environment:177)",
+        )
+
+    def test_vm_error_location_contains_only_function_and_line(self):
+        try:
+            raise TypeError("secret detail")
+        except TypeError as error:
+            location = vm_deploy.error_location(error)
+        self.assertRegex(location, r"^test_vm_error_location_contains_only_function_and_line:[0-9]+$")
+
+    def test_vm_main_reports_errors_before_service_setup_with_safe_location(self):
+        args = vm_deploy.argparse.Namespace(release="release-" + "a" * 32, node="a", stage="prepare")
+
+        def fail(_args, _timings=None):
+            raise TypeError("private detail")
+
+        with (patch.object(vm_deploy.argparse.ArgumentParser, "parse_args", return_value=args),
+              patch.object(vm_deploy, "run_stage", side_effect=fail),
+              patch("builtins.print") as print_mock):
+            with self.assertRaises(SystemExit):
+                vm_deploy.main()
+        report = json.loads(print_mock.call_args.args[0])
+        self.assertEqual(report["error_type"], "TypeError")
+        self.assertRegex(report["error_location"], r"^fail:[0-9]+$")
+        self.assertNotIn("private detail", print_mock.call_args.args[0])
+
+    def test_remote_stage_error_reports_qualified_exception_class_only(self):
+        self.assertEqual(
+            delivery.remote_stage_error("urllib.error.HTTPError: private detail", "a", "prepare"),
+            "Node a stage prepare failed (HTTPError)",
+        )
+
+    def test_deployment_drains_and_stops_both_nodes_before_migrating(self):
+        release = "release-" + "a" * 32
+        nodes = [
+            {"NODE_ID": "a", "VM_NAME": "nexoruta-a"},
+            {"NODE_ID": "b", "VM_NAME": "nexoruta-b"},
+        ]
+        events = []
+
+        def gcloud(node, *args, capture=False):
+            if args[:2] == ("compute", "scp"):
+                return ""
+            if args[:3] == ("compute", "ssh", node["VM_NAME"]):
+                command = args[-1]
+                if "--stage" in command:
+                    stage = command.split("--stage", 1)[1].split()[0]
+                    events.append(("stage", node["NODE_ID"], stage))
+                    result = {"release": release, "node": node["NODE_ID"], "stage": stage,
+                              "status": "healthy"}
+                    if stage == "verify":
+                        result["endpoints"] = {"api": "https://api.example.test"}
+                    return json.dumps(result)
+                return ""
+            operation = next((item for item in args if item in ("remove-instances", "add-instances")), None)
+            if operation:
+                events.append((operation, node["NODE_ID"]))
+                return ""
+            raise AssertionError(args)
+
+        def command(*args, capture=False, timeout=None):
+            if args[1:3] == ("storage", "cat"):
+                return json.dumps({"expires_at": 2000})
+            if args[1:3] == ("sql", "backups"):
+                return ""
+            if args[1:4] == ("compute", "backend-services", "get-health"):
+                return json.dumps([{"status": {"healthStatus": [
+                    {"instance": "/zones/test/instances/nexoruta-a", "healthState": "HEALTHY"},
+                    {"instance": "/zones/test/instances/nexoruta-b", "healthState": "HEALTHY"},
+                ]}}])
+            raise AssertionError(args)
+
+        config = {"GCP_PROJECT_ID": "demo-project", "GCP_STATE_BUCKET": "demo-state"}
+        with (
+            patch.object(session, "node_configs", return_value=nodes),
+            patch.object(session, "command", side_effect=command),
+            patch.object(session, "gcloud", side_effect=gcloud),
+            patch.object(delivery.time, "time", return_value=1000),
+            patch.object(delivery.time, "sleep", side_effect=lambda seconds: events.append(("sleep", seconds))),
+        ):
+            result = delivery.deploy(config, release)
+
+        operations = [event for event in events if event[0] in ("remove-instances", "add-instances", "stage")]
+        self.assertCountEqual(operations[:2], [("stage", "a", "prepare"), ("stage", "b", "prepare")])
+        self.assertCountEqual(operations[2:4], [("remove-instances", "a"), ("remove-instances", "b")])
+        self.assertEqual(operations[4:], [
+            ("stage", "a", "stop"), ("stage", "b", "stop"), ("stage", "a", "migrate"),
+            ("stage", "b", "apply"), ("add-instances", "b"),
+            ("stage", "a", "apply"), ("add-instances", "a"), ("stage", "a", "verify"),
+        ])
+        self.assertIn(("sleep", 35), events)
+        self.assertEqual(result["endpoints"]["api"], "https://api.example.test")
+
+    def test_remote_error_reports_safe_http_status(self):
+        output = json.dumps({"node": "a", "stage": "verify", "status": "failed",
+                             "error_type": "MailSmokeError", "error_location": "smoke:520", "http_status": 503})
+        self.assertEqual(delivery.remote_stage_error(output, "a", "verify"),
+                         "Node a stage verify failed (MailSmokeError at smoke:520, HTTP 503)")
 
     def test_offline_update_does_not_provision_or_start_anything(self):
         config = {"DEMO_OPERATION": "update"}
@@ -101,6 +269,14 @@ class DeliveryTests(unittest.TestCase):
                     member = tarfile.TarInfo("src/ZonasCobertura/Data/departamentos-uruguay.geojson")
                     member.size = len(payload)
                     output.addfile(member, io.BytesIO(payload))
+                else:
+                    for name, payload in (
+                        ("src/NexoRuta.Commerce/NexoRuta.Commerce.csproj", b"<Project />"),
+                        ("src/NexoRuta.Commerce/Pages/Inicio.razor", b"@page \"/\""),
+                    ):
+                        member = tarfile.TarInfo(name)
+                        member.size = len(payload)
+                        output.addfile(member, io.BytesIO(payload))
             return data.getvalue()
 
         with tempfile.TemporaryDirectory() as temp:
@@ -109,8 +285,11 @@ class DeliveryTests(unittest.TestCase):
                 delivery.stage_sources(destination)
             canonical = destination / "backend/src/ZonasCobertura/Data/departamentos-uruguay.geojson"
             bundled = destination / "frontend/.build/departamentos-uruguay.geojson"
+            restore_marker = destination / "frontend/.restore/src/NexoRuta.Commerce/__nexoruta_restore_shape.razor"
             self.assertEqual(canonical.read_bytes(), bundled.read_bytes())
             self.assertTrue((destination / "frontend/Dockerfile.deploy").is_file())
+            self.assertTrue(restore_marker.is_file())
+            self.assertTrue((destination / "frontend/src/NexoRuta.Commerce/Pages/Inicio.razor").is_file())
 
     def release_manifest(self):
         release = "release-" + "a" * 32
@@ -137,6 +316,8 @@ class DeliveryTests(unittest.TestCase):
             bundle = root / "bundle.tar.gz"
             bundle.write_bytes(b"bundle")
             outputs = root / "outputs"
+            build_id_file = root / "cloud-build-id"
+            step_summary = root / "summary"
 
             def command(*args, **kwargs):
                 if args[1:3] == ("builds", "submit"):
@@ -153,12 +334,15 @@ class DeliveryTests(unittest.TestCase):
             with (patch.object(session, "configuration", return_value={"GCP_PROJECT_ID": "demo-project"}),
                   patch.object(delivery, "ROOT", root), patch.object(delivery, "stage_sources"),
                   patch.object(delivery, "create_bundle", return_value=bundle),
+                  patch.object(delivery, "latest_manifest", return_value=None),
                   patch.object(integration, "verify_checkout", return_value=snapshot),
                   patch.object(session, "command", side_effect=command) as calls,
                   patch.object(delivery.publication, "promote", return_value=True) as promote,
                   patch.dict("os.environ", {"RELEASE_CHANNEL": "main", "INTEGRATION_TAG": snapshot["integration_tag"],
                                             "GITHUB_RUN_NUMBER": "20", "GITHUB_RUN_ATTEMPT": "2",
-                                            "GITHUB_OUTPUT": str(outputs)})):
+                                            "GITHUB_OUTPUT": str(outputs),
+                                            "GITHUB_STEP_SUMMARY": str(step_summary),
+                                            "NEXORUTA_CLOUD_BUILD_ID_FILE": str(build_id_file)})):
                 delivery.build()
                 manifest = json.loads((root / "release.json").read_text())
                 self.assertEqual(manifest["root_sha"], snapshot["root_sha"])
@@ -169,6 +353,71 @@ class DeliveryTests(unittest.TestCase):
                 self.assertEqual(promote.call_args.args[1]["integration_tag"], snapshot["integration_tag"])
                 self.assertFalse(any(call.args[0] == "git" for call in calls.call_args_list))
                 self.assertIn("manifest=", outputs.read_text())
+                self.assertEqual(build_id_file.read_text().strip(), "build-123")
+                self.assertIn("Cloud Build submitted: `build-123`", step_summary.read_text())
+
+    def test_cloud_build_cancellation_uses_the_tracked_project_and_region(self):
+        with patch.object(session, "command") as command:
+            delivery.cancel_cloud_build("build-to-cancel", "demo-project")
+        command.assert_called_once_with("gcloud", "builds", "cancel", "build-to-cancel",
+                                        "--project=demo-project", f"--region={session.REGION}", "--quiet")
+
+    def test_build_reuses_unchanged_images_and_bundle_with_a_complete_manifest(self):
+        sources = {name: char * 40 for name, char in zip(integration.COMPONENTS, "bcd")}
+        snapshot = {"integration_tag": "integration-123-1", "root_sha": "a" * 40, "sources": sources}
+        previous = self.release_manifest()
+        previous.update(sources=sources, bundle_sha256=hashlib.sha256(b"old bundle").hexdigest(),
+                        bundle_source={"root_sha": "e" * 40, "backend_sha": sources["backend"]})
+        plan = {
+            "version": 1, "current": {"root_sha": "f" * 40, "sources": sources},
+            "publish_required": True, "bundle_required": False, "images": ["api", "worker"],
+            "android_input_sha256": "1" * 64,
+            "components": {"mobile_android": {"run": False}},
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            outputs = root / "outputs"
+            seen = {}
+
+            def command(*args, **kwargs):
+                if args[1:3] == ("builds", "submit"):
+                    config = json.loads(Path(next(a.split("=", 1)[1] for a in args if a.startswith("--config="))).read_text())
+                    seen["config"] = config
+                    return json.dumps({"id": "build-selective"})
+                if args[1:3] == ("builds", "describe"):
+                    return json.dumps({"status": "SUCCESS", "results": {"images": [
+                        {"name": image, "digest": "sha256:" + "c" * 64} for image in seen["config"]["images"]]}})
+                if args[1:3] == ("storage", "cp"):
+                    if str(args[3]).startswith("gs://"):
+                        Path(args[4]).write_bytes(b"old bundle")
+                    else:
+                        self.assertIn("--if-generation-match=0", args)
+                return ""
+
+            with (patch.object(session, "configuration", return_value={"GCP_PROJECT_ID": "demo-project"}),
+                  patch.object(delivery, "ROOT", root), patch.object(delivery, "stage_sources"),
+                  patch.object(delivery, "create_bundle") as create_bundle,
+                  patch.object(delivery, "latest_manifest", return_value=previous),
+                  patch.object(integration, "verify_checkout", return_value=snapshot),
+                  patch.object(session, "command", side_effect=command),
+                  patch.object(delivery.publication, "promote", return_value=True),
+                  patch.dict("os.environ", {"RELEASE_CHANNEL": "main", "INTEGRATION_TAG": snapshot["integration_tag"],
+                                            "GITHUB_RUN_NUMBER": "21", "GITHUB_RUN_ATTEMPT": "1",
+                                            "TESTED_CI_PLAN": json.dumps(plan), "GITHUB_OUTPUT": str(outputs)})):
+                delivery.build()
+
+            manifest = json.loads((root / "release.json").read_text())
+            self.assertEqual([step["id"] for step in seen["config"]["steps"]], ["api", "worker"])
+            self.assertEqual(seen["config"]["steps"][0]["waitFor"], ["-"])
+            self.assertEqual(seen["config"]["steps"][1]["waitFor"], ["api"])
+            for step in seen["config"]["steps"]:
+                self.assertIn("--cache-from", step["args"])
+                self.assertIn("BUILDKIT_INLINE_CACHE=1", step["args"])
+            self.assertEqual(manifest["images"]["admin"], previous["images"]["admin"])
+            self.assertEqual(manifest["images"]["api"], f"{session.REGION}-docker.pkg.dev/demo-project/nexoruta/api@sha256:" + "c" * 64)
+            self.assertEqual(set(manifest["reused_images"]), {"admin", "backoffice", "commerce", "tracking"})
+            self.assertEqual(manifest["bundle_sha256"], previous["bundle_sha256"])
+            create_bundle.assert_not_called()
 
     def test_channel_tag_and_manifest_must_match(self):
         manifest = self.release_manifest()
@@ -213,46 +462,9 @@ class DeliveryTests(unittest.TestCase):
                 delivery.latest_release({"GCP_PROJECT_ID": "demo-project"})
             self.assertEqual(command.call_count, 1)
 
-    def test_database_cleanup_still_runs_if_the_vm_stop_fails(self):
-        with (
-            patch.object(session, "instance", side_effect=RuntimeError("Compute unavailable")),
-            patch.object(session, "end_lease") as lease,
-            patch.object(session, "stop_database") as sql,
-        ):
-            session.stop_after_failure({})
-            lease.assert_called_once()
-            sql.assert_called_once()
-
-    def test_unmanaged_database_cannot_be_stopped(self):
-        database = [{"name": "nexoruta-demo-db", "settings": {"userLabels": {}, "activationPolicy": "ALWAYS"}}]
-        with patch.object(session, "command", return_value=json.dumps(database)) as command:
-            with self.assertRaisesRegex(RuntimeError, "not owned"):
-                session.stop_database({"GCP_PROJECT_ID": "demo-project"})
-            self.assertEqual(command.call_count, 1)
-
-    def test_stop_with_a_missing_vm_still_stops_sql_without_provisioning(self):
-        with (
-            patch.object(session, "instance", return_value=None),
-            patch.object(session, "end_lease"),
-            patch.object(session, "stop_database") as sql,
-            patch.object(session, "command") as command,
-        ):
-            session.run({"DEMO_OPERATION": "stop"})
-            sql.assert_called_once()
-            command.assert_not_called()
-
     def test_stop_cannot_recreate_deleted_resources(self):
         with self.assertRaisesRegex(RuntimeError, "must not create"):
             session.check_plan({"resource_changes": [{"address": "database", "change": {"actions": ["create"]}}]}, "stop")
-
-    def test_sql_cleanup_is_independent_of_lease_write_failure(self):
-        with (
-            patch.object(session, "instance", return_value=None),
-            patch.object(session, "end_lease", side_effect=RuntimeError("Storage unavailable")),
-            patch.object(session, "stop_database") as sql,
-        ):
-            session.stop_after_failure({})
-            sql.assert_called_once()
 
     def test_region_is_not_silently_deployed_in_the_us(self):
         with patch.dict("os.environ", {

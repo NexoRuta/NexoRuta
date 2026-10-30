@@ -1,149 +1,401 @@
 main:
   steps:
+  - lock:
+      call: acquire_control
+      args:
+        state_bucket: ${state_bucket}
+      result: generation
+  - busy:
+      switch:
+      - condition: $${generation == null}
+        steps:
+        - return_busy:
+            return: control_busy
+  - run_control:
+      try:
+        call: control
+        result: outcome
+      except:
+        as: control_error
+        steps:
+        - release_on_error:
+            try:
+              call: release_control
+              args:
+                state_bucket: ${state_bucket}
+                generation: $${generation}
+            except:
+              as: release_error
+              steps:
+              - preserve_control_error:
+                  assign:
+                  - release_failed: true
+        - raise_control_error:
+            raise: $${control_error}
+  - unlock:
+      call: release_control
+      args:
+        state_bucket: ${state_bucket}
+        generation: $${generation}
+  - done:
+      return: $${outcome}
+
+control:
+  steps:
   - init:
       assign:
-      - vm_status: ABSENT
-      - lease:
-          expires_at: 0
-          provisioning_until: 0
-      - now: $${sys.now()}
-      - lease_response:
-          body: null
-      - vm_response:
-          body: null
-      - latest_lease:
-          body: null
+      - nodes:
+        - name: nexoruta-demo
+          zone: ${zone}
+        - name: nexoruta-demo-b
+          zone: ${secondary_zone}
+      - vm_states: []
+      - cleanup_errors: []
+      - running: false
   - read_lease:
-      try:
-        call: http.get
-        args:
-          url: https://storage.googleapis.com/storage/v1/b/${state_bucket}/o/leases%2Fdemo.json?alt=media
-          auth:
-            type: OAuth2
-        result: lease_response
-      except:
-        as: error
+      call: read_lease
+      args:
+        state_bucket: ${state_bucket}
+      result: lease
+  - read_nodes:
+      for:
+        value: node
+        in: $${nodes}
         steps:
-        - missing_lease:
-            switch:
-            - condition: $${error.code != 404}
-              steps:
-              - condition_result_0:
-                  raise: $${error}
-  - decode_lease:
-      switch:
-      - condition: $${default(map.get(lease_response, "body"), null) != null}
-        steps:
-        - assign_lease:
+        - read_vm:
+            call: node_status
+            args:
+              project_id: ${project_id}
+              zone: $${node.zone}
+              name: $${node.name}
+            result: status
+        - remember_vm:
             assign:
-            - lease: $${lease_response.body}
-  - read_vm:
-      try:
-        call: http.get
-        args:
-          url: https://compute.googleapis.com/compute/v1/projects/${project_id}/zones/${zone}/instances/nexoruta-demo
-          auth:
-            type: OAuth2
-        result: vm_response
-      except:
-        as: error
-        steps:
-        - missing_vm:
-            switch:
-            - condition: $${error.code != 404}
-              steps:
-              - condition_result_1:
-                  raise: $${error}
-  - decode_vm:
-      switch:
-      - condition: $${default(map.get(vm_response, "body"), null) != null}
-        steps:
-        - assign_vm:
-            assign:
-            - vm_status: $${vm_response.body.status}
+            - node_state:
+                name: $${node.name}
+                zone: $${node.zone}
+                status: $${status}
+            - vm_states: $${list.concat(vm_states, node_state)}
+            - running: $${running or status == "RUNNING"}
+        - publish_node_state:
+            call: publish_node_metrics
+            args:
+              project_id: ${project_id}
+              node: $${if(node.name == "nexoruta-demo", "a", "b")}
+              status: $${status}
+              active: $${sys.now() < lease.expires_at and sys.now() >= lease.provisioning_until}
   - keep_valid_session:
       switch:
-      - condition: $${now < lease.provisioning_until}
+      - condition: $${sys.now() < lease.provisioning_until}
         steps:
-        - condition_result_2:
+        - return_provisioning:
             return: provisioning
-      - condition: $${vm_status == "RUNNING" and now < lease.expires_at}
+      - condition: $${running and sys.now() < lease.expires_at}
         steps:
-        - condition_result_3:
+        - return_active:
             return: active
-  - stop_expired_vm:
-      switch:
-      - condition: $${vm_status == "RUNNING"}
+  - stop_expired_nodes:
+      for:
+        value: node
+        in: $${vm_states}
         steps:
-        - stop_vm:
-            call: http.post
-            args:
-              url: https://compute.googleapis.com/compute/v1/projects/${project_id}/zones/${zone}/instances/nexoruta-demo/stop
-              auth:
-                type: OAuth2
-            result: vm_stop
-  - read_sql:
-      try:
-        call: http.get
-        args:
-          url: https://sqladmin.googleapis.com/sql/v1beta4/projects/${project_id}/instances/nexoruta-demo-db
-          auth:
-            type: OAuth2
-        result: sql_response
-      except:
-        as: error
-        steps:
-        - missing_sql:
+        - stop_running_node:
             switch:
-            - condition: $${error.code == 404}
+            - condition: $${node.status == "RUNNING"}
               steps:
-              - condition_result_4:
-                  return: no_database
-        - sql_read_error:
-            raise: $${error}
-  - check_for_new_session:
-      try:
-        call: http.get
-        args:
-          url: https://storage.googleapis.com/storage/v1/b/${state_bucket}/o/leases%2Fdemo.json?alt=media
-          auth:
-            type: OAuth2
-        result: latest_lease
-      except:
-        as: error
-        steps:
-        - missing_latest_lease:
-            switch:
-            - condition: $${error.code != 404}
-              steps:
-              - condition_result_5:
-                  raise: $${error}
-  - protect_new_session:
+              - check_new_session_before_vm:
+                  call: safe_to_stop
+                  args:
+                    state_bucket: ${state_bucket}
+                    original_lease: $${lease}
+                  result: may_stop_vm
+              - protect_new_session_before_vm:
+                  switch:
+                  - condition: $${not may_stop_vm}
+                    steps:
+                    - return_new_session_before_vm:
+                        return: new_session
+              - stop_vm:
+                  try:
+                    call: http.post
+                    args:
+                      url: $${"https://compute.googleapis.com/compute/v1/projects/${project_id}/zones/" + node.zone + "/instances/" + node.name + "/stop"}
+                      timeout: 20
+                      auth:
+                        type: OAuth2
+                  except:
+                    as: error
+                    steps:
+                    - record_vm_failure:
+                        assign:
+                        - cleanup_errors: $${list.concat(cleanup_errors, error)}
+  - report_cleanup:
       switch:
-      - condition: $${latest_lease.body != null}
+      - condition: $${len(cleanup_errors) > 0}
         steps:
-        - newer_lease:
-            switch:
-            - condition: $${sys.now() < latest_lease.body.provisioning_until}
-              steps:
-              - condition_result_6:
-                  return: provisioning
-            - condition: $${latest_lease.body.expires_at != lease.expires_at and sys.now() < latest_lease.body.expires_at}
-              steps:
-              - condition_result_7:
-                  return: new_session
-  - stop_sql:
-      switch:
-      - condition: $${sql_response.body.settings.activationPolicy != "NEVER"}
-        steps:
-        - patch_sql:
-            call: http.patch
-            args:
-              url: https://sqladmin.googleapis.com/sql/v1beta4/projects/${project_id}/instances/nexoruta-demo-db
-              auth:
-                type: OAuth2
-              body:
-                settings:
-                  activationPolicy: NEVER
+        - raise_cleanup_failure:
+            raise:
+              message: Some resources could not be stopped; the next guard execution will retry.
+              errors: $${cleanup_errors}
   - done:
       return: stopped
+
+read_lease:
+  params: [state_bucket]
+  steps:
+  - fetch:
+      try:
+        call: http.get
+        args:
+          url: $${"https://storage.googleapis.com/storage/v1/b/" + state_bucket + "/o/leases%2Fdemo.json?alt=media"}
+          timeout: 20
+          auth:
+            type: OAuth2
+        result: response
+      except:
+        as: error
+        steps:
+        - missing:
+            switch:
+            - condition: $${map.get(error, "code") == 404}
+              steps:
+              - return_empty_lease:
+                  return:
+                    expires_at: 0
+                    provisioning_until: 0
+        - failed:
+            raise: $${error}
+  - done:
+      return: $${response.body}
+
+safe_to_stop:
+  params: [state_bucket, original_lease]
+  steps:
+  - reread_lease:
+      call: read_lease
+      args:
+        state_bucket: $${state_bucket}
+      result: latest
+  - protect_provisioning_or_new_session:
+      switch:
+      - condition: $${sys.now() < latest.provisioning_until}
+        steps:
+        - protect_provisioning:
+            return: false
+      - condition: $${latest.expires_at != original_lease.expires_at and sys.now() < latest.expires_at}
+        steps:
+        - protect_new_session:
+            return: false
+  - done:
+      return: true
+
+node_status:
+  params: [project_id, zone, name]
+  steps:
+  - fetch:
+      try:
+        call: http.get
+        args:
+          url: $${"https://compute.googleapis.com/compute/v1/projects/" + project_id + "/zones/" + zone + "/instances/" + name}
+          timeout: 20
+          auth:
+            type: OAuth2
+        result: response
+      except:
+        as: error
+        steps:
+        - missing:
+            switch:
+            - condition: $${map.get(error, "code") == 404}
+              steps:
+              - return_absent:
+                  return: ABSENT
+        - failed:
+            raise: $${error}
+  - done:
+      return: $${response.body.status}
+
+publish_node_metrics:
+  params: [project_id, node, status, active]
+  steps:
+  - timestamp:
+      assign:
+      - timestamp: $${time.format(sys.now())}
+  - publish:
+      try:
+        call: http.post
+        args:
+          url: $${"https://monitoring.googleapis.com/v3/projects/" + project_id + "/timeSeries"}
+          timeout: 20
+          auth:
+            type: OAuth2
+          body:
+            timeSeries:
+            - metric:
+                type: custom.googleapis.com/nexoruta/node_running
+                labels:
+                  node: $${node}
+              resource:
+                type: global
+                labels:
+                  project_id: $${project_id}
+              metricKind: GAUGE
+              valueType: DOUBLE
+              points:
+              - interval:
+                  endTime: $${timestamp}
+                value:
+                  doubleValue: $${if(status == "RUNNING", 1.0, 0.0)}
+            - metric:
+                type: custom.googleapis.com/nexoruta/session_active
+                labels:
+                  node: $${node}
+              resource:
+                type: global
+                labels:
+                  project_id: $${project_id}
+              metricKind: GAUGE
+              valueType: DOUBLE
+              points:
+              - interval:
+                  endTime: $${timestamp}
+                value:
+                  doubleValue: $${if(active, 1.0, 0.0)}
+      except:
+        as: telemetry_error
+        steps:
+        - log_telemetry_failure:
+            try:
+              call: sys.log
+              args:
+                severity: WARNING
+                text: Session guard metric publication failed; resource cleanup continues.
+                timeout: 5
+            except:
+              as: log_error
+              steps:
+              - ignore_logging_failure:
+                  assign:
+                  - logging_failed: true
+  - done:
+      return: null
+
+# Shared with scripts/gcp/control_lock.py. Conditional object creation and
+# generation checks serialize the independent guard with manual session actions.
+# All HTTP calls have a 20-second timeout; this bounded execution finishes within
+# the ten-minute lock lease, including failures and the two metric publications.
+acquire_control:
+  params: [state_bucket]
+  steps:
+  - init:
+      assign:
+      - previous_generation: "0"
+  - metadata:
+      try:
+        call: http.get
+        args:
+          url: $${"https://storage.googleapis.com/storage/v1/b/" + state_bucket + "/o/locks%2Fdemo-control.json"}
+          timeout: 20
+          auth:
+            type: OAuth2
+        result: object
+      except:
+        as: error
+        steps:
+        - absent:
+            switch:
+            - condition: $${map.get(error, "code") == 404}
+              next: create
+        - metadata_failed:
+            raise: $${error}
+  - remember_generation:
+      assign:
+      - previous_generation: $${object.body.generation}
+  - read:
+      try:
+        call: http.get
+        args:
+          url: $${"https://storage.googleapis.com/storage/v1/b/" + state_bucket + "/o/locks%2Fdemo-control.json?alt=media&ifGenerationMatch=" + previous_generation}
+          timeout: 20
+          auth:
+            type: OAuth2
+        result: existing
+      except:
+        as: error
+        steps:
+        - read_changed:
+            switch:
+            - condition: $${map.get(error, "code") == 404 or map.get(error, "code") == 412}
+              steps:
+              - return_read_changed:
+                  return: null
+        - read_failed:
+            raise: $${error}
+  - validate_existing_lock:
+      switch:
+      - condition: $${get_type(existing.body.expires_at) != "integer" and get_type(existing.body.expires_at) != "double"}
+        steps:
+        - refuse_invalid_expiry:
+            raise: The shared control lock is malformed; refusing to overwrite it.
+      - condition: $${not text.match_regex(existing.body.owner, "^[a-f0-9]{32}$")}
+        steps:
+        - refuse_invalid_owner:
+            raise: The shared control lock is malformed; refusing to overwrite it.
+  - busy:
+      switch:
+      - condition: $${sys.now() < existing.body.expires_at}
+        steps:
+        - return_busy:
+            return: null
+  - create:
+      try:
+        call: http.post
+        args:
+          url: $${"https://storage.googleapis.com/upload/storage/v1/b/" + state_bucket + "/o?uploadType=media&name=locks%2Fdemo-control.json&ifGenerationMatch=" + previous_generation}
+          timeout: 20
+          auth:
+            type: OAuth2
+          headers:
+            Content-Type: application/json
+          body:
+            owner: $${text.replace_all(sys.get_env("GOOGLE_CLOUD_WORKFLOW_EXECUTION_ID"), "-", "")}
+            expires_at: $${sys.now() + 600}
+        result: acquired
+      except:
+        as: error
+        steps:
+        - create_changed:
+            switch:
+            - condition: $${map.get(error, "code") == 412}
+              steps:
+              - return_create_changed:
+                  return: null
+        - create_failed:
+            raise: $${error}
+  - done:
+      return: $${acquired.body.generation}
+
+release_control:
+  params: [state_bucket, generation]
+  steps:
+  - release:
+      try:
+        call: http.delete
+        args:
+          url: $${"https://storage.googleapis.com/storage/v1/b/" + state_bucket + "/o/locks%2Fdemo-control.json?ifGenerationMatch=" + generation}
+          timeout: 20
+          auth:
+            type: OAuth2
+      except:
+        as: error
+        steps:
+        - changed:
+            switch:
+            - condition: $${map.get(error, "code") == 404 or map.get(error, "code") == 412}
+              steps:
+              - return_changed:
+                  return: false
+        - failed:
+            raise: $${error}
+  - done:
+      return: true

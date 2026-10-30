@@ -19,9 +19,9 @@ resource "google_sql_database_instance" "demo" {
   deletion_protection = true
   settings {
     edition                     = "ENTERPRISE"
-    tier                        = "db-custom-2-8192"
+    tier                        = "db-g1-small"
     availability_type           = "ZONAL"
-    activation_policy           = var.running ? "ALWAYS" : "NEVER"
+    activation_policy           = "ALWAYS"
     disk_type                   = "PD_SSD"
     disk_size                   = 20
     disk_autoresize             = true
@@ -33,15 +33,8 @@ resource "google_sql_database_instance" "demo" {
       ssl_mode        = "ENCRYPTED_ONLY"
     }
     backup_configuration {
-      enabled                        = true
-      point_in_time_recovery_enabled = true
-      start_time                     = "06:00"
-      location                       = local.region
-      transaction_log_retention_days = 3
-      backup_retention_settings {
-        retained_backups = 7
-        retention_unit   = "COUNT"
-      }
+      enabled                        = false
+      point_in_time_recovery_enabled = false
     }
     maintenance_window {
       day          = 7
@@ -59,7 +52,7 @@ resource "google_sql_database" "app" {
 }
 
 resource "random_password" "password" {
-  for_each = toset(["migrator", "api", "worker", "bootstrap", "rabbit", "mongo", "mail", "admin", "operator", "commerce"])
+  for_each = toset(["migrator", "api", "worker", "bootstrap", "rabbit", "mongo", "mail", "admin", "operator", "commerce", "keys_api", "keys_admin", "keys_backoffice", "keys_commerce", "keys_tracking", "monitor", "grafana"])
   length   = 40
   special  = false
 }
@@ -70,7 +63,7 @@ resource "random_bytes" "key" {
 }
 
 resource "random_uuid" "organization" {
-  for_each = toset(["operator", "commerce"])
+  for_each = toset(["operator", "commerce", "keys_api", "keys_admin", "keys_backoffice", "keys_commerce", "keys_tracking", "monitor", "grafana"])
 }
 
 # The admin is used only by one-shot migrations. Runtime logins are provisioned
@@ -82,9 +75,9 @@ resource "google_sql_user" "migrator" {
 }
 
 locals {
-  domain = var.base_domain != "" ? var.base_domain : "${replace(google_compute_address.demo.address, ".", "-")}.sslip.io"
+  domain = var.base_domain != "" ? var.base_domain : "${replace(google_compute_global_address.frontend.address, ".", "-")}.sslip.io"
   endpoints = {
-    for name in ["api", "admin", "backoffice", "commerce", "tracking", "mail"] : name => "https://${name}.${local.domain}"
+    for name in ["api", "admin", "backoffice", "commerce", "tracking", "mail", "monitor"] : name => "https://${name}.${local.domain}"
   }
 }
 
@@ -94,6 +87,9 @@ resource "google_secret_manager_secret_version" "runtime" {
   secret_data = jsonencode({
     project_id       = var.project_id
     region           = local.region
+    services_host    = "nexoruta-demo.${var.zone}.c.${var.project_id}.internal"
+    frontend_ip      = google_compute_global_address.frontend.address
+    nodes            = { a = { name = local.name, zone = var.zone }, b = { name = "${local.name}-b", zone = var.secondary_zone } }
     sql_connection   = google_sql_database_instance.demo.connection_name
     sql_database     = google_sql_database.app.name
     passwords        = { for key, item in random_password.password : key => item.result }
@@ -122,7 +118,7 @@ resource "google_dns_record_set" "app" {
   name         = "${each.key}.${var.base_domain}."
   type         = "A"
   ttl          = 60
-  rrdatas      = [google_compute_address.demo.address]
+  rrdatas      = [google_compute_global_address.frontend.address]
 }
 
 output "endpoints" { value = local.endpoints }

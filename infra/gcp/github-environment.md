@@ -23,6 +23,8 @@ número, que son valores diferentes.
 | `GCP_DELIVERY_BUCKET` | `PROJECT_ID-nexoruta-delivery` |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/nexoruta-github/providers/demo-vm` |
 | `GCP_DEPLOY_SERVICE_ACCOUNT` | `nexoruta-demo-deployer@PROJECT_ID.iam.gserviceaccount.com` |
+| `GCP_SECONDARY_ZONE` | `southamerica-west1-b` |
+| `MONITOR_ALLOWED_EMAILS` | Correos Google explícitamente autorizados, separados por comas |
 
 Estos son los nombres generados por OpenTofu. La preparación inicial con
 `scripts/gcp/setup.ps1` crea WIF, IAM, buckets y secretos en GCP y escribe las siete
@@ -71,6 +73,14 @@ Al cambiarlo, publicar el cambio en `main` y ejecutar `start` o `update`.
 | `SMTP_USERNAME` | Si el proveedor SMTP requiere autenticación. |
 | `SMTP_PASSWORD` | Junto con `SMTP_USERNAME`. |
 | `GEOAPIFY_API_KEY` | Para probar geocodificación con Geoapify. |
+| `MONITOR_GOOGLE_CLIENT_ID` | Cliente OAuth web de Google para el acceso privado a Grafana. |
+| `MONITOR_GOOGLE_CLIENT_SECRET` | Secret del mismo cliente OAuth; no incluirlo en el repositorio ni en logs. |
+
+El cliente OAuth de Grafana debe tener este URI de redirección autorizado:
+`https://monitor.34-49-146-66.sslip.io/login/google`. La IP global `34.49.146.66`
+está reservada para el balanceador. Grafana asigna `Viewer` solo a las cuentas de
+`MONITOR_ALLOWED_EMAILS`; la autenticación básica y el acceso anónimo quedan
+deshabilitados.
 
 Antes de `start` o `update`, el runner combina la configuración pública de Compose
 con los secrets de GitHub y los copia al secreto privado
@@ -89,45 +99,15 @@ JWT/cifrado y las credenciales de firma Android se generan y conservan mediante
 OpenTofu/Secret Manager. No necesitan entradas manuales en GitHub. Tampoco se
 copia la sesión personal de `gcloud` del PC al runner.
 
-## Secrets de los tres repos de aplicaciones
-
-En **cada uno** de `NexoRuta-Backend`, `NexoRuta-Frontend` y `NexoRuta-Mobile`, crear
-también el environment **`nexoruta-demo`**, permitido desde `main`, con este secret:
-
-| Nombre | Valor |
-| --- | --- |
-| `NEXORUTA_INTEGRATION_TOKEN` | Token con acceso al repo madre: `Contents: write` si es fine-grained, o scope `repo` si es OAuth/clásico, para enviar `repository_dispatch`. Preferir uno dedicado. |
-
-Esos jobs solo notifican una publicación de imágenes. No necesitan variables ni
-credenciales de GCP y no inician la VM.
-
-Este secret es necesario para publicar automáticamente al pushear en los repos de
-aplicaciones. Los botones manuales `start`, `update` y `stop` del repo madre pueden
-usarse sin él. La CLI `gh` guarda secrets, pero no crea PATs nuevos: un PAT dedicado
-se genera en GitHub con acceso únicamente a `NexoRuta/NexoRuta` y luego se carga
-en los tres environments. También es posible usar un token OAuth existente con
-scope `repo`, teniendo en cuenta que conserva todos sus permisos originales.
-
-Para cargar el token dedicado con una sola entrada privada en la terminal:
-
-```powershell
-./scripts/gcp/setup-integration-token.ps1
-```
-
-Crear el fine-grained PAT con Resource owner `NexoRuta`, **Only select repositories**
-seleccionando únicamente `NexoRuta/NexoRuta`, `Contents: Read and write` y hasta
-90 días de vigencia. El script pide el valor sin mostrarlo, comprueba el permiso
-de dispatch con un evento de prueba fuera de los tipos de delivery, lo carga en
-los tres environments y verifica su existencia. Usa la sesión administrativa de
-`gh` para guardar secrets; el PAT nuevo no necesita administrar los repos de apps.
-
 ## CI de pull requests
 
 El CI de código de PR usa un environment independiente **`nexoruta-ci`**, sin
 credenciales de despliegue ni secrets de aplicaciones. Si necesita descargar
 submódulos privados, agregar allí únicamente `SUBMODULES_TOKEN` con lectura.
-El CI de `main`, incluyendo el workflow reutilizado por delivery, usa
-`nexoruta-demo`. No se habilita OIDC de GCP en los jobs de pruebas.
+Las ejecuciones manuales o semanales del CI root sobre `main` y el plan/publicación
+automáticos usan `nexoruta-demo` para leer sus variables y el token de submódulos.
+Los jobs de pruebas no reciben permiso OIDC de GCP; solo los jobs de despliegue lo
+solicitan.
 
 ## Configurar desde la terminal
 
@@ -138,6 +118,7 @@ gh variable set GCP_ZONE --repo NexoRuta/NexoRuta --env nexoruta-demo --body sou
 
 # Sin pasar el valor sensible por argumentos: gh solicita el secret.
 gh secret set SUBMODULES_TOKEN --repo NexoRuta/NexoRuta --env nexoruta-demo
+gh secret set SUBMODULES_TOKEN --repo NexoRuta/NexoRuta --env nexoruta-ci
 gh secret set GEOAPIFY_API_KEY --repo NexoRuta/NexoRuta --env nexoruta-demo
 gh secret set SMTP_USERNAME --repo NexoRuta/NexoRuta --env nexoruta-demo
 gh secret set SMTP_PASSWORD --repo NexoRuta/NexoRuta --env nexoruta-demo

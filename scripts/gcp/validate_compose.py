@@ -13,6 +13,9 @@ with tempfile.TemporaryDirectory(prefix="nexoruta-compose-") as temp:
     values.update({key: "example.invalid/test:validation" for key in required if key.endswith("_IMAGE")})
     values["SMTP_PORT"] = "1025"
     values["SMTP_SSL"] = "false"
+    values["NODE_PRIVATE_IP"] = "127.0.0.1"
+    values["NODE_NAME"] = "node-a"
+    values["RELEASE_ID"] = "release-validation"
     path.write_text("".join(f"{key}={value}\n" for key, value in values.items()))
     session.command("docker", "compose", "--env-file", str(path), "-f", str(compose), "config", "--quiet")
 print("Production Compose configuration is valid.")

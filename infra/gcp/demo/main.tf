@@ -26,6 +26,15 @@ variable "zone" {
   }
 }
 
+variable "secondary_zone" {
+  type    = string
+  default = "southamerica-west1-b"
+  validation {
+    condition     = contains(["southamerica-west1-b", "southamerica-west1-c"], var.secondary_zone) && var.secondary_zone != var.zone
+    error_message = "The second node must use a different Santiago zone: southamerica-west1-b or southamerica-west1-c."
+  }
+}
+
 variable "base_domain" {
   type        = string
   default     = ""
@@ -83,17 +92,6 @@ resource "google_compute_firewall" "iap_ssh" {
   }
 }
 
-resource "google_compute_firewall" "web" {
-  name          = "${local.name}-web"
-  network       = google_compute_network.demo.name
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = [local.name]
-  allow {
-    protocol = "tcp"
-    ports    = ["80", "443"]
-  }
-}
-
 resource "google_compute_address" "demo" {
   name   = local.name
   region = local.region
@@ -114,7 +112,7 @@ resource "google_compute_disk" "data" {
 resource "google_compute_instance" "demo" {
   name                      = local.name
   zone                      = var.zone
-  machine_type              = "n4-highcpu-8"
+  machine_type              = "n4-custom-6-16384"
   desired_status            = var.running ? "RUNNING" : "TERMINATED"
   allow_stopping_for_update = true
   tags                      = [local.name]
@@ -122,6 +120,7 @@ resource "google_compute_instance" "demo" {
     application = "nexoruta"
     environment = "demo"
     managed_by  = "opentofu"
+    node        = "a"
   }
 
   boot_disk {
@@ -143,6 +142,76 @@ resource "google_compute_instance" "demo" {
     access_config {
       nat_ip = google_compute_address.demo.address
     }
+  }
+  service_account {
+    email  = "nexoruta-demo-runtime@${var.project_id}.iam.gserviceaccount.com"
+    scopes = ["cloud-platform"]
+  }
+  metadata = {
+    enable-oslogin         = "TRUE"
+    block-project-ssh-keys = "TRUE"
+    startup-script         = file("${path.module}/startup.sh")
+    shutdown-script        = "#!/bin/bash\nsystemctl stop docker.service containerd.service || true\n"
+  }
+  scheduling {
+    provisioning_model          = "STANDARD"
+    automatic_restart           = false
+    on_host_maintenance         = "TERMINATE"
+    instance_termination_action = "STOP"
+    max_run_duration {
+      seconds = 14400
+    }
+  }
+  depends_on = [google_secret_manager_secret_version.runtime, google_sql_user.migrator]
+}
+
+# Keep the existing A instance, disk and regional address at their original
+# resource addresses. B has independent storage and never mounts A's disk.
+resource "google_compute_disk" "secondary" {
+  name                   = "${local.name}-b-data"
+  type                   = "hyperdisk-balanced"
+  zone                   = var.secondary_zone
+  size                   = 80
+  provisioned_iops       = 3000
+  provisioned_throughput = 140
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "google_compute_instance" "secondary" {
+  name                      = "${local.name}-b"
+  zone                      = var.secondary_zone
+  machine_type              = "n4-custom-6-16384"
+  desired_status            = var.running ? "RUNNING" : "TERMINATED"
+  allow_stopping_for_update = true
+  tags                      = [local.name]
+  labels = {
+    application = "nexoruta"
+    environment = "demo"
+    managed_by  = "opentofu"
+    node        = "b"
+  }
+
+  boot_disk {
+    interface = "NVME"
+    initialize_params {
+      image                  = "debian-cloud/debian-12"
+      type                   = "hyperdisk-balanced"
+      size                   = 20
+      provisioned_iops       = 3000
+      provisioned_throughput = 140
+    }
+  }
+  attached_disk {
+    source      = google_compute_disk.secondary.id
+    device_name = "nexoruta-data"
+  }
+  network_interface {
+    subnetwork = google_compute_subnetwork.demo.id
+    # Egress is needed for images, packages and external providers. Inbound
+    # application ports remain restricted to the Google front ends.
+    access_config {}
   }
   service_account {
     email  = "nexoruta-demo-runtime@${var.project_id}.iam.gserviceaccount.com"

@@ -1,12 +1,76 @@
 import datetime as dt
 import json
+import threading
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
 import demo_session as session
+import delivery
 
 
 class SessionSafetyTests(unittest.TestCase):
+    def test_stop_runs_both_vms_concurrently_without_stopping_sql(self):
+        barrier = threading.Barrier(2)
+        calls = []
+        vm = {"status": "RUNNING", "labels": {"application": "nexoruta", "managed_by": "opentofu"}}
+
+        def stop(node, *args, **kwargs):
+            calls.append(node["NODE_ID"])
+            barrier.wait(timeout=3)
+
+        with (patch.object(session, "end_lease"), patch.object(session, "instance", return_value=vm),
+              patch.object(session, "gcloud", side_effect=stop), patch.object(session, "command") as command):
+            self.assertEqual(session.stop_session({}), [])
+            command.assert_not_called()
+        self.assertCountEqual(calls, ["a", "b"])
+
+    def test_guard_leaves_sql_running(self):
+        guard = (Path(__file__).parents[2] / "infra/gcp/bootstrap/guard.yaml.tftpl").read_text()
+        self.assertNotIn("sqladmin.googleapis.com", guard)
+        self.assertIn("/instances/\" + node.name + \"/stop", guard)
+
+    def test_stop_continues_if_lease_or_one_node_fails(self):
+        nodes = session.node_configs({})
+        def lookup(node):
+            if node["NODE_ID"] == "a":
+                raise RuntimeError("unavailable")
+            return {"status": "RUNNING", "labels": {"application": "nexoruta", "managed_by": "opentofu"}}
+        with (patch.object(session, "end_lease", side_effect=RuntimeError("lease failure")),
+              patch.object(session, "instance", side_effect=lookup),
+              patch.object(session, "gcloud") as gcloud):
+            errors = session.stop_session({})
+        self.assertEqual(len(errors), 2)
+        self.assertEqual(gcloud.call_args.args[0], nodes[1])
+
+    def test_tofu_setup_overlaps_database_start_and_both_finish_before_session(self):
+        database_started = threading.Event()
+        setup_started = threading.Event()
+        completed = []
+
+        def start_database(config):
+            database_started.set()
+            if not setup_started.wait(5):
+                raise AssertionError("OpenTofu setup did not run concurrently")
+            completed.append("database")
+
+        def setup(config):
+            setup_started.set()
+            if not database_started.wait(5):
+                raise AssertionError("database did not start concurrently")
+            completed.append("tofu")
+
+        def start(config, release):
+            self.assertCountEqual(completed, ["database", "tofu"])
+
+        with (patch.object(delivery, "latest_release", return_value="release-" + "a" * 32),
+              patch.object(session, "instance", return_value=None),
+              patch.object(session, "write_lease"),
+              patch.object(session, "start_database", side_effect=start_database),
+              patch.object(session, "initialize_tofu", side_effect=setup),
+              patch.object(session, "start_session", side_effect=start)):
+            session.run({"DEMO_OPERATION": "start"})
+
     def setUp(self):
         environment = patch.dict("os.environ", {"GITHUB_ACTIONS": "false"})
         environment.start()
@@ -82,7 +146,7 @@ class SessionSafetyTests(unittest.TestCase):
             "GCP_ZONE": "us-central1-a", "GCP_STATE_BUCKET": "demo-state",
         }
         with (
-            patch.dict("os.environ", {"DEMO_RELEASE": "release-" + "a" * 32}),
+            patch.object(delivery, "latest_release", return_value="release-" + "a" * 32),
             patch.object(session, "instance", return_value=None),
             patch.object(session, "write_lease"),
             patch.object(session, "start_database"),
@@ -112,14 +176,15 @@ class SessionSafetyTests(unittest.TestCase):
 
     def test_start_cleanup_also_covers_a_failed_infrastructure_refresh(self):
         events = []
-        def fail_refresh(config):
+        def fail_refresh(config, release):
             events.append("refresh")
             raise RuntimeError("refresh failed")
         with (
-            patch.dict("os.environ", {"DEMO_RELEASE": "release-" + "a" * 32}),
+            patch.object(delivery, "latest_release", return_value="release-" + "a" * 32),
             patch.object(session, "instance", return_value=None),
             patch.object(session, "write_lease"),
             patch.object(session, "start_database", side_effect=lambda config: events.append("database")),
+            patch.object(session, "initialize_tofu"),
             patch.object(session, "start_session", side_effect=fail_refresh),
             patch.object(session, "stop_after_failure") as cleanup,
         ):
@@ -133,12 +198,10 @@ class SessionSafetyTests(unittest.TestCase):
         with (
             patch.object(session, "instance", return_value=self.vm),
             patch.object(session, "end_lease"),
-            patch.object(session, "stop_database") as database,
             patch.object(session, "command") as command,
             patch.object(session, "gcloud") as vm_command,
         ):
             session.run({"DEMO_OPERATION": "stop"})
-            database.assert_called_once()
             command.assert_not_called()
             vm_command.assert_not_called()
 

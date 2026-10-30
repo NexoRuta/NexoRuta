@@ -6,8 +6,8 @@ un commit automático sobre `main` o `develop`.
 
 ## Secuencia
 
-1. Un push al `main` del madre o la notificación de un componente solicita publicar.
-   `start` manual también solicita probar y publicar antes de iniciar la sesión.
+1. Un push al `main` del madre o la notificación de un componente solicita probar y publicar.
+   `start` manual no publica: selecciona la última release completa del canal.
 2. CI resuelve una sola vez los `main` de backend, frontend y mobile. Sus tres SHAs
    se reutilizan para todas las pruebas de aplicaciones y Cloud SQL.
 3. Solo si todos los jobs de CI terminan bien, se crea un commit de integración
@@ -20,9 +20,8 @@ un commit automático sobre `main` o `develop`.
    manifiesto incluye `integration_tag`, `root_sha`, `sources` y `publication_order`.
 6. Después de publicar imágenes y assets se crea una **GitHub prerelease** con ese
    tag y el manifiesto completo en sus notas. No se marca como release estable/latest.
-7. `start` despliega esa release. Su APK se construye con el mobile fijado en el tag,
-   se guarda en el artifact de Actions y se adjunta a la GitHub prerelease con sus
-   checksums. Si Android falla, la release de imágenes sigue existiendo sin APK.
+7. `start` y `update` pueden desplegar la última release completa del canal. `start`
+   además enciende Cloud SQL y las dos VMs; no vuelve a ejecutar CI ni construye un APK.
 
 El tag significa **código probado**. La GitHub prerelease significa **imágenes y
 bundle publicados**. Ninguno de los dos significa que una VM esté encendida ni
@@ -41,7 +40,7 @@ y release pueden conservarse para inspección, sin convertirse en la versión de
 Se admiten las releases previas sin tag para que `update` pueda seguir usando la
 última publicación válida durante la transición. La primera publicación nueva
 agrega el tag y la información de orden al canal. Los números de ejecución se
-comparan dentro del mismo workflow `demo-vm.yml`; no publicar ese canal desde otro
+comparan dentro del mismo workflow `publish.yml`; no publicar ese canal desde otro
 workflow con una numeración independiente.
 
 `update` selecciona una sola release completa del canal. No prueba ni compila de
@@ -52,8 +51,8 @@ los jobs continúan en la misma ejecución que los creó.
 ## Permisos y operación
 
 El job `integration` necesita `contents: write` únicamente para publicar el tag.
-`github_release` lo necesita para crear la prerelease y Android para adjuntar el
-APK. El resto conserva permisos de lectura sobre GitHub. Ninguno modifica ramas.
+`github_release` lo necesita para crear la prerelease. Los controles manuales de
+VM solo requieren lectura sobre GitHub. Ninguno modifica ramas.
 Las reglas del repositorio deben permitir al token de Actions crear tags con el
 prefijo `integration-`; las protecciones de ramas pueden permanecer activas.
 Se mantiene `SUBMODULES_TOKEN` de lectura para repositorios privados. El token de
