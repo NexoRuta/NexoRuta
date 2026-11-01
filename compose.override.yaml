@@ -1,0 +1,191 @@
+x-otel-settings: &otel-settings
+  OpenTelemetry__Enabled: "true"
+  OpenTelemetry__SamplingRatio: "1.0"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+
+services:
+  # Mirror the GCP deployment order for local Compose: migrate, provision
+  # restricted logins, then start application services.
+  rls-migrator:
+    profiles: !reset []
+
+  rls-role-provisioner:
+    profiles: !reset []
+    depends_on:
+      rls-migrator:
+        condition: service_completed_successfully
+
+  dashboard:
+    restart: unless-stopped
+
+  api:
+    environment:
+      <<: *otel-settings
+    depends_on:
+      rls-role-provisioner:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+
+  worker:
+    environment:
+      <<: *otel-settings
+    depends_on:
+      rls-role-provisioner:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+
+  worker-kafka:
+    environment:
+      <<: *otel-settings
+    depends_on:
+      rls-role-provisioner:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+
+  local-bootstrap:
+    depends_on:
+      rls-role-provisioner:
+        condition: service_completed_successfully
+
+  admin:
+    environment: *otel-settings
+    depends_on:
+      api:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  backoffice:
+    environment: *otel-settings
+    depends_on:
+      api:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  commerce:
+    environment: *otel-settings
+    depends_on:
+      api:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  tracking:
+    environment: *otel-settings
+    depends_on:
+      api:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  mailpit:
+    image: axllent/mailpit:v1.31.4
+    ports: !override
+      - "127.0.0.1:11025:1025"
+      - "127.0.0.1:18025:8025"
+
+  rabbitmq:
+    volumes:
+      - ./deploy/local/observability/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./deploy/local/observability/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      - dashboard
+      - tempo
+
+  docker-status-exporter:
+    image: python:3.13-alpine
+    restart: unless-stopped
+    command: ["python", "/app/docker_status_exporter.py"]
+    environment:
+      NEXORUTA_COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME:-nexoruta}
+      NEXORUTA_NODE_NAME: local
+    volumes:
+      - ./deploy/local/observability/docker_status_exporter.py:/app/docker_status_exporter.py:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    expose:
+      - "9927"
+
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    restart: unless-stopped
+    user: "0:0"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=4GB
+      - --web.enable-remote-write-receiver
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./deploy/local/observability/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - otel-collector
+      - rabbitmq
+      - docker-status-exporter
+
+  loki:
+    image: grafana/loki:3.7.9
+    restart: unless-stopped
+    user: "0:0"
+    command: ["--config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - ./deploy/local/observability/loki.yaml:/etc/loki/local-config.yaml:ro
+      - loki_data:/tmp/loki
+
+  alloy:
+    image: grafana/alloy:v1.21.3
+    restart: unless-stopped
+    user: "0:0"
+    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "--storage.path=/var/lib/alloy/data", "/etc/alloy/config.alloy"]
+    volumes:
+      - ./deploy/local/observability/alloy.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    depends_on:
+      - loki
+
+  tempo:
+    image: grafana/tempo:3.1.1
+    restart: unless-stopped
+    command: ["--config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./deploy/local/observability/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+
+  grafana:
+    image: grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
+    restart: unless-stopped
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: light
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./deploy/local/observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./deploy/local/observability/grafana/provisioning/dashboards/provider.yaml:/etc/grafana/provisioning/dashboards/provider.yaml:ro
+      - ./deploy/observability/grafana/nexoruta.json:/etc/grafana/provisioning/dashboards/nexoruta.json:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+
+volumes:
+  prometheus_data:
+  loki_data:
+  alloy_data:
+  tempo_data:
+  grafana_data:

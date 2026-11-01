@@ -39,17 +39,41 @@ class DeliveryTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     vm_deploy.extract(data.getvalue(), Path(temp))
 
-    def test_grafana_dashboard_queries_use_selected_cloud_monitoring_project(self):
-        dashboard_path = Path(__file__).parents[2] / "deploy/gcp/grafana/provisioning/dashboards/nexoruta.json"
-        dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
-        variables = {item["name"]: item for item in dashboard["templating"]["list"]}
-        self.assertEqual(variables["project"]["query"]["selectedQueryType"], "projects")
-        self.assertEqual(variables["project"]["hide"], 2)
-        self.assertEqual(variables["service"]["query"]["projectName"], "$project")
-        queries = [target["timeSeriesList"] for panel in dashboard["panels"]
-                   for target in panel.get("targets", []) if target.get("queryType") == "timeSeriesList"]
-        self.assertTrue(queries)
-        self.assertTrue(all(query.get("projectName") == "$project" for query in queries))
+    def test_local_and_gcp_grafana_use_the_shared_prometheus_dashboard(self):
+        root = Path(__file__).parents[2]
+        canonical = root / "deploy/observability/grafana/nexoruta.json"
+        gcp_copy = root / "deploy/gcp/grafana/provisioning/dashboards/nexoruta.json"
+        self.assertEqual(canonical.read_bytes(), gcp_copy.read_bytes())
+
+        dashboard = json.loads(canonical.read_text(encoding="utf-8"))
+        self.assertEqual(dashboard["uid"], "nexoruta-observabilidad")
+
+        panels = []
+
+        def collect(items):
+            for panel in items:
+                if panel["type"] != "row":
+                    panels.append(panel)
+                collect(panel.get("panels", []))
+
+        collect(dashboard["panels"])
+        datasource_types = {
+            datasource["type"]
+            for panel in panels
+            for datasource in [panel.get("datasource", {})]
+            + [target.get("datasource", {}) for target in panel.get("targets", [])]
+            if datasource.get("type")
+        }
+        self.assertEqual(datasource_types, {"prometheus", "loki"})
+
+        gcp_row = next(panel for panel in dashboard["panels"]
+                       if panel.get("title") == "Infraestructura GCP · Prometheus")
+        self.assertTrue(gcp_row["collapsed"])
+        datasource_config = (root / "deploy/gcp/grafana/provisioning/datasources/observability.yaml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("deleteDatasources:", datasource_config)
+        self.assertIn("name: Google Cloud Monitoring", datasource_config)
 
     def test_environment_cannot_inject_additional_lines(self):
         with self.assertRaises(ValueError):

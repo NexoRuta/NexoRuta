@@ -136,6 +136,8 @@ def stage_sources(destination):
 def create_bundle(destination):
     assets = destination / "assets"
     shutil.copytree(ROOT / "deploy/gcp", assets)
+    shutil.copyfile(ROOT / "deploy/observability/grafana/nexoruta.json",
+                    assets / "grafana/provisioning/dashboards/nexoruta.json")
     sql = assets / "sql"
     shutil.copyfile(ROOT / "backend/scripts/provision-rls-runtime-roles.sql", sql / "runtime-roles.sql")
     migrations = ROOT / "backend/src/NexoRuta.Infrastructure/Persistence/Migrations"

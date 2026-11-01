@@ -1,0 +1,75 @@
+discovery.docker "nexoruta" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "15s"
+}
+
+discovery.relabel "nexoruta_logs" {
+  targets = []
+
+  rule {
+    action        = "keep"
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = "nexoruta-demo"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_id"]
+    target_label  = "container_id"
+  }
+}
+
+loki.source.docker "nexoruta" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.nexoruta.targets
+  labels        = { job = "docker", node = sys.env("NODE_NAME") }
+  relabel_rules = discovery.relabel.nexoruta_logs.rules
+  forward_to    = [loki.process.nexoruta_logs.receiver]
+}
+
+loki.process "nexoruta_logs" {
+  stage.drop {
+    expression = "(?i)(authorization|password|access_token|refresh_token|api[ _-]?key|[?&](token|code|key|signature|secret)=|/seguimiento/|/api/public/seguimiento/)"
+  }
+
+  stage.json {
+    expressions = {
+      level          = "Level",
+      trace_id       = "Properties.trace_id",
+      span_id        = "Properties.span_id",
+      correlation_id = "Properties.correlation_id",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level = "level",
+    }
+  }
+
+  stage.structured_metadata {
+    values = {
+      trace_id       = "trace_id",
+      span_id        = "span_id",
+      correlation_id = "correlation_id",
+    }
+  }
+
+  forward_to = [loki.write.central.receiver]
+}
+
+loki.write "central" {
+  endpoint {
+    url = "http://" + sys.env("SERVICES_HOST") + ":3100/loki/api/v1/push"
+  }
+}

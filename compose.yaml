@@ -1,4 +1,6 @@
 # Public deployment settings. Credentials remain in GitHub environment secrets.
+name: nexoruta
+
 x-app-settings:
   SMTP_HOST: mailpit
   SMTP_PORT: "1025"
@@ -21,7 +23,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nexoruta -d nexoruta"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U nexoruta -d nexoruta"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -171,7 +173,7 @@ services:
     container_name: nexoruta-rls-migrator
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Postgres: ${NEXORUTA_POSTGRES_CONNECTION:?Set the local migration connection in .env}
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta;Password=${NEXORUTA_POSTGRES_PASSWORD:?Set existing development password in .env}"
     command: ["database-migrate"]
     depends_on:
       postgres:

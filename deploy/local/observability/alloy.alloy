@@ -1,0 +1,188 @@
+discovery.docker "nexoruta" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "15s"
+}
+
+discovery.relabel "nexoruta_logs" {
+  targets = []
+
+  rule {
+    action        = "keep"
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = "nexoruta"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_id"]
+    target_label  = "container_id"
+  }
+}
+
+loki.source.docker "nexoruta" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.nexoruta.targets
+  labels        = { job = "docker", node = "local" }
+  relabel_rules = discovery.relabel.nexoruta_logs.rules
+  forward_to    = [loki.process.nexoruta_logs.receiver]
+}
+
+loki.process "nexoruta_logs" {
+  stage.drop {
+    expression = "(?i)(authorization|password|access_token|refresh_token|api[ _-]?key|[?&](token|code|key|signature|secret)=|/seguimiento/|/api/public/seguimiento/)"
+  }
+
+  stage.json {
+    expressions = {
+      level          = "Level",
+      trace_id       = "Properties.trace_id",
+      span_id        = "Properties.span_id",
+      correlation_id = "Properties.correlation_id",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level = "level",
+    }
+  }
+
+  stage.structured_metadata {
+    values = {
+      trace_id       = "trace_id",
+      span_id        = "span_id",
+      correlation_id = "correlation_id",
+    }
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+prometheus.exporter.blackbox "local_services" {
+  config = "{ modules: { http_2xx: { prober: http, timeout: 5s }, tcp_connect: { prober: tcp, timeout: 5s } } }"
+
+  target {
+    name    = "api"
+    address = "http://api:8080/health/ready"
+    module  = "http_2xx"
+    labels  = { service = "api", node = "local" }
+  }
+  target {
+    name    = "admin"
+    address = "http://admin:8080/health/ready"
+    module  = "http_2xx"
+    labels  = { service = "admin", node = "local" }
+  }
+  target {
+    name    = "backoffice"
+    address = "http://backoffice:8080/health/ready"
+    module  = "http_2xx"
+    labels  = { service = "backoffice", node = "local" }
+  }
+  target {
+    name    = "commerce"
+    address = "http://commerce:8080/health/ready"
+    module  = "http_2xx"
+    labels  = { service = "commerce", node = "local" }
+  }
+  target {
+    name    = "tracking"
+    address = "http://tracking:8080/health/ready"
+    module  = "http_2xx"
+    labels  = { service = "tracking", node = "local" }
+  }
+  target {
+    name    = "postgres"
+    address = "postgres:5432"
+    module  = "tcp_connect"
+    labels  = { service = "postgres", node = "local" }
+  }
+  target {
+    name    = "redis"
+    address = "redis:6379"
+    module  = "tcp_connect"
+    labels  = { service = "redis", node = "local" }
+  }
+  target {
+    name    = "rabbitmq"
+    address = "rabbitmq:5672"
+    module  = "tcp_connect"
+    labels  = { service = "rabbitmq", node = "local" }
+  }
+  target {
+    name    = "mailpit"
+    address = "http://mailpit:8025/"
+    module  = "http_2xx"
+    labels  = { service = "mailpit", node = "local" }
+  }
+  target {
+    name    = "dashboard"
+    address = "http://dashboard:18888"
+    module  = "http_2xx"
+    labels  = { service = "dashboard", node = "local" }
+  }
+  target {
+    name    = "prometheus"
+    address = "http://prometheus:9090/-/healthy"
+    module  = "http_2xx"
+    labels  = { service = "prometheus", node = "local" }
+  }
+  target {
+    name    = "loki"
+    address = "http://loki:3100/ready"
+    module  = "http_2xx"
+    labels  = { service = "loki", node = "local" }
+  }
+  target {
+    name    = "tempo"
+    address = "http://tempo:3200/ready"
+    module  = "http_2xx"
+    labels  = { service = "tempo", node = "local" }
+  }
+  target {
+    name    = "grafana"
+    address = "http://grafana:3000/api/health"
+    module  = "http_2xx"
+    labels  = { service = "grafana", node = "local" }
+  }
+  target {
+    name    = "alloy"
+    address = "http://alloy:12345/-/healthy"
+    module  = "http_2xx"
+    labels  = { service = "alloy", node = "local" }
+  }
+  target {
+    name    = "docker-status-exporter"
+    address = "http://docker-status-exporter:9927/healthz"
+    module  = "http_2xx"
+    labels  = { service = "docker-status-exporter", node = "local" }
+  }
+}
+
+prometheus.scrape "local_services" {
+  targets         = prometheus.exporter.blackbox.local_services.targets
+  forward_to      = [prometheus.remote_write.local.receiver]
+  scrape_interval = "15s"
+}
+
+prometheus.remote_write "local" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
