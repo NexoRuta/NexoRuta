@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-export NEXORUTA_TEST_POSTGRES_MODE=native
+export NEXORUTA_TEST_POSTGRES_MODE="${NEXORUTA_TEST_POSTGRES_MODE:-native}"
 export NEXORUTA_PLAYWRIGHT_MODULE="$PWD/scripts/cloud/node_modules/playwright-core"
 export NEXORUTA_DESTINATION_BROWSER_DIR="$(mktemp -d /tmp/nexoruta-cloud-browser-XXXXXX)"
 export NEXORUTA_GEOCODING_FULLSTACK_DIR="$(mktemp -d /tmp/nexoruta-cloud-fullstack-XXXXXX)"

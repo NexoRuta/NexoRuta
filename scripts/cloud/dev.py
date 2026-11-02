@@ -4,6 +4,9 @@ import argparse, base64, json, os, pathlib, pwd, secrets, signal, socket, subpro
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 STATE = ROOT / ".local" / "codex-cloud"
 LOCAL_HTTP = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+DOCKER = os.environ.get("NEXORUTA_CLOUD_POSTGRES_MODE") == "docker"
+CONTAINER = "nexoruta-checkpoint-cloud"
+IMAGE = "postgis/postgis:18-3.6-alpine"
 PG = pathlib.Path("/usr/lib/postgresql/18/bin")
 
 def run(args, **kw):
@@ -35,7 +38,11 @@ def env(s, role="api"):
 
 def psql(s, sql=None, file=None, database=None):
     args = [PG / "psql", "-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", str(s["pgPort"]), "-U", s["ownerUser"], "-d", database or s["database"]]
-    if file: args += ["-f", file]
+    if DOCKER:
+        args = ["docker", "exec", "-i", "-e", "PGPASSWORD", "-e", "NEXORUTA_API_DB_PASSWORD", "-e", "NEXORUTA_WORKER_DB_PASSWORD", "-e", "NEXORUTA_BOOTSTRAP_DB_PASSWORD", CONTAINER,
+                "psql", "-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-U", s["ownerUser"], "-d", database or s["database"]]
+        if file: sql = pathlib.Path(file).read_text()
+    elif file: args += ["-f", file]
     e = dict(os.environ, PGPASSWORD=s["ownerPassword"], NEXORUTA_API_DB_PASSWORD=s["apiPassword"],
         NEXORUTA_WORKER_DB_PASSWORD=s["workerPassword"], NEXORUTA_BOOTSTRAP_DB_PASSWORD=s["bootstrapPassword"])
     return run(args, env=e, input=sql, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
@@ -68,7 +75,7 @@ def launch(s, name, project, port):
     pidfile.write_text(str(process.pid)); (STATE / (name+".identity")).write_text(str(dll))
 
 def start():
-    if os.name != "posix" or not PG.exists(): raise RuntimeError("Run install.sh in Linux first")
+    if os.name != "posix" or (not DOCKER and not PG.exists()): raise RuntimeError("Run install.sh in Linux first")
     STATE.mkdir(parents=True, exist_ok=True); STATE.chmod(0o711)
     fresh = not (STATE / "private.json").exists()
     if fresh:
@@ -80,16 +87,40 @@ def start():
         with socket.socket() as probe: probe.bind(("127.0.0.1", s["pgPort"]))
         (STATE / "private.json").write_text(json.dumps(s)); (STATE / "private.json").chmod(0o600)
     else: s = load()
-    pgdir = STATE / "postgres"; pgdir.mkdir(exist_ok=True); pgdir.chmod(0o700)
-    if os.geteuid() == 0:
-        user = pwd.getpwnam("postgres"); os.chown(pgdir, user.pw_uid, user.pw_gid)
-    if not (pgdir / "data" / "PG_VERSION").exists():
-        password = pgdir / "initial-password"; password.write_text(s["ownerPassword"]); password.chmod(0o600)
-        if os.geteuid() == 0: os.chown(password, user.pw_uid, user.pw_gid)
-        try: pg([PG / "initdb", "-D", pgdir / "data", "--username", s["ownerUser"], "--pwfile", password, "--auth-host=scram-sha-256", "--auth-local=trust"], stdout=subprocess.DEVNULL)
-        finally: password.unlink()
-    status = subprocess.run((["runuser", "-u", "postgres", "--"] if os.geteuid()==0 else [])+[str(PG / "pg_ctl"), "-D", str(pgdir / "data"), "status"], stdout=subprocess.DEVNULL)
-    if status.returncode: pg([PG / "pg_ctl", "-D", pgdir / "data", "-l", pgdir / "server.log", "-o", f"-h 127.0.0.1 -p {s['pgPort']} -k {pgdir}", "-w", "start"])
+    if DOCKER:
+        found = subprocess.run(["docker", "container", "inspect", CONTAINER], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        if found.returncode:
+            e = dict(os.environ, POSTGRES_USER=s["ownerUser"], POSTGRES_PASSWORD=s["ownerPassword"], POSTGRES_DB="postgres")
+            run(["docker", "run", "-d", "--name", CONTAINER, "--label", "nexoruta.checkpoint="+s["database"],
+                 "-e", "POSTGRES_USER", "-e", "POSTGRES_PASSWORD", "-e", "POSTGRES_DB",
+                 "-p", f"127.0.0.1:{s['pgPort']}:5432", IMAGE], env=e, stdout=subprocess.DEVNULL)
+            # Filesystem snapshots can retain the marker while Docker state is new.
+            (STATE / "seeded").unlink(missing_ok=True)
+        else:
+            info=json.loads(found.stdout)[0]
+            if info["Config"]["Labels"].get("nexoruta.checkpoint") != s["database"]:
+                raise RuntimeError("Container does not belong to this synthetic database")
+            run(["docker", "start", CONTAINER], stdout=subprocess.DEVNULL)
+        for _ in range(60):
+            ready=subprocess.run(["docker","exec",CONTAINER,"pg_isready","-h","127.0.0.1","-U",s["ownerUser"]],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            if ready.returncode == 0:
+                try:
+                    psql(s,"SELECT 1",database="postgres")
+                    break
+                except subprocess.CalledProcessError: pass
+            time.sleep(1)
+        else: raise RuntimeError("Owned Docker database did not become ready")
+    else:
+        pgdir = STATE / "postgres"; pgdir.mkdir(exist_ok=True); pgdir.chmod(0o700)
+        if os.geteuid() == 0:
+            user = pwd.getpwnam("postgres"); os.chown(pgdir, user.pw_uid, user.pw_gid)
+        if not (pgdir / "data" / "PG_VERSION").exists():
+            password = pgdir / "initial-password"; password.write_text(s["ownerPassword"]); password.chmod(0o600)
+            if os.geteuid() == 0: os.chown(password, user.pw_uid, user.pw_gid)
+            try: pg([PG / "initdb", "-D", pgdir / "data", "--username", s["ownerUser"], "--pwfile", password, "--auth-host=scram-sha-256", "--auth-local=trust"], stdout=subprocess.DEVNULL)
+            finally: password.unlink()
+        status = subprocess.run((["runuser", "-u", "postgres", "--"] if os.geteuid()==0 else [])+[str(PG / "pg_ctl"), "-D", str(pgdir / "data"), "status"], stdout=subprocess.DEVNULL)
+        if status.returncode: pg([PG / "pg_ctl", "-D", pgdir / "data", "-l", pgdir / "server.log", "-o", f"-h 127.0.0.1 -p {s['pgPort']} -k {pgdir}", "-w", "start"])
     existing = psql(s, "SELECT datname FROM pg_database WHERE datname='"+s["database"]+"';", database="postgres")
     if s["database"] not in existing: psql(s, 'CREATE DATABASE "'+s["database"]+'";', database="postgres")
     # Never rebuild files mapped by a running web process. Stop this runtime first.
@@ -126,7 +157,7 @@ def start():
     print("Synthetic Cloud runtime ready: API5000 Backoffice5101 Commerce5102. Run verify next.")
 
 def stop():
-    load()
+    s=load()
     for name in ["commerce","backoffice","api"]:
         p=STATE/(name+".pid")
         if not p.exists(): continue
@@ -136,7 +167,12 @@ def stop():
             os.killpg(pid,signal.SIGTERM)
         except (ProcessLookupError,FileNotFoundError): pass
         p.unlink()
-    pg([PG/"pg_ctl","-D",STATE/"postgres/data","-w","stop"])
+    if DOCKER:
+        label=run(["docker","inspect","-f",'{{index .Config.Labels "nexoruta.checkpoint"}}',CONTAINER],stdout=subprocess.PIPE,text=True).stdout.strip()
+        if label != s["database"]: raise RuntimeError("Refusing to stop unrelated container")
+        run(["docker","stop",CONTAINER],stdout=subprocess.DEVNULL)
+    else:
+        pg([PG/"pg_ctl","-D",STATE/"postgres/data","-w","stop"])
     print("Owned Cloud runtime stopped; data retained")
 
 def verify():
@@ -151,6 +187,12 @@ def verify():
     checks=psql(s,"SELECT rolname,rolsuper,rolbypassrls FROM pg_roles WHERE rolname='nexoruta_api_runtime'; SELECT postgis_full_version(); SELECT count(*) FROM public.\"__EFMigrationsHistory\";")
     safe=psql(s,"SELECT CASE WHEN NOT rolsuper AND NOT rolbypassrls AND NOT rolcreatedb AND NOT rolcreaterole THEN 'cloud_role_safe' ELSE 'unsafe' END FROM pg_roles WHERE rolname='nexoruta_api_runtime';")
     if "cloud_role_safe" not in safe or "unsafe" in safe:raise RuntimeError("Unsafe or missing runtime RLS login")
+    activity=psql(s,"SELECT count(*) FROM pg_stat_activity WHERE datname='"+s["database"]+"' AND usename='nexoruta_api_runtime';")
+    count=int(activity.splitlines()[2].strip())
+    if count < 1: raise RuntimeError("API runtime connection not observed")
+    rls=psql(s,"SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relrowsecurity AND relforcerowsecurity;")
+    if int(rls.splitlines()[2].strip()) < 1: raise RuntimeError("Forced RLS not observed")
+    print("API connections use restricted runtime role; forced RLS tables verified")
     print("PostgreSQL/PostGIS and runtime RLS role verified; credentials remain in ignored private.json")
     print(checks)
 
