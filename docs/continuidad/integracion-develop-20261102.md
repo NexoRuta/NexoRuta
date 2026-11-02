@@ -6,8 +6,8 @@
 
 | Componente | Commit de integración |
 |---|---|
-| Backend | `b0d64572c75d8cc9fb67a0e927392f42d63abc8d` |
-| Frontend | `9ec7f39cc55f43983436a86443d2e6213fd01550` |
+| Backend | `c41edf6e38a8d8fcc305d19bcf699b46e523e24d` |
+| Frontend | `5528cd94774123494e5a28e2d8dcf44bd0ffe28d` |
 | Mobile | `d570ddb7c482c56070140e25fafb5a18e51cdbfa` |
 
 PRs de integración: [Backend #47](https://github.com/NexoRuta/NexoRuta-Backend/pull/47), [Frontend #44](https://github.com/NexoRuta/NexoRuta-Frontend/pull/44), [Mobile #20](https://github.com/NexoRuta/NexoRuta-Mobile/pull/20). Conservan los checkpoints publicados y la historia de develop; sin reemplazar ramas ni force-push.
@@ -31,3 +31,5 @@ Las pruebas Kestrel construyen el frontend exacto y usan Chromium fijado tambié
 La reserva del despachador utiliza políticas de catálogo sólo para CURRENT_USER dentro de la transacción de migración y las elimina antes de confirmar. FORCE RLS permanece habilitado; no queda un acceso permanente para runtime.
 
 B2 admite al migrador CREATEROLE que hereda al propietario del esquema mediante políticas SELECT completas, exclusivas de su transacción y con bloqueo de escritores. Rechaza políticas restrictivas que impidan asegurar visibilidad total. No concede BYPASSRLS ni SUPERUSER y conserva el rechazo de conflictos y ocupaciones legadas sin conciliación. La regresión de transición se ejecuta también con una identidad efímera no superusuario, detecta conflictos reales y sólo activa tras conciliación explícita. El harness verifica que no quedan políticas temporales después de confirmar. Esta corrección de compatibilidad no equivale a revisión nativa ni cierra CU06.
+
+El recorrido completo detectó una acción comercial oculta tras suspender una parada. Frontend #45 descuenta sólo paradas activas del panel general, conservando las filas históricas de la ruta. La CI ejecuta primero ese recorrido crítico en el lote 0; si falla, informa antes de recorrer el resto del lote. La suite completa sigue ejecutándose cuando pasa.
