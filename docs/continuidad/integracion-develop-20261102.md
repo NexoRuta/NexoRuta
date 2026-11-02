@@ -6,7 +6,7 @@
 
 | Componente | Commit de integración |
 |---|---|
-| Backend | `c372e1691da4d4e59bc48019969d369febe2fd1a` |
+| Backend | `5614b306a44a95843f7e659d85358dab4b87deaf` |
 | Frontend | `9ec7f39cc55f43983436a86443d2e6213fd01550` |
 | Mobile | `d570ddb7c482c56070140e25fafb5a18e51cdbfa` |
 
@@ -20,7 +20,7 @@ Las regresiones actualizadas conservan sus aserciones: CSV v2, texto español de
 
 Las ejecuciones CI de estos PRs y del superproyecto son la evidencia de la combinación final. Los resultados originales de Cloud permanecen documentados en las auditorías CU08/CU09 y rediseño; no sustituyen los checks de integración.
 
-La preparación para PostgreSQL administrado crea propietarios NOINHERIT y la migración del historial sólo admite membresía del propio migrador con CREATEROLE/superusuario. Las membresías ajenas siguen rechazadas; el harness exige que el rol API no pueda hacer SET ROLE al propietario del historial. Se conserva el identificador de la migración histórica. La regresión de preparación de VM exige reinicio de brokers existentes y reconciliación explícita del núcleo de observabilidad, sin tocar datos ni ejecutar despliegues.
+La preparación para PostgreSQL administrado crea propietarios NOINHERIT y las migraciones del historial y del plazo de prueba sólo admiten membresía del propio migrador con CREATEROLE/superusuario. Las membresías ajenas siguen rechazadas; el harness exige que el rol API no pueda hacer SET ROLE al propietario del historial. Se conserva el identificador de la migración histórica. La regresión de preparación de VM exige reinicio de brokers existentes y reconciliación explícita del núcleo de observabilidad, sin tocar datos ni ejecutar despliegues.
 
 Las suites completas detectaron fixtures anteriores a la admisión CU09. Se actualizan a cobertura/tarifa publicadas y destino inicial confirmado, manteniendo el aislamiento y los conflictos. Las pruebas de actualización siembran el esquema anterior real, sin intentar revertir el historial protegido. Los contratos de mensajería comparan JSON semánticamente, preservando IDs y cabeceras de trazabilidad.
 
