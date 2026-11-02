@@ -143,6 +143,9 @@ def main():
                              f"WHERE r.rolname IN ({technical_sql});").stdout.strip()
             if inherited != "0":
                 raise RuntimeError("A technical login inherited another role")
+            transient = psql("SELECT count(*) FROM pg_policies WHERE policyname='migration_dispatcher_catalog' OR policyname LIKE 'migration_fleet_%';").stdout.strip()
+            if transient != "0":
+                raise RuntimeError("Migration-only policies leaked after commit")
             print("Runtime role attributes and technical membership isolation passed.")
 
             # Each portal can persist its own keys but cannot read another ring
