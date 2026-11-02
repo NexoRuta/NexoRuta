@@ -173,6 +173,7 @@ def main():
             denied('SELECT "Payload" FROM public."OutboxMessages";', "nexoruta_monitor_runtime", monitor_secret)
             denied("SET ROLE nexoruta_monitor_fn;", "nexoruta_monitor_runtime", monitor_secret)
             denied("SELECT * FROM nexoruta_hosting.rate_limits;", "nexoruta_monitor_runtime", monitor_secret)
+            denied("SET ROLE nexoruta_history_fn;", "nexoruta_api_runtime", runtime_passwords["API"])
             print("Monitor aggregate sees seeded outbox; raw data/function-owner/counters denied.")
 
             # Start well inside one window so the twelve independent sessions

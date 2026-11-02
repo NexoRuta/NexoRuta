@@ -6,19 +6,19 @@
       "path": "backend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Backend.git",
       "branch": "develop",
-      "commit": "7b88c603e521b1eb013b755ed8cd6827bb37404a"
+      "commit": "396087317e8de3a467c1153a6c5919cd64f91216"
     },
     {
       "path": "frontend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Frontend.git",
       "branch": "develop",
-      "commit": "017ecc89a0353236aa1d77a9902a5c953133baf1"
+      "commit": "9ec7f39cc55f43983436a86443d2e6213fd01550"
     },
     {
       "path": "mobile",
       "repository": "https://github.com/NexoRuta/NexoRuta-Mobile.git",
       "branch": "develop",
-      "commit": "0c88a4aaddb517976a3de993be0da78743024014"
+      "commit": "d570ddb7c482c56070140e25fafb5a18e51cdbfa"
     }
   ],
   "initialRequiredCommit": "8991321593f9092e18aac83d6a9a11df4c388cb3"
