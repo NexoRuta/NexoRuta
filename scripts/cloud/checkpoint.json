@@ -1,18 +1,18 @@
 {
   "rootRepository": "https://github.com/NexoRuta/NexoRuta.git",
-  "rootBranch": "checkpoint/cu08-verified-20261102",
+  "rootBranch": "task-cu09-tarifa-cobertura-20261102",
   "submodules": [
     {
       "path": "backend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Backend.git",
-      "branch": "checkpoint/cu08-verified-20261102",
-      "commit": "2d476ee6a9f1a37a8a1f7e2b14f2f27cb075e715"
+      "branch": "task-cu09-tarifa-cobertura-20261102",
+      "commit": "4462a9f70380843ea616fbce5568acd1aa42c89b"
     },
     {
       "path": "frontend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Frontend.git",
-      "branch": "checkpoint/cu08-verified-20261102",
-      "commit": "fdf1c80445dc5c79f1c56a4db68888d965a9d482"
+      "branch": "task-cu09-tarifa-cobertura-20261102",
+      "commit": "1a5a670088a69fbfb3bd7e605c11cb5330d680ac"
     },
     {
       "path": "mobile",
