@@ -18,7 +18,7 @@ x-api-env: &id001
   Reparto__EvidenciasEncryptionKey: ${EVIDENCE_KEY:?}
   Geocoding__Geoapify__ApiKey: ${GEOAPIFY_API_KEY:-}
   OpenTelemetry__Enabled: 'true'
-  OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4317
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
   OTEL_EXPORTER_OTLP_PROTOCOL: grpc
   NODE_NAME: ${NODE_NAME:?}
   RELEASE_ID: ${RELEASE_ID:?}
@@ -58,7 +58,7 @@ x-worker:
     Email__Smtp__Password: ${SMTP_PASSWORD:-}
     Email__Smtp__FromAddress: ${SMTP_FROM:?}
     OpenTelemetry__Enabled: 'true'
-    OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4317
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     OTEL_EXPORTER_OTLP_PROTOCOL: grpc
     NODE_NAME: ${NODE_NAME:?}
     RELEASE_ID: ${RELEASE_ID:?}
@@ -85,7 +85,7 @@ x-web:
     ASPNETCORE_ENVIRONMENT: Production
     Api__BaseAddress: ${API_URL:?}/
     OpenTelemetry__Enabled: 'true'
-    OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4317
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     OTEL_EXPORTER_OTLP_PROTOCOL: grpc
     NODE_NAME: ${NODE_NAME:?}
     RELEASE_ID: ${RELEASE_ID:?}
@@ -313,8 +313,6 @@ services:
       timeout: 5s
       retries: 24
       start_period: 30s
-    extra_hosts:
-    - host.docker.internal:host-gateway
     ports:
     - ${NODE_PRIVATE_IP:?}:18080:8080
   worker-rabbit:
@@ -327,8 +325,6 @@ services:
     environment: *id003
     volumes: *id004
     healthcheck: *id005
-    extra_hosts:
-    - host.docker.internal:host-gateway
   worker-kafka:
     image: ${WORKER_IMAGE:?}
     entrypoint: *id002
@@ -359,7 +355,7 @@ services:
       MongoDb__Database: nexoruta
       MongoDb__PasswordRecoveryCollection: PasswordRecoveryRequested
       OpenTelemetry__Enabled: 'true'
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       NODE_NAME: ${NODE_NAME:?}
       RELEASE_ID: ${RELEASE_ID:?}
@@ -367,8 +363,6 @@ services:
       Logging__LogLevel__System.Net.Http.HttpClient: Warning
     volumes: *id004
     healthcheck: *id005
-    extra_hosts:
-    - host.docker.internal:host-gateway
   worker-push:
     image: ${WORKER_IMAGE:?}
     entrypoint: *id002
@@ -394,7 +388,7 @@ services:
       Email__Smtp__Password: ${SMTP_PASSWORD:-}
       Email__Smtp__FromAddress: ${SMTP_FROM:?}
       OpenTelemetry__Enabled: 'true'
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       NODE_NAME: ${NODE_NAME:?}
       RELEASE_ID: ${RELEASE_ID:?}
@@ -402,8 +396,6 @@ services:
       Logging__LogLevel__System.Net.Http.HttpClient: Warning
     volumes: *id004
     healthcheck: *id005
-    extra_hosts:
-    - host.docker.internal:host-gateway
   admin:
     restart: unless-stopped
     mem_limit: 768m
@@ -413,7 +405,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       Api__BaseAddress: ${API_URL:?}/
       OpenTelemetry__Enabled: 'true'
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       NODE_NAME: ${NODE_NAME:?}
       RELEASE_ID: ${RELEASE_ID:?}
@@ -429,8 +421,6 @@ services:
     image: ${ADMIN_IMAGE:?}
     volumes:
     - ./hosting.pfx:/data/hosting.pfx:ro
-    extra_hosts:
-    - host.docker.internal:host-gateway
     ports:
     - ${NODE_PRIVATE_IP:?}:18081:8080
   backoffice:
@@ -442,7 +432,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       Api__BaseAddress: ${API_URL:?}/
       OpenTelemetry__Enabled: 'true'
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       NODE_NAME: ${NODE_NAME:?}
       RELEASE_ID: ${RELEASE_ID:?}
@@ -458,8 +448,6 @@ services:
     image: ${BACKOFFICE_IMAGE:?}
     volumes:
     - ./hosting.pfx:/data/hosting.pfx:ro
-    extra_hosts:
-    - host.docker.internal:host-gateway
     ports:
     - ${NODE_PRIVATE_IP:?}:18082:8080
   commerce:
@@ -471,7 +459,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       Api__BaseAddress: ${API_URL:?}/
       OpenTelemetry__Enabled: 'true'
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       NODE_NAME: ${NODE_NAME:?}
       RELEASE_ID: ${RELEASE_ID:?}
@@ -487,8 +475,6 @@ services:
     image: ${COMMERCE_IMAGE:?}
     volumes:
     - ./hosting.pfx:/data/hosting.pfx:ro
-    extra_hosts:
-    - host.docker.internal:host-gateway
     ports:
     - ${NODE_PRIVATE_IP:?}:18083:8080
   tracking:
@@ -500,7 +486,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       Api__BaseAddress: ${API_URL:?}/
       OpenTelemetry__Enabled: 'true'
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       NODE_NAME: ${NODE_NAME:?}
       RELEASE_ID: ${RELEASE_ID:?}
@@ -522,8 +508,6 @@ services:
     image: ${TRACKING_IMAGE:?}
     volumes:
     - ./hosting.pfx:/data/hosting.pfx:ro
-    extra_hosts:
-    - host.docker.internal:host-gateway
     ports:
     - ${NODE_PRIVATE_IP:?}:18084:8080
   proxy:
@@ -547,14 +531,97 @@ services:
       retries: 12
     profiles:
     - shared
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    user: "0:0"
+    command:
+    - --config.file=/etc/prometheus/prometheus.yaml
+    - --storage.tsdb.path=/prometheus
+    - --storage.tsdb.retention.time=7d
+    - --storage.tsdb.retention.size=4GB
+    - --web.enable-remote-write-receiver
+    restart: unless-stopped
+    mem_limit: 384m
+    ports:
+    - ${NODE_PRIVATE_IP:?}:9090:9090
+    volumes:
+    - ./monitoring/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+    - prometheus:/prometheus
+    profiles:
+    - shared
+  gcp-metrics-collector:
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      PROJECT_ID: ${PROJECT_ID:?}
+    volumes:
+    - ./monitoring/gcp-metrics-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+    profiles:
+    - shared
+  loki:
+    image: grafana/loki:3.7.9
+    command: ["--config.file=/etc/loki/config.yaml"]
+    restart: unless-stopped
+    mem_limit: 384m
+    ports:
+    - ${NODE_PRIVATE_IP:?}:3100:3100
+    volumes:
+    - ./monitoring/loki.yaml:/etc/loki/config.yaml:ro
+    - loki:/loki
+    profiles:
+    - shared
+  tempo:
+    image: grafana/tempo:3.1.1
+    command: ["--config.file=/etc/tempo/tempo.yaml"]
+    restart: unless-stopped
+    mem_limit: 256m
+    ports:
+    - ${NODE_PRIVATE_IP:?}:3200:3200
+    - ${NODE_PRIVATE_IP:?}:4317:4317
+    volumes:
+    - ./monitoring/tempo.yaml:/etc/tempo/tempo.yaml:ro
+    - tempo:/var/tempo
+    profiles:
+    - shared
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    restart: unless-stopped
+    user: "0:0"
+    mem_limit: 256m
+    environment:
+      NODE_NAME: ${NODE_NAME:?}
+      SERVICES_HOST: ${SERVICES_HOST:?}
+    volumes:
+    - ./monitoring/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    - otelcol:/var/lib/otelcol
+  alloy:
+    image: grafana/alloy:v1.21.3
+    command: ["run", "--storage.path=/var/lib/alloy/data", "/etc/alloy/config.alloy"]
+    restart: unless-stopped
+    user: "0:0"
+    mem_limit: 128m
+    environment:
+      NODE_NAME: ${NODE_NAME:?}
+      SERVICES_HOST: ${SERVICES_HOST:?}
+    volumes:
+    - ./monitoring/alloy.alloy:/etc/alloy/config.alloy:ro
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    - alloy:/var/lib/alloy/data
   grafana:
-    image: grafana/grafana:13.2.4@sha256:dbbc38ea21103cefb50396340cd88afec779c7e070b0a7bf5a75b4ce46651d3f
+    image: grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
     restart: unless-stopped
     mem_limit: 512m
     ports:
     - ${NODE_PRIVATE_IP:?}:13000:3000
     environment:
       GCP_PROJECT_ID: ${PROJECT_ID:?}
+      SERVICES_HOST: ${SERVICES_HOST:?}
       GF_SERVER_ROOT_URL: ${MONITOR_URL:?}
       GF_DATABASE_TYPE: postgres
       GF_DATABASE_HOST: sql-proxy:5432
@@ -578,7 +645,6 @@ services:
       GF_AUTH_GOOGLE_ALLOW_SIGN_UP: 'true'
       GF_ANALYTICS_REPORTING_ENABLED: 'false'
       GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
-      GF_PLUGINS_PREINSTALL_DISABLED: 'true'
     volumes:
     - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
     - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
@@ -595,3 +661,8 @@ volumes:
   mongo: null
   caddy-data: null
   caddy-config: null
+  prometheus: null
+  loki: null
+  tempo: null
+  otelcol: null
+  alloy: null

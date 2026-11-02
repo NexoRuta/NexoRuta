@@ -1,24 +1,24 @@
 {
   "rootRepository": "https://github.com/NexoRuta/NexoRuta.git",
-  "rootBranch": "task-cu09-tarifa-cobertura-20261102",
+  "rootBranch": "develop",
   "submodules": [
     {
       "path": "backend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Backend.git",
-      "branch": "task-cu09-tarifa-cobertura-20261102",
-      "commit": "4462a9f70380843ea616fbce5568acd1aa42c89b"
+      "branch": "develop",
+      "commit": "7b88c603e521b1eb013b755ed8cd6827bb37404a"
     },
     {
       "path": "frontend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Frontend.git",
-      "branch": "task-cu09-tarifa-cobertura-20261102",
-      "commit": "1a5a670088a69fbfb3bd7e605c11cb5330d680ac"
+      "branch": "develop",
+      "commit": "017ecc89a0353236aa1d77a9902a5c953133baf1"
     },
     {
       "path": "mobile",
       "repository": "https://github.com/NexoRuta/NexoRuta-Mobile.git",
-      "branch": "task-cu08-consumidores-20261102",
-      "commit": "5302b2014f547035fdea92167e2333b1bf6395fc"
+      "branch": "develop",
+      "commit": "0c88a4aaddb517976a3de993be0da78743024014"
     }
   ],
   "initialRequiredCommit": "8991321593f9092e18aac83d6a9a11df4c388cb3"

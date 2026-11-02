@@ -1,0 +1,43 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  resource/node:
+    attributes:
+      - key: node
+        value: ${env:NODE_NAME}
+        action: upsert
+  batch: {}
+
+exporters:
+  prometheus_remote_write:
+    http:
+      endpoint: http://${env:SERVICES_HOST}:9090/api/v1/write
+      tls:
+        insecure: true
+    resource_constant_labels:
+      included: [service.name, service.instance.id, node]
+    wal:
+      directory: /var/lib/otelcol/prometheusremotewrite
+    retry_on_failure:
+      max_elapsed_time: 0
+  otlp/tempo:
+    endpoint: ${env:SERVICES_HOST}:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [resource/node, batch]
+      exporters: [prometheus_remote_write]
+    traces:
+      receivers: [otlp]
+      processors: [resource/node, batch]
+      exporters: [otlp/tempo]

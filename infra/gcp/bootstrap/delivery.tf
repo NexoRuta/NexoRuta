@@ -186,7 +186,7 @@ resource "google_secret_manager_secret_iam_member" "hosting_deployer" {
   member    = "serviceAccount:${google_service_account.deployer.email}"
 }
 resource "google_project_iam_member" "runtime_observability" {
-  for_each = toset(["roles/logging.logWriter", "roles/monitoring.metricWriter", "roles/cloudtrace.agent", "roles/monitoring.viewer"])
+  for_each = toset(["roles/logging.logWriter", "roles/monitoring.metricWriter", "roles/monitoring.viewer"])
   project  = var.project_id
   role     = each.key
   member   = "serviceAccount:${google_service_account.runtime.email}"

@@ -23,8 +23,10 @@ import urllib.parse
 import urllib.request
 
 BASE = Path("/srv/nexoruta")
-APPS = ("api", "worker-rabbit", "worker-kafka", "worker-push", "admin", "backoffice", "commerce", "tracking", "grafana")
-SHARED = ("rabbitmq", "kafka", "mongo", "mailpit", "proxy")
+APPS = ("api", "worker-rabbit", "worker-kafka", "worker-push", "admin", "backoffice", "commerce", "tracking",
+        "grafana", "otel-collector", "alloy")
+SHARED = ("rabbitmq", "kafka", "mongo", "mailpit", "proxy", "prometheus", "gcp-metrics-collector", "loki", "tempo")
+OBSERVABILITY_CORE = ("prometheus", "gcp-metrics-collector", "loki", "tempo")
 RINGS = ("api", "admin", "backoffice", "commerce", "tracking")
 LOAD_BALANCER_PROXIES = ("35.191.0.0/16", "130.211.0.0/22")
 DIRECT_PORTS = {"api": 18080, "admin": 18081, "backoffice": 18082,
@@ -466,11 +468,17 @@ def prepare(args, deployment, runtime, integrations, hosting, manifest, private_
                 if service in SHARED:
                     existing_services[service] = identifier
             for service, identifier in existing_services.items():
-                if service != "proxy":
+                if service != "proxy" and service not in OBSERVABILITY_CORE:
                     deployment.execute("docker", "start", identifier)
-            missing = tuple(service for service in SHARED if service not in existing_services and service != "proxy")
+            missing = tuple(service for service in SHARED
+                            if service not in existing_services and service not in ("proxy", *OBSERVABILITY_CORE))
             if missing:
                 deployment.compose("--profile", "shared", "up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", *missing)
+            # Recreate the observability core from this release's versioned config.
+            # Compose preserves its named data volumes while replacing containers.
+            deployment.measure("reconcile_observability_core", lambda: deployment.compose(
+                "--profile", "shared", "up", "-d", "--no-deps", "--force-recreate",
+                "--wait", "--wait-timeout", "300", *OBSERVABILITY_CORE))
             # Reconcile Caddy with this release's Compose file so its bind mount
             # and published 18025/tcp mapping are applied. Named Caddy volumes
             # remain attached because this does not remove volumes.
@@ -492,14 +500,12 @@ def prepare(args, deployment, runtime, integrations, hosting, manifest, private_
             raise ValueError("Monitoring services must resolve to a private address")
         private_file(BASE / "monitor.json", json.dumps({"project_id": runtime["project_id"], "node": args.node,
                      "services_host": services_ip, "private_ip": private_ip, "expires_at": args.deadline}))
-        if OPS_AGENT_CONFIG.parent.exists():
-            private_bytes(OPS_AGENT_CONFIG, (deployment.directory / "monitoring/ops-agent.yaml").read_bytes())
-            try:
-                deployment.execute("systemctl", "is-active", "--quiet", "google-cloud-ops-agent")
-            except subprocess.CalledProcessError:
-                pass
-            else:
-                deployment.execute("systemctl", "restart", "google-cloud-ops-agent")
+        ops_agent_source = deployment.directory / "monitoring/ops-agent.yaml"
+        if not ops_agent_source.is_file():
+            raise FileNotFoundError("The release bundle is missing monitoring/ops-agent.yaml")
+        private_bytes(OPS_AGENT_CONFIG, ops_agent_source.read_bytes())
+        deployment.execute("systemctl", "restart", "google-cloud-ops-agent")
+        deployment.execute("systemctl", "is-active", "--quiet", "google-cloud-ops-agent")
         deployment.execute("systemctl", "restart", "nexoruta-monitor.service")
         private_file(deployment.directory / "prepared.json", json.dumps({"node": args.node, "deadline": args.deadline}))
     deployment.measure("install_monitoring_and_mark_prepared", install_monitoring_configuration)
