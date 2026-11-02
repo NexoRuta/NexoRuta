@@ -6,7 +6,7 @@
 
 | Componente | Commit de integración |
 |---|---|
-| Backend | `522d9a80655518506250cebc64a52562fe96f012` |
+| Backend | `ec56a207d4960ec731e45678fb15d98f69537bed` |
 | Frontend | `9ec7f39cc55f43983436a86443d2e6213fd01550` |
 | Mobile | `d570ddb7c482c56070140e25fafb5a18e51cdbfa` |
 
