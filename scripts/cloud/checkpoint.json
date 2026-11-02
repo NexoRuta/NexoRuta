@@ -1,0 +1,24 @@
+{
+  "rootRepository": "https://github.com/NexoRuta/NexoRuta.git",
+  "rootBranch": "checkpoint/codex-cloud-20261102",
+  "submodules": [
+    {
+      "path": "backend",
+      "repository": "https://github.com/NexoRuta/NexoRuta-Backend.git",
+      "branch": "checkpoint/codex-cloud-20261102",
+      "commit": "5bd165c060fd925a079ed263e3d24661cfae3bb3"
+    },
+    {
+      "path": "frontend",
+      "repository": "https://github.com/NexoRuta/NexoRuta-Frontend.git",
+      "branch": "checkpoint/codex-cloud-20261102",
+      "commit": "904af71d3d59bc265f711c61b2f6feed6e114b91"
+    },
+    {
+      "path": "mobile",
+      "repository": "https://github.com/NexoRuta/NexoRuta-Mobile.git",
+      "branch": "checkpoint/codex-cloud-20261102",
+      "commit": "5302b2014f547035fdea92167e2333b1bf6395fc"
+    }
+  ]
+}

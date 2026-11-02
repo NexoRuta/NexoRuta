@@ -1,0 +1,1 @@
+{"name":"nexoruta-cloud-checks","private":true,"version":"1.0.0","description":"Controlled Chromium checks only; no production frontend dependency","devDependencies":{"playwright":"1.62.1"}}
