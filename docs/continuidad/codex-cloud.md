@@ -1,5 +1,7 @@
 # Continuar NexoRuta en Codex Cloud
 
+Para la preparación versionada de **agent con Docker**, usar [Cloud para agent](cloud-agent.md). Sus helpers publicados sustituyen el borrador de onboarding; las instrucciones nativas siguientes se conservan como procedimiento alternativo.
+
 Checkpoint del estado local B1–B5, selector persistido y mobile, del 02/11/2026. Próximo objetivo: **CU08 → CU09 → rediseño**, en ese orden. Esta preparación no implementa esas etapas. Leer AGENTS.md, frontend/DESIGN.md, docs/alcance y las especificaciones antes de cambiar comportamiento.
 
 ## 1. Repositorios y checkout
