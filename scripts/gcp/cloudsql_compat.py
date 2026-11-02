@@ -93,7 +93,15 @@ def main():
                 "ConnectionStrings__Postgres": f"Host=127.0.0.1;Port={port};Database=nexoruta;Username=postgres;Password={password};Include Error Detail=true",
             })
             api = str(session.ROOT / "backend/src/NexoRuta.Api/bin/Release/net10.0/NexoRuta.Api.dll")
-            run(["dotnet", api, "database-migrate"], env=env)
+            try:
+                run(["dotnet", api, "database-migrate"], env=env)
+            except RuntimeError:
+                diagnostic = run(["docker", "logs", "--tail", "70", name], check=False)
+                detail = diagnostic.stdout + diagnostic.stderr
+                for value in redactions:
+                    detail = detail.replace(value, "***")
+                print("Disposable PostgreSQL migration diagnostic:\\n" + detail[-24000:], flush=True)
+                raise
             print("Migration chain passed with NOSUPERUSER/CREATEROLE/CREATEDB postgres.")
             # Repeat all role/schema provisioning, including hosting, to exercise
             # ALTER OWNER and CREATE OR REPLACE against their final owners.
