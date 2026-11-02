@@ -256,7 +256,11 @@ class VmDeploymentTests(unittest.TestCase):
             self.assertIn(("--profile", "shared", "up", "-d", "--no-deps", "--force-recreate",
                            "--wait", "--wait-timeout", "300", "proxy"), up_calls)
             started = [call.args[-1] for call in deployment.execute.call_args_list if call.args[:2] == ("docker", "start")]
-            self.assertEqual(set(started), set(identifiers) - {identifiers[services.index("proxy")]})
+            retained = {identifier for service, identifier in zip(services, identifiers)
+                        if service not in ("proxy", *vm_deploy.OBSERVABILITY_CORE)}
+            self.assertEqual(set(started), retained)
+            self.assertIn(("--profile", "shared", "up", "-d", "--no-deps", "--force-recreate",
+                           "--wait", "--wait-timeout", "300", *vm_deploy.OBSERVABILITY_CORE), up_calls)
             request = urlopen.call_args.args[0]
             self.assertEqual(request.full_url, "http://10.0.0.1:18025/healthz")
             self.assertEqual(request.get_header("Host"), "mail.34-0-0-1.sslip.io")

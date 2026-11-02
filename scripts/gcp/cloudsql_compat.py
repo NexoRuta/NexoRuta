@@ -93,7 +93,15 @@ def main():
                 "ConnectionStrings__Postgres": f"Host=127.0.0.1;Port={port};Database=nexoruta;Username=postgres;Password={password};Include Error Detail=true",
             })
             api = str(session.ROOT / "backend/src/NexoRuta.Api/bin/Release/net10.0/NexoRuta.Api.dll")
-            run(["dotnet", api, "database-migrate"], env=env)
+            try:
+                run(["dotnet", api, "database-migrate"], env=env)
+            except RuntimeError:
+                diagnostic = run(["docker", "logs", "--tail", "70", name], check=False)
+                detail = diagnostic.stdout + diagnostic.stderr
+                for value in redactions:
+                    detail = detail.replace(value, "***")
+                print("Disposable PostgreSQL migration diagnostic:\\n" + detail[-24000:], flush=True)
+                raise
             print("Migration chain passed with NOSUPERUSER/CREATEROLE/CREATEDB postgres.")
             # Repeat all role/schema provisioning, including hosting, to exercise
             # ALTER OWNER and CREATE OR REPLACE against their final owners.
@@ -135,6 +143,9 @@ def main():
                              f"WHERE r.rolname IN ({technical_sql});").stdout.strip()
             if inherited != "0":
                 raise RuntimeError("A technical login inherited another role")
+            transient = psql("SELECT count(*) FROM pg_policies WHERE policyname='migration_dispatcher_catalog' OR policyname LIKE 'migration_fleet_%';").stdout.strip()
+            if transient != "0":
+                raise RuntimeError("Migration-only policies leaked after commit")
             print("Runtime role attributes and technical membership isolation passed.")
 
             # Each portal can persist its own keys but cannot read another ring
@@ -173,6 +184,8 @@ def main():
             denied('SELECT "Payload" FROM public."OutboxMessages";', "nexoruta_monitor_runtime", monitor_secret)
             denied("SET ROLE nexoruta_monitor_fn;", "nexoruta_monitor_runtime", monitor_secret)
             denied("SELECT * FROM nexoruta_hosting.rate_limits;", "nexoruta_monitor_runtime", monitor_secret)
+            denied("SET ROLE nexoruta_history_fn;", "nexoruta_api_runtime", runtime_passwords["API"])
+            denied("SET ROLE nexoruta_proof_deadline_fn;", "nexoruta_api_runtime", runtime_passwords["API"])
             print("Monitor aggregate sees seeded outbox; raw data/function-owner/counters denied.")
 
             # Start well inside one window so the twelve independent sessions

@@ -137,6 +137,8 @@ jobs:
     needs: sources
     if: fromJSON(needs.sources.outputs.plan).components.backend.run
     runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -163,6 +165,22 @@ jobs:
         run: |
           dotnet restore backend/NexoRuta.sln --locked-mode
           dotnet build backend/NexoRuta.sln -c Release --no-restore
+      - name: Build the resolved companion portals for Kestrel browser tests
+        run: |
+          dotnet restore frontend/NexoRuta.sln --locked-mode
+          dotnet build frontend/NexoRuta.sln -c Release --no-restore
+      - name: Install pinned Chromium for browser integration
+        run: npx --yes --package=playwright@1.62.1 playwright install --with-deps chromium
+      - name: Verify the critical operational decision flow first
+        if: matrix.shard == 0
+        env:
+          DOTNET_PROCESSOR_COUNT: "4"
+        run: >-
+          dotnet test backend/tests/NexoRuta.IntegrationTests/NexoRuta.IntegrationTests.csproj
+          -c Release --no-build --no-restore
+          --filter FullyQualifiedName~BackofficeBrowserIniciaDecisionOperativaConConflictoYReintentoSeguro
+          --logger "trx;LogFileName=critical-route-decision.trx"
+          --results-directory artifacts/backend/integration/critical
       - name: Run the verified integration shard
         env:
           DOTNET_PROCESSOR_COUNT: "4"
