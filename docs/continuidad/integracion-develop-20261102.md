@@ -6,7 +6,7 @@
 
 | Componente | Commit de integración |
 |---|---|
-| Backend | `5614b306a44a95843f7e659d85358dab4b87deaf` |
+| Backend | `070f49651180b98815618445af141f1341d12612` |
 | Frontend | `9ec7f39cc55f43983436a86443d2e6213fd01550` |
 | Mobile | `d570ddb7c482c56070140e25fafb5a18e51cdbfa` |
 
@@ -27,3 +27,5 @@ Las suites completas detectaron fixtures anteriores a la admisión CU09. Se actu
 La preparación administrada no hereda los grupos runtime (evita combinar sus políticas RLS), pero sí los propietarios de objetos. PostgreSQL exige EXECUTE para validar CREATE OR REPLACE; se restaura sólo el permiso del propietario NOLOGIN sobre sus propias funciones, tanto en el esquema inicial como en preflight de bases existentes. No se amplía el acceso API/worker/PUBLIC.
 
 Las pruebas Kestrel construyen el frontend exacto y usan Chromium fijado también en Linux, en lugar de asumir binarios Debug y chrome.exe de Windows.
+
+La reserva del despachador utiliza políticas de catálogo sólo para CURRENT_USER dentro de la transacción de migración y las elimina antes de confirmar. FORCE RLS permanece habilitado; no queda un acceso permanente para runtime.

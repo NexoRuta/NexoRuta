@@ -6,7 +6,7 @@
       "path": "backend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Backend.git",
       "branch": "develop",
-      "commit": "5614b306a44a95843f7e659d85358dab4b87deaf"
+      "commit": "070f49651180b98815618445af141f1341d12612"
     },
     {
       "path": "frontend",
