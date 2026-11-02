@@ -159,6 +159,18 @@ def create_bundle(destination):
     statements.append("GRANT CREATE ON DATABASE nexoruta TO nexoruta_schema_owner;")
     statements.append("CREATE SCHEMA IF NOT EXISTS nexoruta_app AUTHORIZATION nexoruta_schema_owner;")
     statements.append(f"GRANT CREATE ON SCHEMA public, nexoruta_app TO {', '.join(sorted(roles))};")
+    # Existing managed databases need the same owner-only validator privilege as fresh migrations.
+    statements.append("""DO $owner_execute$
+    DECLARE item record;
+    BEGIN
+        FOR item IN SELECT p.oid::regprocedure AS signature,r.rolname AS owner_name
+            FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+            JOIN pg_roles r ON r.oid=p.proowner
+            WHERE n.nspname='nexoruta_app' AND NOT r.rolcanlogin
+        LOOP
+            EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO %I',item.signature,item.owner_name);
+        END LOOP;
+    END $owner_execute$;""")
     (sql / "preflight.sql").write_text("\n".join(statements) + "\n", encoding="utf-8")
     with open(sql / "postflight.sql", "a", encoding="utf-8") as output:
         restricted = sorted(roles - {"nexoruta_schema_owner"})

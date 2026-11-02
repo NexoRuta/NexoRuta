@@ -6,7 +6,7 @@
 
 | Componente | Commit de integración |
 |---|---|
-| Backend | `396087317e8de3a467c1153a6c5919cd64f91216` |
+| Backend | `4b27d22645fead64bddf682506645fea496d2e3c` |
 | Frontend | `9ec7f39cc55f43983436a86443d2e6213fd01550` |
 | Mobile | `d570ddb7c482c56070140e25fafb5a18e51cdbfa` |
 
@@ -21,3 +21,9 @@ Las regresiones actualizadas conservan sus aserciones: CSV v2, texto español de
 Las ejecuciones CI de estos PRs y del superproyecto son la evidencia de la combinación final. Los resultados originales de Cloud permanecen documentados en las auditorías CU08/CU09 y rediseño; no sustituyen los checks de integración.
 
 La preparación para PostgreSQL administrado crea propietarios NOINHERIT y la migración del historial sólo admite membresía del propio migrador con CREATEROLE/superusuario. Las membresías ajenas siguen rechazadas; el harness exige que el rol API no pueda hacer SET ROLE al propietario del historial. Se conserva el identificador de la migración histórica. La regresión de preparación de VM exige reinicio de brokers existentes y reconciliación explícita del núcleo de observabilidad, sin tocar datos ni ejecutar despliegues.
+
+Las suites completas detectaron fixtures anteriores a la admisión CU09. Se actualizan a cobertura/tarifa publicadas y destino inicial confirmado, manteniendo el aislamiento y los conflictos. Las pruebas de actualización siembran el esquema anterior real, sin intentar revertir el historial protegido. Los contratos de mensajería comparan JSON semánticamente, preservando IDs y cabeceras de trazabilidad.
+
+La preparación administrada no hereda los grupos runtime (evita combinar sus políticas RLS), pero sí los propietarios de objetos. PostgreSQL exige EXECUTE para validar CREATE OR REPLACE; se restaura sólo el permiso del propietario NOLOGIN sobre sus propias funciones, tanto en el esquema inicial como en preflight de bases existentes. No se amplía el acceso API/worker/PUBLIC.
+
+Las pruebas Kestrel construyen el frontend exacto y usan Chromium fijado también en Linux, en lugar de asumir binarios Debug y chrome.exe de Windows.

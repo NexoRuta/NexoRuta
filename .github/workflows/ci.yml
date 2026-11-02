@@ -137,6 +137,8 @@ jobs:
     needs: sources
     if: fromJSON(needs.sources.outputs.plan).components.backend.run
     runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/nexoruta-playwright
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -163,6 +165,12 @@ jobs:
         run: |
           dotnet restore backend/NexoRuta.sln --locked-mode
           dotnet build backend/NexoRuta.sln -c Release --no-restore
+      - name: Build the resolved companion portals for Kestrel browser tests
+        run: |
+          dotnet restore frontend/NexoRuta.sln --locked-mode
+          dotnet build frontend/NexoRuta.sln -c Release --no-restore
+      - name: Install pinned Chromium for browser integration
+        run: npx --yes --package=playwright@1.62.1 playwright install --with-deps chromium
       - name: Run the verified integration shard
         env:
           DOTNET_PROCESSOR_COUNT: "4"
