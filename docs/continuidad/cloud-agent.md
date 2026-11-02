@@ -30,3 +30,5 @@ Puertos: PostgreSQL15432, API5000, Backoffice5101, Commerce5102. Solo ejecutar u
 check.sh, con env-agent.sh, usa fixtures Docker propias y conserva aserciones: HTTP5, fullstack1, frontend/Chromium9, Mobile Core3 y Node3. HTTP y fullstack separados. El selector fullstack prueba selección, ajuste, guardado, reapertura y conflicto con PostgreSQL real/RLS. Mapbox permanent=false; SDK/HTTP controlados y solicitudes externas bloqueadas. Sin tokens ni consumo Mapbox/Geoapify. Mobile utiliza lock portátil en obj sin reescribir el Android versionado.
 
 verify-restart.py verifica login y huellas de filas persistidas/estado privado antes y después de stop/start. No imprime filas, contraseñas ni claves. Logs, bases, imágenes y capturas son locales, no fuentes de preparación ni artefactos Git. No se accede a Windows ni a sus bases. No se publica el entorno automáticamente.
+
+Para validar otro clon sin reutilizar el contenedor del checkout anterior, detener el runtime anterior y exportar NEXORUTA_CLOUD_CONTAINER con un nombre nuevo exclusivo antes de start/check/verify-restart. No copiar private.json. Esta variable debe mantenerse para todas las operaciones de ese clon.

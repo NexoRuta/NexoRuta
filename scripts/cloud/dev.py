@@ -5,7 +5,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 STATE = ROOT / ".local" / "codex-cloud"
 LOCAL_HTTP = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 DOCKER = os.environ.get("NEXORUTA_CLOUD_POSTGRES_MODE") == "docker"
-CONTAINER = "nexoruta-checkpoint-cloud"
+CONTAINER = os.environ.get("NEXORUTA_CLOUD_CONTAINER", "nexoruta-checkpoint-cloud")
 IMAGE = "postgis/postgis:18-3.6-alpine"
 PG = pathlib.Path("/usr/lib/postgresql/18/bin")
 
