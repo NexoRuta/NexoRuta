@@ -138,7 +138,7 @@ jobs:
     if: fromJSON(needs.sources.outputs.plan).components.backend.run
     runs-on: ubuntu-latest
     env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/nexoruta-playwright
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     timeout-minutes: 40
     strategy:
       fail-fast: false
