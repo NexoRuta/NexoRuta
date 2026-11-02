@@ -150,7 +150,7 @@ def create_bundle(destination):
     for role in sorted(roles):
         statements.append(
             f"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='{role}') "
-            f"THEN CREATE ROLE {role} NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; END IF; END $;"
+            f"THEN CREATE ROLE {role} NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; END IF; END $$;"
         )
         # CREATEROLE already grants ADMIN to the creator. Regranting ADMIN to
         # yourself is rejected by PostgreSQL 18; only enable object privileges.
