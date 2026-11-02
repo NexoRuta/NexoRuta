@@ -27,7 +27,15 @@ Correcciones del setup durante el ensayo: Node18 de Ubuntu no satisface Playwrig
 
 ## Copia limpia final
 
-Pendiente de ejecutar tras el primer commit raíz; el resultado observado se agrega aquí antes de entregar. No se atribuye aprobación nativa ni validación vial a las respuestas controladas.
+Ejecutada desde clones Git locales separados en `/clean`, sin .env, bin/obj, .local, node_modules ni respaldos del checkout habitual. Base de código raíz `8157ffeb51856aebe9db5731ce983f58b82858f9`; hijos5bd165c/904af71/5302b20 coincidentes con los gitlinks publicados. Los clones no requirieron ninguna credencial Windows para ejecutar la aplicación; se usó un clúster nativo nuevo y otras credenciales aleatorias.
+
+Install y start correctos. Pruebas limpias: HTTP5/5, fullstack1/1, frontend9/9, mobile3/3, Node3/3; login y los tres GET200,70 migraciones y rol API restringido. Las capturas Chromium reales de los tests cubren320px y escritorio con SDK/HTTP simulados; no se validan mapas ni tiempos viales reales.
+
+La primera restauración de mobile Core reescribió su lock por el RID android-x64 preexistente. `--locked-mode` confirmó NU1004; se resolvió exclusivamente en los scripts Cloud mediante lock portátil en obj/ y test sin nuevo restore. Esa variante pasó3/3 y dejó `git status --porcelain` vacío en raíz y submódulos; el lock Android original no cambia. Los cambios posteriores al commit de código probado son esa configuración de restore verificada aparte y documentación/normalización de saltos CR duplicados en dos auditorías nuevas, sin alterar su contenido.
+
+Las ramas remotas de los tres hijos fueron comprobadas con ls-remote y sus SHAs completos coinciden con checkpoint.json. El commit raíz final registra el resultado y los mismos gitlinks; se verifica también su checkout y publicación antes de entregar. No se atribuye aprobación nativa ni validación vial a respuestas controladas.
+
+Entorno habitual Windows: API y portales permanecen arriba; login/GET200 de usuario/permisos/envíos/flota verificados, y Chromium con sesión nueva muestra10 filas y destino persistido versión3 al reabrir. Un primer intento del browser encontró sesión expirada; renovar la sesión en una ejecución nueva pasó sin cambiar datos ni políticas. No se hizo una auditoría de ese transitorio ni se lo atribuye a Cloud.
 
 ## Límites
 

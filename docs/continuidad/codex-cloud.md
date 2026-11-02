@@ -28,6 +28,8 @@ bash scripts/cloud/install.sh
 
 Instala .NET SDK **10.0.401**, rollForward=disable según los cuatro global.json; PostgreSQL18/PostGIS real; Node24.22.2, tar oficial verificado por SHA256; Playwright1.62.1/Chromium fijado por package-lock; NuGet de API/tests/portales/mobile Core. Razor/Blazor no necesita otro build npm de aplicación: el nuevo npm solo instala herramientas de prueba.
 
+Red de instalación: permitir los repositorios apt Debian/Ubuntu, apt.postgresql.org, www.postgresql.org (clave PGDG), dot.net/builds.dotnet.microsoft.com, nodejs.org, registry.npmjs.org, api.nuget.org/globalcdn.nuget.org y los CDN de Playwright (cdn.playwright.dev y playwright.download.prss.microsoft.com, incluidos redirects necesarios). Mantener Mapbox/Geoapify fuera de las pruebas. La disponibilidad de esas descargas se comprueba en el setup del entorno, no se deduce de tener un repositorio conectado. En el ensayo .NET ya estaba instalado con la versión exacta; no se ejecutó la rama que descarga un SDK ausente.
+
 **Start skill / cada tarea nueva:**
 ```bash
 export DOTNET_ROOT="${DOTNET_ROOT:-$HOME/.dotnet}"
@@ -58,6 +60,7 @@ bash scripts/cloud/check.sh
 - `NEXORUTA_TEST_POSTGRES_MODE=native`: cada fixture crea su propio initdb clúster PostgreSQL18 temporal, puerto y credenciales aleatorios. No acepta ConnectionStrings externos ni usa la base de desarrollo Cloud. Mismas migraciones, roles RLS y aserciones; Docker permanece como predeterminado para quien lo tenga.
 - Ejecuta HTTP destinos5; selector fullstack1 (Commerce→API→PostgreSQL restringido); frontend9; mobile cierre3; Node3. SDK y transporte Mapbox controlados, sin consumo externo. Incluye selección, ajuste, persistencia, reapertura y conflicto de versión.
 - HTTP y fullstack en invocaciones separadas: una ejecución combinada Linux devolvió401 durante la sesión del browser; las aisladas pasaron. Es una limitación observada del harness, no evidencia para cambiar autorización/RLS del producto. Mantener esa secuencia para reproducir.
+- Mobile Core tiene un lock compartido con un RID android-x64 del desarrollo MAUI. El restore portátil usa `-p:NuGetLockFilePath=obj/cloud.packages.lock.json` y el test `--no-restore`, conservando el lock Android versionado sin reescribirlo. No se agrega workload Android para probar Core. Se comprobó el árbol limpio después de esta variante.
 - `verify` exige login real Cloud y GET200 de envíos/flota/perfiles-viales, PostGIS y rol API sin privilegios globales. Regresión del modo Docker: una prueba HTTP restringida pasó aparte en Windows.
 - El operador recién creado no tiene rutas ni envíos inventados; el listado puede estar vacío. Configurar reglas operativas mediante la pantalla/API existente antes de admitir envíos. Las fixtures publican las reglas sintéticas que necesitan.
 

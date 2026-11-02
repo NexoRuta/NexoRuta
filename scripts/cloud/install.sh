@@ -39,7 +39,7 @@ dotnet restore backend/src/NexoRuta.Api/NexoRuta.Api.csproj
 dotnet restore frontend/tests/NexoRuta.ApiClient.Tests/NexoRuta.ApiClient.Tests.csproj
 dotnet restore backend/tests/NexoRuta.UnitTests/NexoRuta.UnitTests.csproj
 dotnet restore backend/tests/NexoRuta.IntegrationTests/NexoRuta.IntegrationTests.csproj
-dotnet restore mobile/tests/NexoRuta.Mobile.Core.Tests/NexoRuta.Mobile.Core.Tests.csproj
+dotnet restore mobile/tests/NexoRuta.Mobile.Core.Tests/NexoRuta.Mobile.Core.Tests.csproj -p:NuGetLockFilePath=obj/cloud.packages.lock.json
 npm ci --prefix scripts/cloud --ignore-scripts
 "${SUDO[@]}" env PATH="$PATH" "$ROOT/scripts/cloud/node_modules/.bin/playwright" install-deps chromium
 scripts/cloud/node_modules/.bin/playwright install chromium

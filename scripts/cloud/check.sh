@@ -9,6 +9,6 @@ dotnet build frontend/src/NexoRuta.Commerce --nologo
 dotnet test backend/tests/NexoRuta.IntegrationTests --filter FullyQualifiedName~DestinosEnvioHttpTests --logger 'console;verbosity=minimal'
 dotnet test backend/tests/NexoRuta.IntegrationTests --no-build --filter FullyQualifiedName~GeocodificacionFullStackBrowserTests --logger 'console;verbosity=minimal'
 dotnet test frontend/tests/NexoRuta.ApiClient.Tests --filter 'FullyQualifiedName~DestinosEnvioPagesTests|FullyQualifiedName~DestinationSearchSelectSaveEditAndManualFallbackInChromium' --logger 'console;verbosity=minimal'
-dotnet test mobile/tests/NexoRuta.Mobile.Core.Tests --filter FullyQualifiedName~IncidenciasCierreTests --logger 'console;verbosity=minimal'
+dotnet test mobile/tests/NexoRuta.Mobile.Core.Tests --no-restore -p:NuGetLockFilePath=obj/cloud.packages.lock.json --filter FullyQualifiedName~IncidenciasCierreTests --logger 'console;verbosity=minimal'
 node --test frontend/tests/destino-mapbox.test.cjs
 python3 scripts/cloud/dev.py verify
