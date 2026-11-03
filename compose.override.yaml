@@ -22,6 +22,8 @@ services:
   api:
     environment:
       <<: *otel-settings
+      Geocoding__Geoapify__PermitirLlamadasReales: "false"
+      RoutingGeoapify__PermitirLlamadasReales: "false"
     depends_on:
       rls-role-provisioner:
         condition: service_completed_successfully
@@ -31,6 +33,16 @@ services:
   worker:
     environment:
       <<: *otel-settings
+    depends_on:
+      rls-role-provisioner:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+
+  worker-push:
+    environment:
+      <<: *otel-settings
+      Push__NoSend: "true"
     depends_on:
       rls-role-provisioner:
         condition: service_completed_successfully
@@ -60,7 +72,9 @@ services:
         condition: service_started
 
   backoffice:
-    environment: *otel-settings
+    environment:
+      <<: *otel-settings
+      Mapbox__PublicAccessToken: ""
     depends_on:
       api:
         condition: service_healthy
@@ -68,7 +82,9 @@ services:
         condition: service_started
 
   commerce:
-    environment: *otel-settings
+    environment:
+      <<: *otel-settings
+      Mapbox__PublicAccessToken: ""
     depends_on:
       api:
         condition: service_healthy
@@ -129,6 +145,7 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - ./deploy/local/observability/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./deploy/observability/prometheus/alerts.yaml:/etc/prometheus/alerts.yaml:ro
       - prometheus_data:/prometheus
     depends_on:
       - otel-collector

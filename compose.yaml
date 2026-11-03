@@ -161,6 +161,29 @@ services:
       mailpit:
         condition: service_started
 
+  worker-push:
+    image: nexoruta-worker:local
+    build: *worker-build
+    container_name: nexoruta-worker-push
+    entrypoint: ["dotnet", "NexoRuta.Worker.dll"]
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      Messaging__Transport: Push
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_worker_runtime;Password=${NEXORUTA_WORKER_DB_PASSWORD:?Set the local restricted worker role password in .env}"
+      DataProtection__KeysDirectory: /var/nexoruta/data-protection-keys
+    volumes:
+      - api_dataprotection_keys:/var/nexoruta/data-protection-keys:ro
+    healthcheck:
+      test: ["CMD-SHELL", "grep -aq 'NexoRuta.Worker.dll' /proc/1/cmdline"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   rls-migrator:
     profiles: ["rls-admin"]
     build:
@@ -332,6 +355,7 @@ services:
         --config min.insync.replicas=1 --config retention.ms=2592000000
 
   admin:
+    restart: unless-stopped
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -348,6 +372,7 @@ services:
         condition: service_healthy
 
   backoffice:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: frontend/Dockerfile.Backoffice
@@ -366,6 +391,7 @@ services:
         condition: service_healthy
 
   commerce:
+    restart: unless-stopped
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -388,6 +414,7 @@ services:
         condition: service_healthy
 
   tracking:
+    restart: unless-stopped
     build:
       context: ./frontend
       dockerfile: Dockerfile

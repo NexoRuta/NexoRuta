@@ -7,6 +7,11 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 processors:
+  resource/node:
+    attributes:
+      - key: node
+        value: local
+        action: upsert
   batch: {}
 
 exporters:
@@ -23,14 +28,15 @@ exporters:
     resource_constant_labels:
       included:
         - service.name
+        - node
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [resource/node, batch]
       exporters: [otlp/aspire, otlp/tempo]
     metrics:
       receivers: [otlp]
-      processors: [batch]
+      processors: [resource/node, batch]
       exporters: [otlp/aspire, prometheus]

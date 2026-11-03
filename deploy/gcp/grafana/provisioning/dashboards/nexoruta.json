@@ -147,14 +147,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (node) (rate(nexoruta_api_request_duration_seconds_sum{node=~\"$node\"}[5m])) / sum by (node) (rate(nexoruta_api_request_duration_seconds_count{node=~\"$node\"}[5m]))",
+          "expr": "sum by (node, service_name) (rate(http_server_request_duration_seconds_sum{node=~\"$node\",service_name=~\"$otel_service\"}[5m])) / sum by (node, service_name) (rate(http_server_request_duration_seconds_count{node=~\"$node\",service_name=~\"$otel_service\"}[5m]))",
           "instant": false,
-          "legendFormat": "{{node}}",
+          "legendFormat": "{{service_name}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Latencia media del API",
+      "title": "Latencia HTTP media por servicio",
       "type": "timeseries"
     },
     {
@@ -201,14 +201,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, node) (rate(nexoruta_api_request_duration_seconds_bucket{node=~\"$node\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, node, service_name) (rate(http_server_request_duration_seconds_bucket{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
           "instant": false,
-          "legendFormat": "{{node}}",
+          "legendFormat": "{{service_name}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Latencia p95 del API",
+      "title": "Latencia HTTP p95 por servicio",
       "type": "timeseries"
     },
     {
@@ -255,14 +255,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le, node) (rate(nexoruta_api_request_duration_seconds_bucket{node=~\"$node\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (le, node, service_name) (rate(http_server_request_duration_seconds_bucket{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
           "instant": false,
-          "legendFormat": "{{node}}",
+          "legendFormat": "{{service_name}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Latencia p99 del API",
+      "title": "Latencia HTTP p99 por servicio",
       "type": "timeseries"
     },
     {
@@ -307,14 +307,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "100 * (sum by (node) (rate(nexoruta_api_errors_total{node=~\"$node\"}[5m])) or on (node) (sum by (node) (rate(nexoruta_api_requests_total{node=~\"$node\"}[5m])) * 0)) / clamp_min(sum by (node) (rate(nexoruta_api_requests_total{node=~\"$node\"}[5m])), 1e-9)",
+          "expr": "100 * (sum by (node, service_name) (rate(http_server_request_duration_seconds_count{node=~\"$node\",service_name=~\"$otel_service\",http_response_status_code=~\"5..\"}[5m])) or on (node, service_name) (sum by (node, service_name) (rate(http_server_request_duration_seconds_count{node=~\"$node\",service_name=~\"$otel_service\"}[5m])) * 0)) / clamp_min(sum by (node, service_name) (rate(http_server_request_duration_seconds_count{node=~\"$node\",service_name=~\"$otel_service\"}[5m])), 1e-9)",
           "instant": true,
-          "legendFormat": "{{node}}",
+          "legendFormat": "{{service_name}}",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Errores del API · 5 min",
+      "title": "Errores HTTP 5xx · 5 min por servicio",
       "type": "stat"
     },
     {
@@ -359,14 +359,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, node) (rate(nexoruta_mobile_sync_pending_bucket{node=~\"$node\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, node, service_name) (rate(nexoruta_mobile_sync_pending_bucket{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
           "instant": true,
-          "legendFormat": "{{node}}",
+          "legendFormat": "{{service_name}}",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Operaciones móviles pendientes · p95",
+      "title": "Operaciones móviles pendientes · p95 por servicio",
       "type": "stat"
     },
     {
@@ -411,14 +411,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "avg by (node) (nexoruta_cache_hit_ratio{node=~\"$node\"})",
+          "expr": "avg by (node, service_name) (nexoruta_cache_hit_ratio{node=~\"$node\",service_name=~\"$otel_service\"})",
           "instant": true,
-          "legendFormat": "{{node}}",
+          "legendFormat": "{{service_name}}",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Aciertos del caché Geoapify",
+      "title": "Aciertos del caché Geoapify por servicio",
       "type": "stat"
     },
     {
@@ -463,14 +463,26 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "round(sum by (node) (increase(nexoruta_commerce_notifications_failed_total{node=~\"$node\"}[5m])))",
+          "expr": "round(sum by (node, service_name, transport) (increase(nexoruta_worker_failures_total{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
           "instant": true,
-          "legendFormat": "{{node}}",
+          "legendFormat": "{{service_name}} · {{transport}}",
           "range": false,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "round(sum by (node, service_name) (increase(nexoruta_commerce_notifications_failed_total{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
+          "instant": true,
+          "legendFormat": "{{service_name}} · notificaciones",
+          "range": false,
+          "refId": "B"
         }
       ],
-      "title": "Avisos a comercios fallidos",
+      "title": "Fallos de workers y avisos a comercios · 5 min",
       "type": "stat"
     },
     {
@@ -526,9 +538,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "nexoruta_worker_sql_contact_age_seconds{node=~\"$node\"}",
+          "expr": "nexoruta_worker_sql_contact_age_seconds{node=~\"$node\",service_name=~\"$otel_service\"}",
           "instant": false,
-          "legendFormat": "{{node}} · {{transport}}",
+          "legendFormat": "{{service_name}} · {{transport}}",
           "range": true,
           "refId": "A"
         }
@@ -578,14 +590,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "round(sum by (node) (increase(nexoruta_worker_push_failures_total{node=~\"$node\"}[5m]))) or vector(0)",
+          "expr": "round(sum by (node, service_name) (increase(nexoruta_worker_push_failures_total{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
           "instant": true,
-          "legendFormat": "{{node}}",
+          "legendFormat": "{{service_name}}",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Push a repartidores fallidos · 5 min",
+      "title": "Fallos de entrega Push por servicio · 5 min",
       "type": "stat"
     },
     {
@@ -627,11 +639,12 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le, node) (rate(nexoruta_mobile_sync_pending_bucket{node=~\"$node\"}[15m])))",
-          "refId": "A"
+          "expr": "histogram_quantile(0.99, sum by (le, node, service_name) (rate(nexoruta_mobile_sync_pending_bucket{node=~\"$node\",service_name=~\"$otel_service\"}[15m])))",
+          "refId": "A",
+          "legendFormat": "{{service_name}}"
         }
       ],
-      "title": "Operaciones móviles pendientes · p99",
+      "title": "Operaciones móviles pendientes · p99 por servicio",
       "type": "stat"
     },
     {
@@ -673,11 +686,12 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rabbitmq_detailed_queue_messages)",
-          "refId": "A"
+          "expr": "max by (queue) (rabbitmq_detailed_queue_messages)",
+          "refId": "A",
+          "legendFormat": "{{queue}}"
         }
       ],
-      "title": "Profundidad de colas RabbitMQ · local",
+      "title": "Mensajes pendientes por cola RabbitMQ",
       "type": "stat"
     },
     {
@@ -824,10 +838,105 @@
       "type": "logs"
     },
     {
-      "collapsed": true,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Operaciones móviles aplicadas o rechazadas en los últimos 5 minutos, por servicio.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "lineWidth": 2
+          },
+          "noValue": "Sin datos",
+          "unit": "short"
+        },
+        "overrides": []
+      },
       "gridPos": {
         "x": 0,
         "y": 66,
+        "w": 24,
+        "h": 7
+      },
+      "id": 31,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (node, service_name, result) (increase(nexoruta_mobile_sync_operations_total{node=~\"$node\",service_name=~\"$otel_service\"}[5m]))",
+          "instant": false,
+          "legendFormat": "{{service_name}} · {{result}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Operaciones de sincronización por resultado",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Una fila por alerta en estado firing. Sin filas significa que no hay alertas activas.",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 73,
+        "w": 24,
+        "h": 8
+      },
+      "id": 32,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "13.2.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "{{alertname}} · {{service_name}} · {{service}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Alertas activas por servicio",
+      "type": "table"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 81,
         "w": 24,
         "h": 1
       },
@@ -855,7 +964,7 @@
             "h": 4,
             "w": 12,
             "x": 0,
-            "y": 67
+            "y": 82
           },
           "id": 2,
           "options": {
@@ -926,7 +1035,7 @@
             "h": 4,
             "w": 12,
             "x": 12,
-            "y": 67
+            "y": 82
           },
           "id": 3,
           "options": {
@@ -989,7 +1098,7 @@
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 71
+            "y": 86
           },
           "id": 5,
           "options": {
@@ -1051,7 +1160,7 @@
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 71
+            "y": 86
           },
           "id": 6,
           "options": {
@@ -1113,7 +1222,7 @@
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 71
+            "y": 86
           },
           "id": 7,
           "options": {
@@ -1175,7 +1284,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 78
+            "y": 93
           },
           "id": 8,
           "options": {
@@ -1237,7 +1346,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 78
+            "y": 93
           },
           "id": 9,
           "options": {
@@ -1299,7 +1408,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 85
+            "y": 100
           },
           "id": 10,
           "options": {
@@ -1361,7 +1470,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 85
+            "y": 100
           },
           "id": 11,
           "options": {
@@ -1423,7 +1532,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 92
+            "y": 107
           },
           "id": 13,
           "options": {
@@ -1485,7 +1594,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 92
+            "y": 107
           },
           "id": 14,
           "options": {
@@ -1548,7 +1657,7 @@
             "h": 5,
             "w": 12,
             "x": 0,
-            "y": 99
+            "y": 114
           },
           "id": 15,
           "options": {
@@ -1604,7 +1713,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 99
+            "y": 114
           },
           "id": 25,
           "options": {
@@ -1702,7 +1811,7 @@
           "value": ".*"
         },
         "hide": 0,
-        "label": "Servicio (regex)",
+        "label": "Servicio en logs y contenedores",
         "name": "service",
         "options": [
           {
@@ -1713,6 +1822,33 @@
         ],
         "query": ".*",
         "type": "textbox"
+      },
+      {
+        "allValue": "NexoRuta[.].*",
+        "current": {
+          "selected": true,
+          "text": "Todos",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values({service_name=~\"NexoRuta[.].*\"}, service_name)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Servicio de aplicación",
+        "multi": true,
+        "name": "otel_service",
+        "options": [],
+        "query": {
+          "query": "label_values({service_name=~\"NexoRuta[.].*\"}, service_name)",
+          "refId": "PrometheusVariableQueryEditor-otel_service"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
       },
       {
         "current": {
