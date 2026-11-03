@@ -90,6 +90,9 @@ export NUGET_HTTP_CACHE_PATH=/workspace/.cache/nuget-http
 export PLAYWRIGHT_BROWSERS_PATH=/workspace/.cache/ms-playwright
 export NEXORUTA_PLAYWRIGHT_MODULE=/workspace/NexoRuta/scripts/cloud/node_modules/playwright
 export NEXORUTA_RECEIPT_E2E_DIR=/tmp/nexoruta-cu10-browser
+export NPM_CONFIG_CACHE=/workspace/.cache/npm
+npm ci --prefix scripts/cloud --ignore-scripts
+scripts/cloud/node_modules/.bin/playwright install chromium
 dotnet build frontend/src/NexoRuta.Backoffice
 dotnet test backend/tests/NexoRuta.IntegrationTests --filter 'FullyQualifiedName~RecepcionDeposito'
 ```
@@ -112,4 +115,6 @@ Publicación exclusiva en `feature/cu10-recepcion-deposito`:
 | Frontend | `c0f40c1bc032e6da1988098ab4c36e4869228a61` |
 | Mobile (sin cambios) | `74a25f1b5b18c7dfc006cf7df747d73b0ec4910a` |
 
-El principal referencia esos gitlinks. Backend y Frontend se publicaron primero. No se hicieron merges, force-push ni publicaciones sobre ramas ajenas. La comprobación final desde un clon remoto limpio se agrega tras publicar el principal.
+El principal referencia esos gitlinks. Backend y Frontend se publicaron primero. No se hicieron merges, force-push ni publicaciones sobre ramas ajenas. Verificación desde un clon **remoto** limpio del principal (commit `099cc7c`, antes de esta nota documental): `git submodule update --init --recursive --depth 1` obtuvo los tres SHA anteriores desde GitHub y dejó el árbol limpio. No se copiaron carpetas de trabajo, binarios, `.env`, claves ni bases del checkout de implementación. La última actualización del principal es documental y conserva esos mismos gitlinks; el SHA final se informa en la entrega.
+
+Orden para revisar/integrar posteriormente: Backend y su migración, Frontend consumidor, principal con los gitlinks. No se ejecutó esa integración.
