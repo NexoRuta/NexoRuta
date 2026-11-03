@@ -145,3 +145,16 @@ Todos los commits propios se publican únicamente en `fix/sesion-401-intermitent
 | Mobile (gitlink conservado, sin rama nueva ni cambios) | `74a25f1b5b18c7dfc006cf7df747d73b0ec4910a` |
 
 El principal actualiza solo estos gitlinks y documentación. Revisar primero la base pendiente CU-10 y sus anteriores; después Backend (diagnóstico/harness), Frontend (corrección/recuperación), y finalmente los gitlinks/documentación del principal. No se ejecutaron merges ni se crearon PR. No se modifica ninguna rama ajena.
+
+
+## Comprobación de publicación desde cero
+
+El 03/11/2026 se clonó **desde GitHub**, sin referencias ni alternates al workspace original:
+
+```bash
+git clone --depth 1 --branch fix/sesion-401-intermitente --recurse-submodules --shallow-submodules https://github.com/NexoRuta/NexoRuta.git /workspace/nexoruta-session401-clean-20261103T1300
+```
+
+El principal publicado `3a801c3cb88de91115a5970f8c196a2e009c1650` obtuvo Backend `9a35b8b292e74a98a55f3e22eab8097bd0d7eb9a`, Frontend `d470cfd999faccc90fcfcc99672e50531716c29e` y Mobile `74a25f1b5b18c7dfc006cf7df747d73b0ec4910a` por fetch de sus respectivos remotos. Se compararon SHA y estados limpios de los cuatro repositorios. No se copió ningún submódulo local. El commit posterior de esta constancia cambia solo este documento y mantiene los mismos tres gitlinks.
+
+Para revisión local basta clonar la rama con submódulos como arriba (usar otra carpeta destino), leer este informe y ejecutar los comandos dirigidos. El entorno original y el respaldo recuperable permanecen conservados. Los tres repositorios modificados tienen upstream en la rama propia; Mobile sigue intacto.
