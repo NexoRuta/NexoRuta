@@ -32,3 +32,7 @@ check.sh, con env-agent.sh, usa fixtures Docker propias y conserva aserciones: H
 verify-restart.py verifica login y huellas de filas persistidas/estado privado antes y después de stop/start. No imprime filas, contraseñas ni claves. Logs, bases, imágenes y capturas son locales, no fuentes de preparación ni artefactos Git. No se accede a Windows ni a sus bases. No se publica el entorno automáticamente.
 
 Para validar otro clon sin reutilizar el contenedor del checkout anterior, detener el runtime anterior y exportar NEXORUTA_CLOUD_CONTAINER con un nombre nuevo exclusivo antes de start/check/verify-restart. No copiar private.json. Esta variable debe mantenerse para todas las operaciones de ese clon.
+
+## Investigación posterior de sesión (03/11/2026)
+
+[Diagnóstico y reproducción](../auditorias/sesion-401/01-diagnostico-y-verificacion.md): respuesta 401 demorada que invalidaba un ingreso posterior. El origen del 401 histórico de arranque sigue sin determinar. El harness optativo ejecuta portales reales, API Kestrel y PostgreSQL aislado; no requiere ni usa los datos de la prueba manual Mobile. Mantener HTTP y navegador en invocaciones separadas, y no recompilar DLLs mientras los portales del harness las están usando. No se cierran CU pendientes por este corte.
