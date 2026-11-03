@@ -2,6 +2,7 @@ from contextlib import redirect_stdout
 import io
 import sys
 import json
+import os
 from pathlib import Path
 import tarfile
 import tempfile
@@ -11,6 +12,7 @@ import urllib.error
 from unittest.mock import Mock, patch
 
 import vm_deploy
+import monitor_agent
 
 
 class VmDeploymentTests(unittest.TestCase):
@@ -94,6 +96,8 @@ class VmDeploymentTests(unittest.TestCase):
         self.assertEqual(caught.exception.http_status, 200)
 
     def test_release_extraction_makes_only_grafana_provisioning_readable_by_its_container_user(self):
+        if os.name != "posix":
+            self.skipTest("The runtime permission-bit contract is enforced on the Linux deployment host")
         archive_data = io.BytesIO()
         with tarfile.open(fileobj=archive_data, mode="w:gz") as archive:
             for name, contents in (
@@ -137,6 +141,8 @@ class VmDeploymentTests(unittest.TestCase):
             "keys_api", "keys_admin", "keys_backoffice", "keys_commerce", "keys_tracking", "admin", "operator", "commerce")}
         runtime = {"project_id": "demo-project", "sql_connection": "demo-project:region:sql", "registry": registry,
                    "services_host": "10.0.0.1", "frontend_ip": "34.0.0.1",
+                   "redis": {"host": "10.0.0.3", "port": 6378, "auth_string": "private-redis-auth",
+                             "ca_certificates": ["cGVtLWNhLWNlcnRpZmljYXRl"]},
                    "passwords": passwords, "keys": {name: "key" for name in ("jwt", "tracking", "push", "evidence")},
                    "endpoints": {name: f"https://{name}.34-0-0-1.sslip.io" for name in (
                        "api", "admin", "backoffice", "commerce", "tracking", "mail", "monitor")},
@@ -155,6 +161,10 @@ class VmDeploymentTests(unittest.TestCase):
         values = vm_deploy.environment(runtime, integrations, images, "hash", hosting, "b", "10.0.0.2",
                                        "release-" + "a" * 32, ("172.22.0.0/16",))
         self.assertEqual(values["SMTP_HOST"], "10.0.0.1")
+        self.assertEqual(values["REDIS_HOST"], "10.0.0.3")
+        self.assertEqual(values["REDIS_AUTH"], "private-redis-auth")
+        self.assertEqual(values["REDIS_PORT"], 6378)
+        self.assertEqual(json.loads(values["REDIS_CA_CERTIFICATES_BASE64_JSON"]), ["cGVtLWNhLWNlcnRpZmljYXRl"])
         self.assertEqual(values["TRUSTED_NETWORKS"], "34.0.0.1/32,35.191.0.0/16,130.211.0.0/22,172.22.0.0/16")
         allowed_hosts = values["ALLOWED_HOSTS"].split(";")
         self.assertIn("api.34-0-0-1.sslip.io", allowed_hosts)
@@ -173,6 +183,33 @@ class VmDeploymentTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     vm_deploy.environment(runtime, integrations, images, "hash", hosting, "a", "10.0.0.1",
                                           "release-" + "a" * 32, subnets)
+
+    def test_shared_environment_requires_private_authenticated_tls_redis(self):
+        runtime, integrations, hosting, images = self.configuration()
+        original = runtime["redis"]
+        for redis in (
+            {**original, "host": "8.8.8.8"},
+            {**original, "port": 6379},
+            {**original, "auth_string": ""},
+            {**original, "ca_certificates": []},
+        ):
+            with self.subTest(redis=redis):
+                runtime["redis"] = redis
+                with self.assertRaisesRegex(ValueError, "Memorystore"):
+                    vm_deploy.environment(runtime, integrations, images, "hash", hosting, "a", "10.0.0.1",
+                                          "release-" + "a" * 32)
+
+    def test_monitor_config_accepts_only_private_memorystore_tls_endpoint(self):
+        config = {"node": "a", "project_id": "demo-project", "private_ip": "10.0.0.2",
+                  "services_host": "10.0.0.1", "redis_host": "10.0.0.3", "redis_port": 6378}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "monitor.json"
+            path.write_text(json.dumps(config), encoding="utf-8")
+            self.assertEqual(monitor_agent.read_config(path), config)
+            for invalid in ({**config, "redis_port": 6379}, {**config, "redis_host": "8.8.8.8"}):
+                path.write_text(json.dumps(invalid), encoding="utf-8")
+                with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                    monitor_agent.read_config(path)
 
     def test_migrations_provision_hosting_before_catalog_and_bootstrap(self):
         deployment = vm_deploy.Deploy(Path("unused"), io.StringIO())
@@ -268,7 +305,10 @@ class VmDeploymentTests(unittest.TestCase):
                 self.assertNotIn(runtime["passwords"]["mail"], call.args)
             config = json.loads((root / "monitor.json").read_text())
             self.assertEqual(config["expires_at"], args.deadline)
-            self.assertEqual((release / "hosting.pfx").stat().st_mode & 0o777, 0o600)
+            self.assertEqual(config["redis_host"], runtime["redis"]["host"])
+            self.assertEqual(config["redis_port"], runtime["redis"]["port"])
+            if os.name == "posix":
+                self.assertEqual((release / "hosting.pfx").stat().st_mode & 0o777, 0o600)
 
 
 if __name__ == "__main__":

@@ -178,6 +178,7 @@ def bootstrap_config(runtime):
 def environment(runtime, integrations, images, mail_hash, hosting=None, node=None,
                 private_ip=None, release=None, docker_subnets=()):
     passwords, keys, endpoints = runtime["passwords"], runtime["keys"], runtime["endpoints"]
+    redis = runtime.get("redis")
     result = {
         "PROJECT_ID": runtime["project_id"], "SQL_CONNECTION_NAME": runtime["sql_connection"],
         "MIGRATOR_PASSWORD": passwords["migrator"], "API_DB_PASSWORD": passwords["api"],
@@ -214,6 +215,15 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
             ipaddress.IPv4Address(address)
         if not re.fullmatch(r"[A-Za-z0-9.-]+", runtime["services_host"]):
             raise ValueError("Invalid private services host")
+        if (not isinstance(redis, dict) or not isinstance(redis.get("host"), str)
+                or not ipaddress.ip_address(redis["host"]).is_private
+                or not isinstance(redis.get("port"), int) or redis["port"] != 6378
+                or not isinstance(redis.get("auth_string"), str) or not redis["auth_string"]
+                or any(character in redis["auth_string"] for character in "\r\n\x00")
+                or not isinstance(redis.get("ca_certificates"), list)
+                or not 1 <= len(redis["ca_certificates"]) <= 4
+                or any(not isinstance(certificate, str) or not certificate for certificate in redis["ca_certificates"])):
+            raise ValueError("The shared Memorystore endpoint requires a private address, AUTH and TLS CA certificates")
         allowed_hosts = {urllib.parse.urlsplit(url).hostname for url in endpoints.values()}
         allowed_hosts.update((private_ip, "localhost", "127.0.0.1"))
         networks = [runtime["frontend_ip"] + "/32", *LOAD_BALANCER_PROXIES]
@@ -231,6 +241,8 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
         result.update({
             "NODE_NAME": node, "NODE_PRIVATE_IP": private_ip, "RELEASE_ID": release,
             "SERVICES_HOST": runtime["services_host"], "ALLOWED_HOSTS": ";".join(sorted(allowed_hosts)),
+            "REDIS_HOST": redis["host"], "REDIS_PORT": redis["port"], "REDIS_AUTH": redis["auth_string"],
+            "REDIS_CA_CERTIFICATES_BASE64_JSON": json.dumps(redis["ca_certificates"], separators=(",", ":")),
             "TRUSTED_NETWORKS": ",".join(networks),
             "MONITOR_DB_PASSWORD": passwords["monitor"], "GRAFANA_DB_PASSWORD": passwords["grafana"],
             "GRAFANA_SECRET_KEY": hosting["grafana_secret_key"],
@@ -499,7 +511,9 @@ def prepare(args, deployment, runtime, integrations, hosting, manifest, private_
         if not ipaddress.IPv4Address(services_ip).is_private:
             raise ValueError("Monitoring services must resolve to a private address")
         private_file(BASE / "monitor.json", json.dumps({"project_id": runtime["project_id"], "node": args.node,
-                     "services_host": services_ip, "private_ip": private_ip, "expires_at": args.deadline}))
+                     "services_host": services_ip, "private_ip": private_ip,
+                     "redis_host": runtime["redis"]["host"], "redis_port": runtime["redis"]["port"],
+                     "expires_at": args.deadline}))
         ops_agent_source = deployment.directory / "monitoring/ops-agent.yaml"
         if not ops_agent_source.is_file():
             raise FileNotFoundError("The release bundle is missing monitoring/ops-agent.yaml")

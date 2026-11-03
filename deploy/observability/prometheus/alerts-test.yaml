@@ -1,0 +1,81 @@
+rule_files:
+  - alerts.yaml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'nexoruta_cache_distributed_requests_total{service_name="NexoRuta.Api",node="a",cache="operator_branding",result="miss"}'
+        values: '0+1x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: NexoRutaDistributedCacheHitRatioLow
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'nexoruta_cache_distributed_requests_total{service_name="NexoRuta.Api",node="a",cache="operator_branding",result="miss"}'
+        values: '0+2x30'
+      - series: 'nexoruta_cache_distributed_requests_total{service_name="NexoRuta.Api",node="b",cache="operator_branding",result="hit"}'
+        values: '0+2x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: NexoRutaDistributedCacheHitRatioLow
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'nexoruta_cache_distributed_requests_total{service_name="NexoRuta.Api",node="a",cache="published_tariff",result="miss"}'
+        values: '0+3x30'
+    alert_rule_test:
+      - eval_time: 26m
+        alertname: NexoRutaDistributedCacheHitRatioLow
+        exp_alerts:
+          - exp_labels:
+              alertname: NexoRutaDistributedCacheHitRatioLow
+              cache: published_tariff
+              severity: warning
+            exp_annotations:
+              summary: 'Pocos aciertos de caché distribuida: published_tariff'
+              description: 'El caso published_tariff mantiene menos de 25% de aciertos con más de 20 lecturas válidas en 15 minutos, ponderadas entre instancias.'
+
+  - interval: 1m
+    input_series:
+      - series: 'nexoruta_cache_distributed_operations_total{service_name="NexoRuta.Api",node="a",cache="operator_branding",operation="get",result="error"}'
+        values: '0+2x20'
+      - series: 'nexoruta_cache_distributed_operations_total{service_name="NexoRuta.Api",node="a",cache="operator_branding",operation="get",result="success"}'
+        values: '0+4x20'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: NexoRutaDistributedCacheErrorsHigh
+        exp_alerts:
+          - exp_labels:
+              alertname: NexoRutaDistributedCacheErrorsHigh
+              cache: operator_branding
+              severity: warning
+            exp_annotations:
+              summary: 'Errores de Redis elevados: operator_branding'
+              description: 'Más del 5% de las operaciones de caché fallaron durante 5 minutos, con más de 20 operaciones.'
+
+  - interval: 1m
+    input_series:
+      - series: 'nexoruta_cache_distributed_requests_total{service_name="NexoRuta.Api",node="a",cache="published_tariff",result="hit"}'
+        values: '0+3x14 2+3x15'
+      - series: 'nexoruta_cache_distributed_requests_total{service_name="NexoRuta.Api",node="a",cache="published_tariff",result="miss"}'
+        values: '0+1x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: NexoRutaDistributedCacheHitRatioLow
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'nexoruta_cache_distributed_operations_total{service_name="NexoRuta.Api",node="a",cache="operator_branding",operation="get",result="error"}'
+        values: '0+1x4 4+0x20'
+      - series: 'nexoruta_cache_distributed_operations_total{service_name="NexoRuta.Api",node="a",cache="operator_branding",operation="get",result="success"}'
+        values: '0+3x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: NexoRutaDistributedCacheErrorsHigh
+        exp_alerts: []

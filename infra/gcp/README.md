@@ -259,7 +259,9 @@ gh run download ID_CI --repo NexoRuta/NexoRuta --name android-verification-SHA_M
 
 El resumen muestra las URLs y el vencimiento. Cada VM instala Docker y conserva
 su disco y volúmenes; los servicios persistentes (RabbitMQ, Kafka y MongoDB) viven
-solo en A y B los consume por la red privada. El despliegue prepara permisos de migración, aplica migraciones, aprovisiona
+solo en A y B los consume por la red privada. Las dos APIs usan Memorystore para la
+caché distribuida con endpoint privado, AUTH y TLS; la conexión se valida desde
+ambas VMs y se observa en el monitor. El despliegue prepara permisos de migración, aplica migraciones, aprovisiona
 logins runtime sin `cloudsqlsuperuser`/`BYPASSRLS`, importa el catálogo de Uruguay,
 crea cuentas/organizaciones iniciales y levanta todos los servicios.
 
@@ -289,7 +291,13 @@ comprueba cada minuto si venció la lease y ordena detener las VMs. Cloud SQL
 permanece encendido y se factura continuamente. Las operaciones usan concurrency
 en GitHub y bloqueo del estado.
 
-Apagar conserva discos, IP, secretos e imágenes: esos recursos siguen
+Memorystore Basic de 1 GiB se crea con la primera sesión y **permanece creado y
+facturable cuando se apagan las VMs**. El control manual y el guard apagan las VMs,
+pero no destruyen servicios administrados. Sus entradas no son datos durables: tienen
+TTL y se pueden reconstruir desde PostgreSQL. Retirar Memorystore requiere un cambio
+operativo explícito de infraestructura; no se elimina al detener la demo.
+
+Apagar conserva discos, IP, secretos, imágenes y Memorystore: esos recursos siguen
 cobrando. Los precios anteriores de Iowa no corresponden a Santiago ni a N4.
 El crédito de USD 300 dura 90 días desde el alta y se comparte con otros consumos
 de la cuenta. La alerta de USD 80/mes deja margen para un proyecto de hasta tres

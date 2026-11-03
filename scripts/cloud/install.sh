@@ -4,7 +4,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 [[ "$(uname -s)" == Linux ]] || { echo "Linux required; do not run against the workshop Windows services." >&2; exit 2; }
 if [[ $EUID -eq 0 ]]; then SUDO=(); else command -v sudo >/dev/null; SUDO=(sudo); fi
 "${SUDO[@]}" apt-get update -qq
-"${SUDO[@]}" apt-get install -y --no-install-recommends ca-certificates curl gnupg python3 git xz-utils postgresql-common
+"${SUDO[@]}" apt-get install -y --no-install-recommends ca-certificates curl gnupg python3 git xz-utils build-essential postgresql-common
 # PostgreSQL18 matches the existing integration fixture; use the official PGDG repository.
 . /etc/os-release
 "${SUDO[@]}" install -d /usr/share/postgresql-common/pgdg
@@ -12,6 +12,20 @@ curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | "${SUDO[@]}" tee
 printf 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" | "${SUDO[@]}" tee /etc/apt/sources.list.d/nexoruta-pgdg.list >/dev/null
 "${SUDO[@]}" apt-get update -qq
 "${SUDO[@]}" apt-get install -y --no-install-recommends postgresql-18 postgresql-18-postgis-3 postgresql-18-postgis-3-scripts
+# The native integration route owns a disposable Redis process. Build the same
+# fixed server version used by the Redis Testcontainers and local Compose fixtures.
+REDIS_VERSION=7.2.16
+REDIS_SHA256=960a8ec15e34ff40e57ff16837b26b33bd81f2da6d24497bb63de532a323a18e
+redis_tmp="$(mktemp -d)"
+curl -fsSL "https://download.redis.io/releases/redis-$REDIS_VERSION.tar.gz" -o "$redis_tmp/redis-$REDIS_VERSION.tar.gz"
+echo "$REDIS_SHA256  $redis_tmp/redis-$REDIS_VERSION.tar.gz" | sha256sum -c -
+tar -xzf "$redis_tmp/redis-$REDIS_VERSION.tar.gz" -C "$redis_tmp"
+make -C "$redis_tmp/redis-$REDIS_VERSION" -j"$(nproc)"
+redis_bin="/opt/nexoruta-redis-$REDIS_VERSION/bin"
+"${SUDO[@]}" install -d -m 0755 "$redis_bin"
+"${SUDO[@]}" install -m 0755 "$redis_tmp/redis-$REDIS_VERSION/src/redis-server" "$redis_bin/redis-server"
+"${SUDO[@]}" install -m 0755 "$redis_tmp/redis-$REDIS_VERSION/src/redis-cli" "$redis_bin/redis-cli"
+rm -rf -- "$redis_tmp"
 # Playwright1.62.1 needs Node>=20; pin Node rather than taking Ubuntu24's Node18.
 NODE_VERSION=24.22.2
 if [[ "$(node --version 2>/dev/null || true)" != "v$NODE_VERSION" ]]; then

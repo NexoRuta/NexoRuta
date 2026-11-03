@@ -93,12 +93,12 @@ docker compose down
 | RabbitMQ Management | `http://localhost:15672` | Interfaz de administración; credenciales locales de desarrollo: `nexoruta` / `nexoruta_dev`. |
 | PostgreSQL | `localhost:5432` | Puerto TCP; base `nexoruta`, usuario `nexoruta`, contraseña `nexoruta_dev` (solo desarrollo local). |
 | RabbitMQ | `localhost:5672` | Puerto AMQP; las mismas credenciales locales de desarrollo. |
-| Redis | Sin puerto publicado en el host | Disponible para otros contenedores en `redis:6379` dentro de la red Compose. |
+| Redis 7.2.16 | Sin puerto publicado en el host | Disponible para otros contenedores en `redis:6379` dentro de la red Compose. |
 | Worker | Sin puerto HTTP publicado | Proceso de plantilla que registra actividad periódica. |
 
 Las credenciales del archivo Compose son públicas y no deben reutilizarse fuera del entorno local. EF Core/PostgreSQL persiste los datos; outbox y workers participan en la publicación de eventos y generación de seguimiento. Redis no define la autorización de CU-01. El bootstrap conserva `AccesoInicial` y `DatosInicialesSeeder`, con cuatro valores explícitos requeridos: `AccesoInicial:UsuarioEmail`, `AccesoInicial:OperadorNombre`, `AccesoInicial:ComercioNombre` y `AccesoInicial:OperadorUsuarioEmail`. `Demo:Enabled` y las transformaciones históricas por nombres Demo fueron eliminados; no se borraron registros existentes. La configuración y su alcance se describen en [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md).
 
-El Compose habitual levanta Grafana, Prometheus, Loki, Tempo y Alloy junto con la aplicación, y conserva Aspire Dashboard. Seguí [la guía local de observabilidad](deploy/local/observability/README.md) para ver el dashboard compartido con GCP y las métricas de estado de los contenedores.
+La caché distribuida de Compose guarda snapshots de identidad visual por 15 minutos y tarifarios publicados por 6 horas; las simulaciones recalculan importes y consultan el estado activo de la zona en cada solicitud. Si Redis no responde, la API vuelve a PostgreSQL. El dashboard de Grafana muestra hits, misses, ratio y errores/bypass por caso en la fila **Caché distribuida**. El Compose habitual levanta Grafana, Prometheus, Loki, Tempo y Alloy junto con la aplicación, y conserva Aspire Dashboard. Seguí [la guía local de observabilidad](deploy/local/observability/README.md) para ver el dashboard compartido con GCP y las métricas de estado de los contenedores.
 
 ### Initial platform administrator (local Compose)
 

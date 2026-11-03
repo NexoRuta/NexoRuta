@@ -933,10 +933,296 @@
       "type": "table"
     },
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 81
+      },
+      "id": 1010,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Lecturas de snapshots que encontraron una entrada válida en Redis.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "lineWidth": 2
+              },
+              "noValue": "Sin datos",
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 0,
+            "y": 82
+          },
+          "id": 101,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by (cache) (rate(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=\"hit\"}[$__rate_interval]))",
+              "instant": false,
+              "legendFormat": "{{cache}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Aciertos por segundo",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Lecturas válidas sin entrada. Un miss es normal al consultar una nueva versión.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "lineWidth": 2
+              },
+              "noValue": "Sin datos",
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 6,
+            "y": 82
+          },
+          "id": 102,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by (cache) (rate(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=\"miss\"}[$__rate_interval]))",
+              "instant": false,
+              "legendFormat": "{{cache}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Fallos de caché por segundo",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Aciertos / (aciertos + misses), agregados entre nodos. Sin tráfico no se dibuja un porcentaje.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "lineWidth": 2
+              },
+              "noValue": "Sin tráfico",
+              "unit": "percent",
+              "max": 100,
+              "min": 0
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 12,
+            "y": 82
+          },
+          "id": 103,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "(100 * (sum by (cache) (rate(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=\"hit\"}[$__rate_interval])) or on (cache) (0 * sum by (cache) (rate(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=\"miss\"}[$__rate_interval])))) / sum by (cache) (rate(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=~\"hit|miss\"}[$__rate_interval]))) and on (cache) sum by (cache) (increase(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=~\"hit|miss\"}[$__rate_interval])) > 0",
+              "instant": false,
+              "legendFormat": "{{cache}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Porcentaje de aciertos",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Errores de lectura, errores de operación Redis, bypass y cancelaciones se muestran por separado; no afectan el porcentaje de aciertos.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "lineWidth": 2
+              },
+              "noValue": "Sin datos",
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 18,
+            "y": 82
+          },
+          "id": 104,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by (cache, result) (rate(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=~\"error|bypass|cancelled\"}[$__rate_interval])) or label_replace(sum by (cache) (rate(nexoruta_cache_distributed_operations_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=\"error\"}[$__rate_interval])), \"result\", \"operation_error\", \"cache\", \".+\")",
+              "instant": false,
+              "legendFormat": "{{cache}} · {{result}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Errores y bypass",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Percentil 95 de las operaciones GET y SET observadas por la API.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "lineWidth": 2
+              },
+              "noValue": "Sin datos",
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 24,
+            "x": 0,
+            "y": 88
+          },
+          "id": 105,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le, cache, operation) (rate(nexoruta_cache_distributed_operation_duration_seconds_bucket{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",operation=~\"get|set\"}[$__rate_interval])))",
+              "instant": false,
+              "legendFormat": "{{cache}} · {{operation}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Latencia p95 de Redis",
+          "type": "timeseries"
+        }
+      ],
+      "title": "Caché distribuida",
+      "type": "row"
+    },
+    {
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 81,
+        "y": 94,
         "w": 24,
         "h": 1
       },
@@ -964,7 +1250,7 @@
             "h": 4,
             "w": 12,
             "x": 0,
-            "y": 82
+            "y": 95
           },
           "id": 2,
           "options": {
@@ -1035,7 +1321,7 @@
             "h": 4,
             "w": 12,
             "x": 12,
-            "y": 82
+            "y": 95
           },
           "id": 3,
           "options": {
@@ -1098,7 +1384,7 @@
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 86
+            "y": 99
           },
           "id": 5,
           "options": {
@@ -1160,7 +1446,7 @@
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 86
+            "y": 99
           },
           "id": 6,
           "options": {
@@ -1222,7 +1508,7 @@
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 86
+            "y": 99
           },
           "id": 7,
           "options": {
@@ -1284,7 +1570,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 93
+            "y": 106
           },
           "id": 8,
           "options": {
@@ -1346,7 +1632,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 93
+            "y": 106
           },
           "id": 9,
           "options": {
@@ -1408,7 +1694,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 100
+            "y": 113
           },
           "id": 10,
           "options": {
@@ -1470,7 +1756,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 100
+            "y": 113
           },
           "id": 11,
           "options": {
@@ -1532,7 +1818,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 107
+            "y": 120
           },
           "id": 13,
           "options": {
@@ -1594,7 +1880,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 107
+            "y": 120
           },
           "id": 14,
           "options": {
@@ -1657,7 +1943,7 @@
             "h": 5,
             "w": 12,
             "x": 0,
-            "y": 114
+            "y": 127
           },
           "id": 15,
           "options": {
@@ -1713,7 +1999,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 114
+            "y": 127
           },
           "id": 25,
           "options": {
@@ -1844,6 +2130,37 @@
         "query": {
           "query": "label_values({service_name=~\"NexoRuta[.].*\"}, service_name)",
           "refId": "PrometheusVariableQueryEditor-otel_service"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "Todos"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\"}, cache)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Caso de caché",
+        "multi": true,
+        "name": "cache",
+        "options": [],
+        "query": {
+          "query": "label_values(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\"}, cache)",
+          "refId": "PrometheusVariableQueryEditor-cache"
         },
         "refresh": 1,
         "regex": "",

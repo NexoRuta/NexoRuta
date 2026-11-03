@@ -6,7 +6,7 @@ import tempfile
 import demo_session as session
 
 compose = session.ROOT / "deploy/gcp/compose.yaml"
-required = set(re.findall(r"\$\{([A-Z_]+):\?", compose.read_text()))
+required = set(re.findall(r"\$\{([A-Z0-9_]+):\?", compose.read_text()))
 with tempfile.TemporaryDirectory(prefix="nexoruta-compose-") as temp:
     path = Path(temp) / "test.env"
     values = {key: "validation-only" for key in required}

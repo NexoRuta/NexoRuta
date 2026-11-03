@@ -2,6 +2,16 @@ name: nexoruta-demo
 x-api-env: &id001
   ASPNETCORE_ENVIRONMENT: Production
   ConnectionStrings__Postgres: ${API_CONNECTION:?}
+  ConnectionStrings__Redis: ${REDIS_HOST:?}:${REDIS_PORT:?},ssl=true,sslHost=${REDIS_HOST:?},abortConnect=false,connectRetry=1,connectTimeout=1000,syncTimeout=500,asyncTimeout=500,keepAlive=30
+  Caching__Enabled: 'true'
+  Caching__Namespace: nexoruta-gcp-demo
+  Caching__OperationTimeoutMilliseconds: '500'
+  Caching__MaxEntryBytes: '2097152'
+  Caching__RedisTls: 'true'
+  Caching__RedisCaCertificatesBase64Json: ${REDIS_CA_CERTIFICATES_BASE64_JSON:?}
+  Caching__RedisPassword: ${REDIS_AUTH:?}
+  Caching__OperatorBranding__TtlSeconds: '900'
+  Caching__PublishedTariff__TtlSeconds: '21600'
   Jwt__SigningKeyBase64: ${JWT_KEY:?}
   DatabaseInitialization__ApplyMigrations: 'false'
   DatabaseInitialization__SeedData: 'false'

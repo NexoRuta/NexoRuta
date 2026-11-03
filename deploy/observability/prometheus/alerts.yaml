@@ -90,7 +90,7 @@ groups:
           summary: "Fallos de entrega Push en {{ $labels.service_name }}"
           description: "El worker Push registró entregas fallidas durante los últimos 5 minutos."
 
-      - alert: NexoRutaCacheHitRatioLow
+      - alert: NexoRutaGeoapifyCacheHitRatioLow
         expr: |
           nexoruta_cache_hit_ratio{service_name="NexoRuta.Api"} < 0.25
           and on (node, service_name)
@@ -102,5 +102,55 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Aciertos de caché bajos en {{ $labels.service_name }}"
-          description: "La proporción de aciertos es menor a 25% con más de 20 consultas en 15 minutos."
+          summary: "Aciertos del caché Geoapify bajos en {{ $labels.service_name }}"
+          description: "La proporción de aciertos del caché local Geoapify es menor a 25% con más de 20 consultas en 15 minutos."
+
+      - alert: NexoRutaDistributedCacheHitRatioLow
+        expr: |
+          (
+            (
+              sum by (cache) (increase(nexoruta_cache_distributed_requests_total{
+                service_name="NexoRuta.Api", result="hit"
+              }[15m]))
+              or on (cache)
+              (0 * sum by (cache) (increase(nexoruta_cache_distributed_requests_total{
+                service_name="NexoRuta.Api", result="miss"
+              }[15m])))
+            )
+            /
+            clamp_min(sum by (cache) (increase(nexoruta_cache_distributed_requests_total{
+              service_name="NexoRuta.Api", result=~"hit|miss"
+            }[15m])), 0.001)
+          ) < 0.25
+          and on (cache)
+          sum by (cache) (increase(nexoruta_cache_distributed_requests_total{
+            service_name="NexoRuta.Api", result=~"hit|miss"
+          }[15m])) > 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pocos aciertos de caché distribuida: {{ $labels.cache }}"
+          description: "El caso {{ $labels.cache }} mantiene menos de 25% de aciertos con más de 20 lecturas válidas en 15 minutos, ponderadas entre instancias."
+
+      - alert: NexoRutaDistributedCacheErrorsHigh
+        expr: |
+          (
+            sum by (cache) (increase(nexoruta_cache_distributed_operations_total{
+              service_name="NexoRuta.Api", result="error"
+            }[5m]))
+            /
+            clamp_min(sum by (cache) (increase(nexoruta_cache_distributed_operations_total{
+              service_name="NexoRuta.Api"
+            }[5m])), 0.001)
+          ) > 0.05
+          and on (cache)
+          sum by (cache) (increase(nexoruta_cache_distributed_operations_total{
+            service_name="NexoRuta.Api"
+          }[5m])) > 20
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Errores de Redis elevados: {{ $labels.cache }}"
+          description: "Más del 5% de las operaciones de caché fallaron durante 5 minutos, con más de 20 operaciones."

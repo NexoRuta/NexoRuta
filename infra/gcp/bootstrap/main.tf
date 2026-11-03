@@ -80,6 +80,7 @@ locals {
     "storage.googleapis.com",
     "sqladmin.googleapis.com",
     "servicenetworking.googleapis.com",
+    "redis.googleapis.com",
     "artifactregistry.googleapis.com",
     "cloudbuild.googleapis.com",
     "cloudquotas.googleapis.com",
