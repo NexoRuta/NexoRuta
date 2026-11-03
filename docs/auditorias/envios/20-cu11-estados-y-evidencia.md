@@ -157,6 +157,8 @@ Se conservan los casos y las comprobaciones funcionales, de permisos, conflicto 
 
 ### Optativos informados separadamente
 
+> Ejecución posterior: los nueve optativos de este corte se activaron y verificaron en [Navegadores optativos](../navegador-optativos/01-ejecucion.md). Los resultados de abajo conservan la ejecución histórica de CU-11.
+
 La selección de integración mantiene sin activar cuatro optativos: dos recorridos de `GeocodificacionFullStackBrowserTests`, `VehiculosBackofficeBrowserTests.ChromiumTraversesCheckoutBackofficeRealApiAndEphemeralPostgres` y `RecepcionDepositoBrowserTests.RealLabelDecodingAndBackofficeReceiptUseRestrictedApiAndIsolatedPostgres`. Su omisión no equivale a aprobación ni elimina los cuatro navegadores **obligatorios** de `CommerceCsvImportKestrelTests`.
 
 Frontend mantiene los cinco optativos de BaseOperativa, destino/geocodificación, estimación vial, Flota y actualización GPS documentados en [la regresión de Flota/Depósito](../regresion-flota-deposito/01-diagnostico-y-verificacion.md). No se agregaron Skip ni se cambiaron sus condiciones.
