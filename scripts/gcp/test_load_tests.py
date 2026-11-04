@@ -95,5 +95,19 @@ class LatestFixtureVersionTests(unittest.TestCase):
             load_test_control.latest_fixture_version("nexoruta-demo-20261022")
 
 
+class DemoControlLockTests(unittest.TestCase):
+    def test_uses_the_lock_store_protocol_instead_of_the_named_object_storage(self):
+        config = {"GCP_PROJECT_ID": "nexoruta-demo-20261022", "GCP_STATE_BUCKET": "state-bucket"}
+        lock_store = object()
+        context = object()
+        with patch.object(load_test_control.control_lock, "JsonStorage", return_value=lock_store) as storage, \
+                patch.object(load_test_control.control_lock, "control_lock", return_value=context) as guard:
+            result = load_test_control.demo_control_lock(config, "access-token")
+
+        self.assertIs(context, result)
+        storage.assert_called_once_with("state-bucket", "access-token")
+        guard.assert_called_once_with(config, store=lock_store)
+
+
 if __name__ == "__main__":
     unittest.main()
