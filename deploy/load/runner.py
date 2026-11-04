@@ -6,12 +6,16 @@ import os
 from pathlib import Path
 import re
 import signal
+import shutil
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+from supervision import MetricStream, Resources, classify
+from sessions import SessionBroker, Sessions
 
 
 PROFILES = {"smoke": ("2m", 1), "baseline": ("15m", 5), "sync": ("15m", 20),
@@ -75,12 +79,110 @@ def request_stop(signum, _frame):
 def load_thresholds(profile_name, profile, defaults):
     thresholds = dict(defaults)
     if profile.get("sync"):
-        batches = profile["vus"]
+        # Arrival-rate executors may need fewer VUs than their ceiling. Check
+        # every started batch against completions in the stream evidence.
+        batches = 1 if profile.get("rate") else profile["vus"]
         operations = batches * 50
         thresholds["nexoruta_load_sync_batches_completed"] = [f"count>={batches}"]
         thresholds["nexoruta_load_sync_operations_applied"] = [f"count>={operations}"]
         thresholds["nexoruta_load_sync_drain_duration"] = ["p(95)<60000", "p(99)<120000"]
     return thresholds
+
+
+def verify_suite(manifest, configuration):
+    digest = hashlib.sha256()
+    for name in ("Dockerfile", "profiles.json", "scenario.js", "runner.py", "supervision.py", "sessions.py"):
+        digest.update((ROOT / name).read_bytes())
+    if (manifest.get("suite_sha256") != digest.hexdigest()
+            or manifest.get("thresholds_version") != configuration["version"]):
+        raise ValueError("The running suite does not match the reserved manifest")
+
+
+def run_process(args, env, output, result, lease, control_bucket, bucket, prom_origin,
+                authentication, resources):
+    stream = MetricStream(output / "metrics.pipe", json.loads(env.get("NEXORUTA_LOAD_PROFILE", "{}")),
+                          json.loads(env.get("NEXORUTA_LOAD_THRESHOLDS", "{}")))
+    resources.sample()
+    args = [*args[:-1], "-o", f"json={output / 'metrics.pipe'}", args[-1]]
+    stream.start()
+    process = None
+    stop_reason = None
+    started = last_checkpoint = last_lease_check = last_prom_check = time.time()
+    checkpoint = 0
+    try:
+        with (output / "k6.log").open("w", encoding="utf-8") as log_file:
+            process = subprocess.Popen(args, env=env, stdout=log_file, stderr=subprocess.STDOUT)
+            while process.poll() is None:
+                now = time.time()
+                evidence = stream.evidence.snapshot()
+                resource_sample = resources.sample()
+                if EXIT_SIGNAL:
+                    stop_reason = "cloud_run_signal"
+                elif now >= lease.get("expires_at", 0):
+                    stop_reason = "lease_expired"
+                elif authentication is not None and authentication.snapshot()["fault"]:
+                    stop_reason = "authentication_unavailable"
+                elif evidence["stream_error"]:
+                    stop_reason = "metric_stream_unavailable"
+                elif resource_sample.get("oom"):
+                    stop_reason = "generator_oom"
+                elif resource_sample.get("saturated"):
+                    stop_reason = "generator_saturated"
+                elif not resource_sample["available"] and now - started > 30:
+                    stop_reason = "generator_telemetry_unavailable"
+                elif (shutil.disk_usage(output).free < 64 * 1024 * 1024
+                      or (output / "k6.log").stat().st_size > 16 * 1024 * 1024):
+                    stop_reason = "local_storage_exhausted"
+                elif evidence["severe_errors"]:
+                    stop_reason = "sustained_http_errors"
+                elif evidence["last_measured_at"] and now - evidence["last_measured_at"] > 20:
+                    stop_reason = "metric_stream_unavailable"
+                if not stop_reason and now - last_lease_check >= 5:
+                    last_lease_check = now
+                    try:
+                        lease = read_json(control_bucket, "leases/load-test.json")
+                        if (lease.get("run_id") != result["run_id"]
+                                or lease.get("status") not in ("starting", "running")
+                                or lease.get("expires_at", 0) <= now):
+                            stop_reason = "lease_cancelled_or_expired"
+                    except (OSError, urllib.error.URLError, ValueError):
+                        stop_reason = "lease_unavailable"
+                if not stop_reason and now - last_prom_check >= 15:
+                    last_prom_check = now
+                    try:
+                        check_endpoint(prom_origin + "/-/ready", timeout=5)
+                    except (OSError, urllib.error.URLError, RuntimeError):
+                        stop_reason = "prometheus_unavailable"
+                if stop_reason:
+                    process.send_signal(signal.SIGINT)
+                    break
+                if now - last_checkpoint >= 30:
+                    checkpoint += 1
+                    progress = {**result, "checkpoint": checkpoint, "observed_at": now,
+                                "elapsed_seconds": round(now - started, 3),
+                                "evidence": evidence, "generator": resource_sample,
+                                "authentication": authentication.snapshot() if authentication is not None else None}
+                    try:
+                        upload(bucket, f"runs/{result['run_id']}/progress/{checkpoint:04d}.json",
+                               json.dumps(progress).encode())
+                    except (OSError, urllib.error.URLError):
+                        stop_reason = "report_export_unavailable"
+                        process.send_signal(signal.SIGINT)
+                        break
+                    last_checkpoint = now
+                time.sleep(1)
+            try:
+                exit_code = process.wait(timeout=7 if stop_reason or EXIT_SIGNAL else 15)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                exit_code = process.wait()
+    finally:
+        # Any unexpected control/export failure must also stop the traffic.
+        if process is not None and process.poll() is None:
+            process.kill()
+            process.wait(timeout=10)
+        stream.close()
+    return exit_code, stop_reason, stream.evidence.snapshot(final=True), resources.latest
 
 
 def main():
@@ -117,6 +219,7 @@ def main():
                 or not re.fullmatch(r"[a-f0-9]{64}", operations_sha256)):
             raise ValueError("A pinned synthetic sync dataset is required for this profile")
     manifest = read_json(control_bucket, f"runs/{run_id}/manifest.json")
+    verify_suite(manifest, profile)
     lease = read_json(control_bucket, "leases/load-test.json")
     if (manifest.get("run_id") != run_id or manifest.get("profile") != profile_name
             or manifest.get("fixture_version") != fixture_version
@@ -137,7 +240,9 @@ def main():
     prom_write = os.environ.get("NEXORUTA_PROMETHEUS_WRITE_URL", "")
     if not re.fullmatch(r"http://10(?:\.\d{1,3}){3}:9091/api/v1/write", prom_write):
         raise ValueError("The private write-only Prometheus gateway is required")
-    os.environ["NEXORUTA_LOAD_FIXTURE"] = json.dumps(fixture_data)
+    authentication = Sessions(api_origin, fixture_data, selected["vus"])
+    os.environ["NEXORUTA_LOAD_FIXTURE"] = json.dumps(authentication.public_fixture)
+    fixture_data = authentication.public_fixture
     if operations_path:
         os.environ["NEXORUTA_LOAD_OPERATIONS_FILE"] = str(operations_path)
     # These are local, bounded probes from the isolated VPC before any user traffic.
@@ -148,10 +253,10 @@ def main():
     output = Path("/tmp/nexoruta-load")
     output.mkdir(mode=0o700)
     report = output / "summary.json"
-    log = output / "k6.log"
     started = time.time()
     result = {"run_id": run_id, "profile": profile_name, "release": manifest["release"],
               "fixture_version": fixture_version, "suite_sha256": manifest["suite_sha256"],
+              "thresholds_version": profile["version"],
               "status": "running", "started_at": started}
     if operations_sha256:
         result["operations_sha256"] = operations_sha256
@@ -168,57 +273,40 @@ def main():
             str(ROOT / "scenario.js")]
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
-    with log.open("w", encoding="utf-8") as log_file:
-        process = subprocess.Popen(args, env=env, stdout=log_file, stderr=subprocess.STDOUT)
-        last_checkpoint = started
-        checkpoint = 0
-        last_lease_check = started
-        last_prom_check = started
-        stop_reason = None
-        while process.poll() is None:
-            now = time.time()
-            if EXIT_SIGNAL:
-                stop_reason = "cloud_run_signal"
-            elif now >= lease.get("expires_at", 0):
-                stop_reason = "lease_expired"
-            elif now - last_lease_check >= 5:
-                last_lease_check = now
-                try:
-                    lease = read_json(control_bucket, "leases/load-test.json")
-                    if (lease.get("run_id") != run_id
-                            or lease.get("status") not in ("starting", "running")
-                            or lease.get("expires_at", 0) <= now):
-                        stop_reason = "lease_cancelled_or_expired"
-                except (OSError, urllib.error.URLError, ValueError):
-                    stop_reason = "lease_unavailable"
-            if not stop_reason and now - last_prom_check >= 15:
-                last_prom_check = now
-                try:
-                    check_endpoint(prom_origin + "/-/ready", timeout=5)
-                except (OSError, urllib.error.URLError, RuntimeError):
-                    stop_reason = "prometheus_unavailable"
-            if stop_reason:
-                process.send_signal(signal.SIGINT)
-                break
-            if now - last_checkpoint >= 30:
-                checkpoint += 1
-                progress = {**result, "checkpoint": checkpoint, "observed_at": now,
-                            "elapsed_seconds": round(now - started, 3)}
-                upload(bucket, f"runs/{run_id}/progress/{checkpoint:04d}.json", json.dumps(progress).encode())
-                last_checkpoint = now
-            time.sleep(1)
-        try:
-            exit_code = process.wait(timeout=7 if stop_reason or EXIT_SIGNAL else 15)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            exit_code = process.wait()
-
+    resources = Resources()
+    broker = SessionBroker(authentication, lambda: dict(resources.latest))
+    env.update(NEXORUTA_AUTH_BROKER_URL=broker.url, NEXORUTA_AUTH_BROKER_KEY=broker.capability)
+    try:
+        broker.start()
+        exit_code, stop_reason, evidence, generator = run_process(
+            args, env, output, result, lease, control_bucket, bucket, prom_origin,
+            authentication, resources)
+    finally:
+        # Cloud Run may allow only a short grace period after SIGTERM. Preserve
+        # the verdict/checkpoint instead of spending it on optional revocation.
+        cleanup = broker.close(budget=0 if EXIT_SIGNAL else 120)
+    authentication_result = authentication.snapshot()
+    if authentication_result["fault"] and not stop_reason:
+        stop_reason = "authentication_unavailable"
+    if EXIT_SIGNAL:
+        stop_reason = "cloud_run_signal"
     ended = time.time()
-    result.update(status="cancelled" if stop_reason or EXIT_SIGNAL else ("passed" if exit_code == 0 else "failed"),
+    data = None
+    if report.exists() and report.stat().st_size <= 4 * 1024 * 1024:
+        try:
+            candidate = json.loads(report.read_text(encoding="utf-8"))
+            if isinstance(candidate, dict) and isinstance(candidate.get("metrics"), dict) and candidate["metrics"]:
+                data = candidate
+        except (OSError, ValueError):
+            pass  # An invalid or incomplete summary is never passing evidence.
+    status, classification = classify(profile_name, exit_code, stop_reason, evidence, generator, data is not None)
+    if status == "passed" and not cleanup["complete"]:
+        status, classification = "failed", "session_cleanup_incomplete"
+    result.update(status=status, classification=classification, evidence=evidence, generator=generator,
+                  authentication=authentication_result, session_cleanup=cleanup,
                   stop_reason=stop_reason, ended_at=ended,
                   duration_seconds=round(ended - started, 3), exit_code=exit_code)
-    if report.exists():
-        data = json.loads(report.read_text(encoding="utf-8"))
+    if data is not None:
         result["metrics"] = data.get("metrics", {})
         upload(bucket, f"runs/{run_id}/k6-summary.json", json.dumps(data).encode())
     upload(bucket, f"runs/{run_id}/summary.json", json.dumps(result).encode())

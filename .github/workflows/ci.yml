@@ -64,6 +64,15 @@ jobs:
       - name: Validate GitHub workflows
         # actionlint v1.7.12 does not yet recognize GitHub's documented queue: max key.
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -ignore 'unexpected key "queue" for "concurrency" section' .github/workflows/*.yml
+      - name: Exercise the real k6 runner with isolated controlled services
+        run: python3 scripts/gcp/verify_load_runtime.py --evidence "$RUNNER_TEMP/nexoruta-load-runtime.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: nexoruta-load-runtime-verification
+          path: ${{ runner.temp }}/nexoruta-load-runtime.json
+          if-no-files-found: ignore
+          retention-days: 7
 
   sources:
     needs: source_policy

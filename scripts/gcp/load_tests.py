@@ -23,6 +23,8 @@ REGION = "southamerica-west1"
 JOB = "nexoruta-load-tests"
 LEASE_OBJECT = "leases/load-test.json"
 PROFILES = {"smoke": 300, "baseline": 1260, "sync": 1500, "stress": 2700, "soak": 5100}
+SUITE_SOURCES = ("tests/load/Dockerfile", "tests/load/profiles.json", "tests/load/scenario.js",
+                 "deploy/load/runner.py", "deploy/load/supervision.py", "deploy/load/sessions.py")
 
 
 def config():
@@ -249,16 +251,21 @@ def immutable_manifest(config, run_id, profile, session_expires_at, fixture_vers
     except urllib.error.URLError as error:
         raise RuntimeError("Public API readiness check failed") from error
     root = Path(__file__).resolve().parents[2]
-    suite_hash = hashlib.sha256()
-    for relative in ("tests/load/Dockerfile", "tests/load/profiles.json", "tests/load/scenario.js", "deploy/load/runner.py"):
-        suite_hash.update((root / relative).read_bytes())
     return {
         "run_id": run_id, "profile": profile, "release": release,
         "image_digests": images, "integration_tag": manifest.get("integration_tag"),
         "source_shas": manifest.get("sources"), "fixture_version": fixture_version,
-        "suite_sha256": suite_hash.hexdigest(), "session_expires_at": session_expires_at,
+        "suite_sha256": suite_sha256(root), "session_expires_at": session_expires_at,
+        "thresholds_version": json.loads((root / "tests/load/profiles.json").read_text(encoding="utf-8"))["version"],
         "created_at": time.time(), "api_origin": origin,
     }
+
+
+def suite_sha256(root):
+    digest = hashlib.sha256()
+    for relative in SUITE_SOURCES:
+        digest.update((root / relative).read_bytes())
+    return digest.hexdigest()
 
 
 def application_origin(config):
@@ -442,6 +449,29 @@ def reserve(config, profile):
     print(json.dumps({"run_id": run_id, "profile": profile, "fixture_version": fixture_version, "status": "reserved"}))
 
 
+def execution_report(active, cloud_state, summary):
+    run_id = active["run_id"]
+    if not isinstance(summary, dict) or summary.get("run_id") != run_id:
+        cancelled = bool(active.get("cancel_requested_at"))
+        return {"run_id": run_id, "status": "cancelled" if cancelled else "failed",
+                "classification": "cancelled" if cancelled else "infrastructure_failed",
+                "stop_reason": "runner_summary_missing_or_mismatched"}
+    if cloud_state != "CONDITION_SUCCEEDED" and summary.get("status") == "passed":
+        return {**summary, "status": "failed", "classification": "infrastructure_failed",
+                "stop_reason": "cloud_execution_failed_after_runner"}
+    if summary.get("status") == "passed" and (summary.get("classification") != "passed"
+            or not summary.get("evidence", {}).get("measured_requests")
+            or not (summary.get("evidence", {}).get("measurement_report") or {}).get("valid")
+            or not (summary.get("evidence", {}).get("measurement_report") or {}).get("complete")
+            or not summary.get("evidence", {}).get("generator_cpu_samples")
+            or not summary.get("evidence", {}).get("generator_memory_samples")
+            or not summary.get("authentication", {}).get("ready")
+            or summary.get("authentication", {}).get("fault")
+            or not summary.get("session_cleanup", {}).get("complete")):
+        return {**summary, "status": "failed", "classification": "incomplete_evidence"}
+    return summary
+
+
 def wait(config, run_id):
     access = token(config["GCP_PROJECT_ID"])
     leases = Storage(load_control_bucket(config), access)
@@ -456,14 +486,24 @@ def wait(config, run_id):
         completed = next((item for item in current.get("conditions", []) if item.get("type") == "Completed"), None)
         if completed and completed.get("state") in ("CONDITION_SUCCEEDED", "CONDITION_FAILED"):
             generation, lease = leases.read(LEASE_OBJECT)
+            _, summary = results.read(f"runs/{run_id}/summary.json")
+            observed = lease if lease and lease.get("run_id") == run_id else active
+            report = execution_report(observed, completed["state"], summary)
+            report.update(execution=active["execution"], cloud_state=completed["state"])
+            _, existing = results.read(f"runs/{run_id}/controller-summary.json")
+            if existing is None:
+                try:
+                    results.write(f"runs/{run_id}/controller-summary.json", "0", report)
+                except urllib.error.HTTPError as error:
+                    if error.code != 412:
+                        raise
             if lease and lease.get("run_id") == run_id:
-                lease.update(status="completed" if completed["state"] == "CONDITION_SUCCEEDED" else "failed",
+                lease.update(status="completed" if report.get("status") == "passed" else "failed",
                              completed_at=time.time(), execution_status=completed["state"])
                 leases.write(LEASE_OBJECT, generation, lease)
-            _, summary = results.read(f"runs/{run_id}/summary.json")
             print(json.dumps({"run_id": run_id, "execution": active["execution"],
-                              "status": completed["state"], "result": summary or {}}))
-            return completed["state"] == "CONDITION_SUCCEEDED"
+                              "status": completed["state"], "result": report}))
+            return completed["state"] == "CONDITION_SUCCEEDED" and report.get("status") == "passed"
         time.sleep(10)
     raise RuntimeError("The load-test execution exceeded its bounded deadline and remains available for cancellation")
 
