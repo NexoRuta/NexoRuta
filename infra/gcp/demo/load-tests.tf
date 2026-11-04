@@ -213,15 +213,9 @@ resource "google_cloud_run_v2_job" "load_tests" {
           name  = "NEXORUTA_LOAD_FIXTURES_BUCKET"
           value = google_storage_bucket.load_test_fixtures.name
         }
-        env {
-          name = "NEXORUTA_LOAD_FIXTURE"
-          value_source {
-            secret_key_ref {
-              secret  = google_secret_manager_secret.load_fixtures.secret_id
-              version = "latest"
-            }
-          }
-        }
+        # A fixture version is attached by the load-tests workflow for each run.
+        # Keep it out of the base Job so deployment does not require synthetic
+        # users and replay data to exist before the infrastructure can be applied.
         env {
           name  = "NEXORUTA_API_ORIGIN"
           value = local.endpoints["api"]
