@@ -32,7 +32,7 @@ El objeto de operaciones es JSON con una propiedad por `jornadaId`; su valor con
   "00000000-0000-4000-8000-000000000001": [
     {
       "id": "10000000-0000-4000-8000-000000000001",
-      "secuencia": 1,
+      "secuencia": 2,
       "tipo": "Posicion",
       "envioId": null,
       "versionEnvio": null,
@@ -50,7 +50,7 @@ El objeto de operaciones es JSON con una propiedad por `jornadaId`; su valor con
 
 Subir el objeto con una ruta nueva para cada versión, sin sobrescribir fixtures que sigan referenciadas; calcular su SHA-256 localmente y colocarlo en el secreto. El objeto de ejemplo abrevia los eventos; los perfiles de sincronización necesitan 50 por jornada.
 
-Para ejecutar `smoke` alcanza una cuenta. `baseline` usa cinco cuentas y es de solo lectura. `sync` necesita veinte cuentas; `stress` cincuenta; `soak` cinco. Cada jornada usada por `smoke`, `sync`, `stress` o `soak` debe tener 50 eventos `Posicion` ya registrados en orden y con resultado `Aplicada`. Cada ID es único en su jornada. La prueba vuelve a enviar el mismo ID y payload en orden, por lo que mide reconexión e idempotencia sin crear nuevas filas ni alterar el estado. No cambiar secuencia, ID, timestamp ni payload entre corridas. El fixture mostrado abrevia la lista; para perfiles de sync se completa hasta la secuencia 50. Para medir nuevas escrituras o generar datos se necesita una jornada exclusiva y un flujo de conciliación/limpieza separado.
+Para ejecutar `smoke` alcanza una cuenta. `baseline` usa cinco cuentas y es de solo lectura. `sync` necesita veinte cuentas; `stress` cincuenta; `soak` cinco. Cada jornada usada por `smoke`, `sync`, `stress` o `soak` debe tener primero un `InicioJornada` aplicado en la secuencia 1 y luego 50 eventos `Posicion` ya registrados en orden, con resultado `Aplicada`, en las secuencias 2–51. Esto refleja el contrato del backend: las posiciones solo se aceptan cuando la jornada está en curso. Cada ID es único en su jornada. La prueba vuelve a enviar solo las 50 posiciones con el mismo ID y payload en orden; el replay idempotente no agrega filas ni altera el estado. No cambiar secuencia, ID, timestamp ni payload entre corridas. El fixture mostrado abrevia la lista; para perfiles de sync se completa hasta la secuencia 51. Para cerrar las jornadas preparadas, aplicar el flujo normal de fin y liberación después de verificar las posiciones; los replays posteriores devuelven el resultado almacenado. Para medir nuevas escrituras o generar datos se necesita una jornada exclusiva y un flujo de conciliación/limpieza separado.
 
 La política de login permite cinco intentos por minuto. El wrapper autentica secuencialmente y espera 12,1 segundos después de cada respuesta; así la latencia variable no comprime las llegadas al servidor. Renueva las sesiones tres minutos antes de que venza el JWT de 15 minutos, incluidas las identidades aún inactivas. Refresh y logout comparten una pausa de 2,1 segundos después de cada respuesta, por debajo de 30 solicitudes/minuto. Un rechazo o una respuesta perdida de rotación abortan la corrida; no se reintenta con un refresh token cuyo estado es incierto. Los perfiles se ejecutan solo contra `api` de la release activa; no activan ni usan Mapbox/Geoapify, SMTP externo o FCM.
 

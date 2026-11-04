@@ -29,7 +29,7 @@ OUTPUT = Path("/tmp/controlled-results")
 JOURNEY = str(uuid.UUID(int=1))
 RUN_ID = str(uuid.uuid4())
 PASSWORD = "controlled-only-password"
-OPERATIONS = [{"id": str(uuid.UUID(int=100 + index)), "secuencia": index + 1,
+OPERATIONS = [{"id": str(uuid.UUID(int=100 + index)), "secuencia": index + 2,
     "tipo": "Posicion", "envioId": None, "versionEnvio": None,
     "ocurridaEn": "2026-11-04T00:00:00Z", "datos": {"latitud": -34.9, "longitud": -56.1,
         "precisionMetros": 12, "posicionEnUtc": "2026-11-04T00:00:00Z"}}
@@ -143,7 +143,7 @@ class Handler(BaseHTTPRequestHandler):
                     or not PEER.authenticate(self.headers.get("Authorization", ""))):
                 self.respond(403)
                 return
-            index = body.get("secuencia", 0) - 1
+            index = body.get("secuencia", 0) - 2
             if not 0 <= index < 50 or body != OPERATIONS[index]:
                 self.respond(200, {"resultado": "Conflicto"})
                 return
