@@ -78,7 +78,9 @@ def request_stop(signum, _frame):
 def load_thresholds(profile_name, profile, defaults):
     thresholds = dict(defaults)
     if profile.get("sync"):
-        batches = profile["vus"]
+        # Arrival-rate executors may need fewer VUs than their ceiling. Check
+        # every started batch against completions in the stream evidence.
+        batches = 1 if profile.get("rate") else profile["vus"]
         operations = batches * 50
         thresholds["nexoruta_load_sync_batches_completed"] = [f"count>={batches}"]
         thresholds["nexoruta_load_sync_operations_applied"] = [f"count>={operations}"]
@@ -87,7 +89,8 @@ def load_thresholds(profile_name, profile, defaults):
 
 
 def run_process(args, env, output, result, lease, control_bucket, bucket, prom_origin):
-    stream = MetricStream(output / "metrics.pipe")
+    stream = MetricStream(output / "metrics.pipe", json.loads(env.get("NEXORUTA_LOAD_PROFILE", "{}")),
+                          json.loads(env.get("NEXORUTA_LOAD_THRESHOLDS", "{}")))
     resources = Resources()
     resources.sample()
     args = [*args[:-1], "-o", f"json={output / 'metrics.pipe'}", args[-1]]
@@ -166,7 +169,7 @@ def run_process(args, env, output, result, lease, control_bucket, bucket, prom_o
             process.kill()
             process.wait(timeout=10)
         stream.close()
-    return exit_code, stop_reason, stream.evidence.snapshot(), resources.latest
+    return exit_code, stop_reason, stream.evidence.snapshot(final=True), resources.latest
 
 
 def main():

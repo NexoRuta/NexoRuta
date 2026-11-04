@@ -1,6 +1,7 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { Counter, Trend } from 'k6/metrics';
+import execution from 'k6/execution';
+import { Counter, Gauge, Trend } from 'k6/metrics';
 
 const fixture = JSON.parse(__ENV.NEXORUTA_LOAD_FIXTURE || '{}');
 const profile = JSON.parse(__ENV.NEXORUTA_LOAD_PROFILE || '{}');
@@ -10,6 +11,8 @@ const operationsByJourney = profile.sync
 const unexpected = new Counter('nexoruta_load_unexpected_results');
 const syncApplied = new Counter('nexoruta_load_sync_operations_applied');
 const syncBatches = new Counter('nexoruta_load_sync_batches_completed');
+const syncStarted = new Counter('nexoruta_load_sync_batches_started');
+const windowStarted = new Gauge('nexoruta_load_window_started');
 const syncDrainDuration = new Trend('nexoruta_load_sync_drain_duration');
 
 if (!fixture.accounts || !Array.isArray(fixture.accounts) || !fixture.accounts.length) {
@@ -55,10 +58,7 @@ export const options = {
   scenarios: {
     application: profile.rate
       ? { executor: 'ramping-arrival-rate', startRate: 1, timeUnit: '1s', preAllocatedVUs: 10,
-          maxVUs: profile.vus, stages: [
-            { target: 1, duration: '4m' }, { target: 3, duration: '6m' },
-            { target: 5, duration: '6m' }, { target: 10, duration: '9m' },
-          ] }
+          maxVUs: profile.vus, stages: profile.stages }
       : { executor: 'ramping-vus', startVUs: 1, stages: [
           { target: profile.vus, duration: profile.ramp }, { target: profile.vus, duration: profile.duration },
         ] },
@@ -99,36 +99,53 @@ export function setup() {
 }
 
 export default function (data) {
+  if (__ITER === 0) windowStarted.add(execution.scenario.startTime, { phase: 'control' });
   const identity = data.sessions[(__VU - 1) % data.sessions.length];
   const headers = { Authorization: `Bearer ${identity.token}` };
+  const readTags = measurementTags();
   const read = http.get(`${base}${fixture.readPath}`, { timeout: '10s', headers,
-    tags: { phase: 'measured', kind: 'read', name: 'mobile_profile' } });
+    tags: { ...readTags, kind: 'read', name: 'mobile_profile' } });
   unexpected.add(check(read, { 'profile response is 200': (r) => r.status === 200 }) ? 0 : 1,
-    { phase: 'measured', kind: 'read' });
+    { ...readTags, kind: 'read' });
 
   if (profile.sync && __ITER === 0) {
+    const batchTags = measurementTags();
+    syncStarted.add(1, batchTags);
     const drainStarted = Date.now();
     let applied = 0;
     const operations = operationsByJourney[identity.jornadaId];
     for (let index = 0; index < operations.length; index += 1) {
+      const operationTags = measurementTags();
       const response = http.post(`${base}/api/mobile/jornadas/${identity.jornadaId}/operaciones`,
         JSON.stringify(operations[index]), { timeout: '10s', headers: { ...headers, 'Content-Type': 'application/json',
           'X-NexoRuta-Pending-Sync': String(operations.length - index) },
-        tags: { phase: 'measured', kind: 'sync', name: 'mobile_sync_operation' } });
+        tags: { ...operationTags, kind: 'sync', name: 'mobile_sync_operation' } });
       let result = '';
       try { result = response.json().resultado || ''; } catch (_) { /* counted as unexpected below */ }
       const valid = response.status === 200 && result === 'Aplicada';
       if (!valid) {
-        unexpected.add(1, { phase: 'measured', kind: 'sync' });
+        unexpected.add(1, { ...operationTags, kind: 'sync' });
         check(response, { 'operation replay accepted and applied': () => valid });
         break;
       }
       applied += 1;
-      syncApplied.add(1);
+      syncApplied.add(1, measurementTags());
       check(response, { 'operation replay accepted and applied': () => valid });
     }
-    syncDrainDuration.add(Date.now() - drainStarted);
-    if (applied === operations.length) syncBatches.add(1);
+    syncDrainDuration.add(Date.now() - drainStarted, batchTags);
+    if (applied === operations.length) syncBatches.add(1, batchTags);
   }
-  sleep(1);
+  if (!profile.rate) sleep(1);
+}
+
+function measurementTags() {
+  if (!profile.rate) return { phase: 'measured', stage: 'nominal' };
+  const elapsed = Date.now() - execution.scenario.startTime;
+  let boundary = 0;
+  for (let index = 0; index < profile.stages.length; index += 1) {
+    const duration = profile.stages[index].duration;
+    boundary += Number.parseInt(duration, 10) * (duration.endsWith('m') ? 60000 : 1000);
+    if (elapsed < boundary) return { phase: 'measured', stage: String(index + 1) };
+  }
+  return { phase: 'measured', stage: String(profile.stages.length) };
 }

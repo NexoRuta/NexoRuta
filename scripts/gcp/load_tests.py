@@ -454,7 +454,9 @@ def execution_report(active, cloud_state, summary):
         return {**summary, "status": "failed", "classification": "infrastructure_failed",
                 "stop_reason": "cloud_execution_failed_after_runner"}
     if summary.get("status") == "passed" and (summary.get("classification") != "passed"
-            or not summary.get("evidence", {}).get("measured_requests")):
+            or not summary.get("evidence", {}).get("measured_requests")
+            or not (summary.get("evidence", {}).get("measurement_report") or {}).get("valid")
+            or not (summary.get("evidence", {}).get("measurement_report") or {}).get("complete")):
         return {**summary, "status": "failed", "classification": "incomplete_evidence"}
     return summary
 

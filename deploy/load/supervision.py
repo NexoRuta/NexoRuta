@@ -1,18 +1,175 @@
 """Bounded, payload-free evidence and verdicts for the pinned k6 runner."""
 
 from collections import defaultdict
+from array import array
 import datetime as dt
 import json
 import math
 import os
+import re
 from pathlib import Path
 import select
 import threading
 import time
 
 
+def seconds(value):
+    match = re.fullmatch(r"([1-9][0-9]*)([sm])", value)
+    if not match:
+        raise ValueError("Invalid measured duration")
+    return int(match[1]) * (60 if match[2] == "m" else 1)
+
+
+def percentile(values, fraction):
+    ordered = sorted(values)
+    rank = (len(ordered) - 1) * fraction
+    lower = int(rank)
+    return ordered[lower] + (ordered[min(lower + 1, len(ordered) - 1)] - ordered[lower]) * (rank - lower)
+
+
+class StageMeasurements:
+    """Exact per-stage percentiles with a hard, run-wide sample bound."""
+
+    SAMPLE_LIMIT = 1_000_000
+
+    def __init__(self, profile, thresholds):
+        self.start = None
+        self.sample_count = 0
+        self.samples = defaultdict(lambda: array("d"))
+        self.counts = defaultdict(lambda: defaultdict(int))
+        self.throughput = defaultdict(int)
+        self.limits = {}
+        self.error_limit = None
+        for expression in thresholds.get("http_req_failed{phase:measured}", []):
+            match = re.fullmatch(r"rate<([0-9.]+)", expression)
+            if match and 0 < float(match[1]) <= 1:
+                self.error_limit = float(match[1])
+        for kind in ("read", "sync", "drain"):
+            key = "nexoruta_load_sync_drain_duration" if kind == "drain" else f"http_req_duration{{phase:measured,kind:{kind}}}"
+            expressions = thresholds.get(key, [])
+            limits = {}
+            for expression in expressions:
+                match = re.fullmatch(r"p\((95|99)\)<([0-9.]+)", expression)
+                if match:
+                    limits[int(match[1])] = float(match[2])
+            if set(limits) == {95, 99}:
+                self.limits[kind] = limits
+        self.schedule = []
+        boundary = 0
+        if profile.get("rate"):
+            stages = profile["stages"]
+            if not 1 <= len(stages) <= 16:
+                raise ValueError("Invalid stage count")
+            for index, stage in enumerate(stages):
+                end = boundary + seconds(stage["duration"])
+                self.schedule.append((str(index + 1), boundary, end, stage["target"]))
+                boundary = end
+        else:
+            duration = seconds(profile["duration"]) + seconds(profile["ramp"]) if profile else 0
+            self.schedule.append(("nominal", 0, duration, None))
+
+    def consume(self, metric, data):
+        value = data.get("value")
+        tags = data.get("tags", {})
+        if metric == "nexoruta_load_window_started":
+            if not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                raise ValueError("Invalid measurement start")
+            if self.start is not None and abs(self.start - value / 1000) > 0.001:
+                raise ValueError("Conflicting scenario start markers")
+            self.start = value / 1000
+            return
+        if metric == "dropped_iterations" and self.start is not None:
+            timestamp = dt.datetime.fromisoformat(data["time"].replace("Z", "+00:00")).timestamp()
+            stage = next((key for key, begin, end, _ in self.schedule
+                          if begin <= timestamp - self.start < end), self.schedule[-1][0])
+            if not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                raise ValueError("Invalid dropped iteration sample")
+            self.counts[stage]["dropped_iterations"] += value
+            return
+        fields = {"http_req_failed", "http_req_duration", "nexoruta_load_unexpected_results",
+                  "nexoruta_load_sync_batches_started", "nexoruta_load_sync_batches_completed",
+                  "nexoruta_load_sync_drain_duration"}
+        if tags.get("phase") != "measured" or metric not in fields:
+            return
+        stage = tags.get("stage")
+        if stage not in {key for key, _, _, _ in self.schedule}:
+            raise ValueError("Unknown measurement stage")
+        if not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+            raise ValueError("Invalid stage sample")
+        counts = self.counts[stage]
+        if metric in ("http_req_duration", "nexoruta_load_sync_drain_duration"):
+            kind = "drain" if metric == "nexoruta_load_sync_drain_duration" else tags.get("kind")
+            if kind not in ("read", "sync", "drain") or self.sample_count >= self.SAMPLE_LIMIT:
+                raise ValueError("Invalid or oversized latency evidence")
+            self.samples[(stage, kind)].append(value)
+            self.sample_count += 1
+        elif metric == "http_req_failed":
+            counts["requests"] += 1
+            counts["errors"] += value
+            if self.start is not None:
+                timestamp = dt.datetime.fromisoformat(data["time"].replace("Z", "+00:00")).timestamp()
+                bucket = int((timestamp - self.start) // 10)
+                if not 0 <= bucket < 600:
+                    raise ValueError("Measured timestamp exceeds the bounded run")
+                self.throughput[bucket] += 1
+        else:
+            counts[metric.removeprefix("nexoruta_load_")] += value
+
+    def report(self, ended):
+        rows = []
+        valid = self.start is not None and bool(self.limits) and self.error_limit is not None
+        for stage, begin, end, target in self.schedule:
+            counts = self.counts[stage]
+            requests = counts["requests"]
+            elapsed = max(0, min(ended - self.start, end) - begin) if self.start is not None else 0
+            row = {"stage": stage, "target_iterations_per_second": target,
+                   "observed_seconds": elapsed, "complete": elapsed >= end - begin and requests > 0,
+                   "requests": requests, "errors": counts["errors"],
+                   "error_rate": counts["errors"] / requests if requests else None,
+                   "http_rps": requests / elapsed if elapsed else None,
+                   "dropped_iterations": counts["dropped_iterations"],
+                   "sync_batches_started": counts["sync_batches_started"],
+                   "sync_batches_completed": counts["sync_batches_completed"],
+                   "latency": {}, "breaches": []}
+            latency_count = 0
+            for kind in ("read", "sync", "drain"):
+                values = self.samples.get((stage, kind), ())
+                if kind != "drain":
+                    latency_count += len(values)
+                if values:
+                    p95, p99 = percentile(values, 0.95), percentile(values, 0.99)
+                    row["latency"][kind] = {"count": len(values), "p95_ms": p95, "p99_ms": p99}
+                    limits = self.limits.get(kind, {})
+                    if not limits:
+                        valid = False
+                    for quantile, observed in ((95, p95), (99, p99)):
+                        if quantile in limits and observed >= limits[quantile]:
+                            row["breaches"].append(f"{kind}_p{quantile}")
+            if latency_count != requests:
+                valid = False
+            if (row["error_rate"] is not None and self.error_limit is not None
+                    and row["error_rate"] >= self.error_limit):
+                row["breaches"].append("http_error_rate")
+            if counts["unexpected_results"]:
+                row["breaches"].append("unexpected_results")
+            if counts["dropped_iterations"]:
+                row["breaches"].append("dropped_iterations")
+            if counts["sync_batches_started"] != counts["sync_batches_completed"]:
+                row["breaches"].append("incomplete_sync_batches")
+            rows.append(row)
+        windows = [count / 10 for bucket, count in self.throughput.items()
+                   if self.start is not None and ended >= self.start + (bucket + 1) * 10]
+        return {"valid": valid and any(row["requests"] for row in rows),
+                "complete": all(row["complete"] for row in rows), "stages": rows,
+                "first_breached_stage": next((row["stage"] for row in rows if row["breaches"]), None),
+                "maximum_observed_http_rps": max(windows) if windows else None,
+                "throughput_window_seconds": 10,
+                "sync_batches_started": sum(row["sync_batches_started"] for row in rows),
+                "sync_batches_completed": sum(row["sync_batches_completed"] for row in rows)}
+
+
 class Evidence:
-    def __init__(self):
+    def __init__(self, profile=None, thresholds=None):
         self.lock = threading.Lock()
         self.first_sample = None
         self.last_sample = None
@@ -23,6 +180,7 @@ class Evidence:
         self.window = defaultdict(lambda: [0, 0])
         self.fault = None
         self.severe = False
+        self.measurements = StageMeasurements(profile or {}, thresholds or {})
 
     def consume(self, point):
         if not isinstance(point, dict):
@@ -32,6 +190,8 @@ class Evidence:
         metric, data = point.get("metric"), point.get("data", {})
         if not isinstance(data, dict) or not isinstance(data.get("tags", {}), dict):
             raise ValueError("Invalid metric data")
+        with self.lock:
+            self.measurements.consume(metric, data)
         if metric == "dropped_iterations":
             value = data["value"]
             if not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
@@ -73,21 +233,22 @@ class Evidence:
             if self.last_sample - self.first_sample >= 60 and requests and errors / requests > 0.05:
                 self.severe = True
 
-    def snapshot(self):
+    def snapshot(self, final=False):
         with self.lock:
             return {"measured_requests": self.requests, "measured_errors": self.errors,
                     "unexpected_results": self.unexpected, "dropped_iterations": self.dropped,
                     "first_measured_at": self.first_sample, "last_measured_at": self.last_sample,
-                    "severe_errors": self.severe, "stream_error": self.fault}
+                    "severe_errors": self.severe, "stream_error": self.fault,
+                    "measurement_report": self.measurements.report(time.time()) if final else None}
 
 
 class MetricStream:
     """Continuously drain a FIFO; retain aggregates, never the raw stream."""
 
-    def __init__(self, path):
+    def __init__(self, path, profile=None, thresholds=None):
         os.mkfifo(path, mode=0o600)
         self.fd = os.open(path, os.O_RDWR | os.O_NONBLOCK)
-        self.evidence = Evidence()
+        self.evidence = Evidence(profile, thresholds)
         self.stop = threading.Event()
         self.thread = threading.Thread(target=self._read, daemon=True)
 
@@ -184,10 +345,17 @@ def classify(profile, exit_code, stop_reason, evidence, resources, has_summary):
         return "failed", "invalid_generator_telemetry"
     if not has_summary or not evidence.get("measured_requests"):
         return "failed", "incomplete_evidence"
-    if stop_reason == "sustained_http_errors" or evidence.get("severe_errors") or exit_code == 99:
-        if profile == "stress" and not evidence.get("unexpected_results") and not evidence.get("dropped_iterations"):
+    measurement = evidence.get("measurement_report") or {}
+    if not measurement.get("valid"):
+        return "failed", "incomplete_evidence"
+    if (stop_reason == "sustained_http_errors" or evidence.get("severe_errors") or exit_code == 99
+            or measurement.get("first_breached_stage")):
+        if (profile == "stress" and not evidence.get("unexpected_results") and not evidence.get("dropped_iterations")
+                and measurement.get("sync_batches_started") == measurement.get("sync_batches_completed")):
             return "failed", "capacity_limit_found"
         return "failed", "slo_failed"
     if evidence.get("unexpected_results") or evidence.get("dropped_iterations"):
         return "failed", "slo_failed"
+    if not measurement.get("complete"):
+        return "failed", "incomplete_evidence"
     return "passed", "passed"

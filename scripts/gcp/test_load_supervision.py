@@ -28,7 +28,103 @@ def point(second, value=0, phase="measured", metric="http_req_failed"):
     import datetime as dt
     timestamp = dt.datetime.fromtimestamp(second, dt.timezone.utc).isoformat()
     return {"type": "Point", "metric": metric,
-            "data": {"value": value, "time": timestamp, "tags": {"phase": phase}}}
+            "data": {"value": value, "time": timestamp,
+                     "tags": {"phase": phase, "stage": "nominal", "kind": "read"}}}
+
+
+class StageMeasurementTests(unittest.TestCase):
+    def setUp(self):
+        profiles = json.loads((Path(__file__).resolve().parents[2] / "tests/load/profiles.json").read_text())
+        self.profile = profiles["profiles"]["stress"]
+        self.thresholds = runner.load_thresholds("stress", self.profile, profiles["thresholds"])
+        self.measurements = supervision.StageMeasurements(self.profile, self.thresholds)
+        self.measurements.consume("nexoruta_load_window_started", {"value": 1_000_000})
+
+    def sample(self, second, stage, latency=100):
+        failed = point(1000 + second)
+        failed["data"]["tags"]["stage"] = stage
+        self.measurements.consume("http_req_failed", failed["data"])
+        self.measurements.consume("http_req_duration", {**failed["data"], "value": latency})
+
+    def test_first_breach_is_reported_by_stage_even_if_global_percentile_would_hide_it(self):
+        for second, stage, latency in ((1, "1", 100), (241, "2", 100), (601, "3", 2000), (961, "4", 100)):
+            self.sample(second, stage, latency)
+        report = self.measurements.report(2500)
+        self.assertTrue(report["valid"])
+        self.assertTrue(report["complete"])
+        self.assertEqual(report["first_breached_stage"], "3")
+        self.assertEqual(report["stages"][2]["latency"]["read"]["p95_ms"], 2000)
+        verdict = supervision.classify("stress", 0, None,
+            {"measured_requests": 4, "measurement_report": report}, {"available": True}, True)
+        self.assertEqual(verdict, ("failed", "capacity_limit_found"))
+
+    def test_percentiles_use_samples_not_averages_of_vu_percentiles(self):
+        for second, latency in enumerate((100, 200, 300, 400)):
+            self.sample(second, "1", latency)
+        report = self.measurements.report(1100)
+        self.assertAlmostEqual(report["stages"][0]["latency"]["read"]["p95_ms"], 385)
+        self.assertFalse(report["complete"])
+
+    def test_peak_throughput_excludes_partial_ten_second_windows(self):
+        for _ in range(20):
+            self.sample(1, "1")
+        for _ in range(100):
+            self.sample(13, "1")
+        report = self.measurements.report(1015)
+        self.assertEqual(report["maximum_observed_http_rps"], 2)
+
+    def test_missing_latency_samples_invalidate_the_measurement(self):
+        self.sample(1, "1")
+        failed = point(1002)
+        failed["data"]["tags"]["stage"] = "1"
+        self.measurements.consume("http_req_failed", failed["data"])
+        self.assertFalse(self.measurements.report(1015)["valid"])
+
+    def test_conflicting_scenario_clocks_and_unknown_stages_are_rejected(self):
+        with self.assertRaises(ValueError):
+            self.measurements.consume("nexoruta_load_window_started", {"value": 2_000_000})
+        with self.assertRaises(ValueError):
+            self.sample(1, "unbounded-user-input")
+
+    def test_exact_sample_storage_is_bounded_and_does_not_silently_truncate(self):
+        self.measurements.SAMPLE_LIMIT = 1
+        self.sample(1, "1")
+        with self.assertRaises(ValueError):
+            self.sample(2, "1")
+        self.assertEqual(self.measurements.sample_count, 1)
+
+    def test_dynamic_stress_batches_are_checked_against_starts_not_maximum_vus(self):
+        self.assertEqual(self.thresholds["nexoruta_load_sync_batches_completed"], ["count>=1"])
+        for metric in ("nexoruta_load_sync_batches_started", "nexoruta_load_sync_batches_completed"):
+            self.measurements.consume(metric, {"value": 3, "tags": {"phase": "measured", "stage": "1"}})
+        self.sample(1, "1")
+        report = self.measurements.report(2500)
+        self.assertEqual(report["sync_batches_started"], report["sync_batches_completed"])
+        self.assertNotIn("incomplete_sync_batches", report["stages"][0]["breaches"])
+
+    def test_incomplete_replay_is_not_classified_as_an_application_capacity_limit(self):
+        self.measurements.consume("nexoruta_load_sync_batches_started",
+            {"value": 1, "tags": {"phase": "measured", "stage": "1"}})
+        self.sample(1, "1")
+        report = self.measurements.report(2500)
+        verdict = supervision.classify("stress", 99, None,
+            {"measured_requests": 1, "measurement_report": report}, {"available": True}, True)
+        self.assertEqual(verdict, ("failed", "slo_failed"))
+
+    def test_nominal_sync_keeps_the_requirement_for_every_configured_vu(self):
+        thresholds = runner.load_thresholds("sync", {"vus": 20, "sync": True}, {})
+        self.assertEqual(thresholds["nexoruta_load_sync_batches_completed"], ["count>=20"])
+
+    def test_error_slo_comes_from_the_pinned_thresholds(self):
+        thresholds = {**self.thresholds, "http_req_failed{phase:measured}": ["rate<0.2"]}
+        self.measurements = supervision.StageMeasurements(self.profile, thresholds)
+        self.measurements.consume("nexoruta_load_window_started", {"value": 1_000_000})
+        for index in range(20):
+            failed = point(1001 + index, int(index == 0))
+            failed["data"]["tags"]["stage"] = "1"
+            self.measurements.consume("http_req_failed", failed["data"])
+            self.measurements.consume("http_req_duration", {**failed["data"], "value": 100})
+        self.assertNotIn("http_error_rate", self.measurements.report(1100)["stages"][0]["breaches"])
 
 
 class EvidenceTests(unittest.TestCase):
@@ -134,6 +230,16 @@ class ResourceTests(unittest.TestCase):
 
 
 class ClassificationTests(unittest.TestCase):
+    def test_controller_pass_requires_a_valid_complete_measurement(self):
+        summary = {"run_id": "one", "status": "passed", "classification": "passed",
+                   "evidence": {"measured_requests": 10,
+                                "measurement_report": {"valid": True, "complete": True}}}
+        report = load_test_control.execution_report({"run_id": "one"}, "CONDITION_SUCCEEDED", summary)
+        self.assertEqual(report["status"], "passed")
+        summary["evidence"]["measurement_report"]["complete"] = False
+        report = load_test_control.execution_report({"run_id": "one"}, "CONDITION_SUCCEEDED", summary)
+        self.assertEqual(report["status"], "failed")
+
     def test_wait_persists_a_failure_report_when_cloud_succeeds_without_summary(self):
         active = {"run_id": "one", "profile": "baseline", "expires_at": 999,
                   "execution": "projects/demo/locations/southamerica-west1/jobs/load/executions/one"}
@@ -152,7 +258,7 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(leases.write.call_args.args[2]["status"], "failed")
 
     def test_verdicts_do_not_confuse_cancellation_with_infrastructure_or_slos(self):
-        evidence = {"measured_requests": 10}
+        evidence = {"measured_requests": 10, "measurement_report": {"valid": True, "complete": True}}
         for profile, code, reason, resources, has_summary, expected in (
             ("baseline", 0, None, {"available": True}, True, ("passed", "passed")),
             ("baseline", 99, None, {"available": True}, True, ("failed", "slo_failed")),
@@ -168,7 +274,8 @@ class ClassificationTests(unittest.TestCase):
 
     def test_discarded_iterations_do_not_prove_an_application_capacity_limit(self):
         verdict = supervision.classify("stress", 99, None,
-            {"measured_requests": 100, "dropped_iterations": 1}, {"available": True}, True)
+            {"measured_requests": 100, "dropped_iterations": 1,
+             "measurement_report": {"valid": True, "complete": True}}, {"available": True}, True)
         self.assertEqual(verdict, ("failed", "slo_failed"))
 
     def test_successful_execution_without_runner_evidence_is_failed(self):

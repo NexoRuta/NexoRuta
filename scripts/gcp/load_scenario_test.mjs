@@ -6,7 +6,7 @@ import { test } from 'node:test';
 const source = fs.readFileSync(new URL('../../tests/load/scenario.js', import.meta.url), 'utf8');
 const profiles = JSON.parse(fs.readFileSync(new URL('../../tests/load/profiles.json', import.meta.url)));
 
-async function harness({ count = 1, sync = false, warmupStatus = 200 } = {}) {
+async function harness({ count = 1, sync = false, warmupStatus = 200, rateProfile = false } = {}) {
   const accounts = Array.from({ length: count }, (_, index) => ({
     email: `load-${index}@nexoruta.test`, password: 'controlled-fixture',
     jornadaId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
@@ -19,13 +19,17 @@ async function harness({ count = 1, sync = false, warmupStatus = 200 } = {}) {
     })),
   ]));
   const requests = [];
+  const metrics = [];
+  const execution = { scenario: { startTime: 0 } };
   let clock = 0;
   const context = vm.createContext({
     Date: { now: () => clock }, __VU: 1, __ITER: 0,
     open: () => JSON.stringify(operations),
     __ENV: { NEXORUTA_API_ORIGIN: 'https://controlled.invalid',
       NEXORUTA_LOAD_FIXTURE: JSON.stringify({ accounts, readPath: '/api/mobile/perfil' }),
-      NEXORUTA_LOAD_PROFILE: JSON.stringify({ vus: count, sync, duration: '2m', ramp: '10s' }),
+      NEXORUTA_LOAD_PROFILE: JSON.stringify(rateProfile
+        ? { ...profiles.profiles.stress, sync, vus: count }
+        : { vus: count, sync, duration: '2m', ramp: '10s' }),
       NEXORUTA_LOAD_THRESHOLDS: JSON.stringify(profiles.thresholds) },
   });
   const response = (status, body) => ({ status, json: () => body });
@@ -44,17 +48,22 @@ async function harness({ count = 1, sync = false, warmupStatus = 200 } = {}) {
       for (const [name, value] of Object.entries(exports)) this.setExport(name, value);
     }, { context });
   }
-  class Metric { add() {} }
+  class Metric {
+    constructor(name) { this.name = name; }
+    add(value, tags) { metrics.push({ name: this.name, value, tags }); }
+  }
   const dependencies = {
     'k6/http': module({ default: http }),
     k6: module({ sleep: seconds => { clock += seconds * 1000; },
       check: (value, checks) => Object.values(checks).every(check => check(value)) }),
-    'k6/metrics': module({ Counter: Metric, Trend: Metric }),
+    'k6/metrics': module({ Counter: Metric, Gauge: Metric, Trend: Metric }),
+    'k6/execution': module({ default: execution }),
   };
   const scenario = new vm.SourceTextModule(source, { context });
   await scenario.link(name => dependencies[name]);
   await scenario.evaluate();
-  return { scenario: scenario.namespace, requests, elapsed: () => clock };
+  return { scenario: scenario.namespace, requests, metrics, execution,
+    elapsed: () => clock, advance: milliseconds => { clock += milliseconds; } };
 }
 
 test('login and warm-up precede measured traffic and never replay sync', async () => {
@@ -64,9 +73,29 @@ test('login and warm-up precede measured traffic and never replay sync', async (
   assert.equal(h.requests.filter(r => r.tags.phase === 'warmup').length, 30);
   assert(h.requests.every(r => r.tags.kind !== 'sync'));
   assert(h.elapsed() >= 42100);
+  h.execution.scenario.startTime = h.elapsed();
   h.scenario.default(data);
   assert.equal(h.requests.filter(r => r.tags.phase === 'measured' && r.tags.kind === 'sync').length, 50);
   assert.equal(h.requests.filter(r => r.tags.phase === 'measured' && r.tags.kind === 'read').length, 1);
+});
+
+test('stress labels stages from the actual scenario clock and does not add think-time', async () => {
+  const h = await harness({ count: 50, rateProfile: true });
+  const data = h.scenario.setup();
+  h.execution.scenario.startTime = h.elapsed();
+  h.advance(239999);
+  h.scenario.default(data);
+  h.advance(1);
+  h.scenario.default(data);
+  h.advance(360000);
+  h.scenario.default(data);
+  h.advance(360000);
+  h.scenario.default(data);
+  assert.deepEqual(h.requests.filter(r => r.tags.phase === 'measured').map(r => r.tags.stage), ['1', '2', '3', '4']);
+  assert.equal(h.elapsed() - h.execution.scenario.startTime, 960000);
+  assert(h.metrics.filter(m => m.name === 'nexoruta_load_window_started')
+    .every(m => m.value === h.execution.scenario.startTime));
+  assert.deepEqual(JSON.parse(JSON.stringify(h.scenario.options.scenarios.application.stages)), profiles.profiles.stress.stages);
 });
 
 test('failed warm-up aborts setup before measured scenarios can start', async () => {

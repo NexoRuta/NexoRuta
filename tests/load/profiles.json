@@ -1,10 +1,13 @@
 {
-  "version": 2,
+  "version": 3,
   "profiles": {
     "smoke": {"vus": 1, "duration": "2m", "ramp": "10s", "sync": true},
     "baseline": {"vus": 5, "duration": "15m", "ramp": "1m", "sync": false},
     "sync": {"vus": 20, "duration": "15m", "ramp": "30s", "sync": true},
-    "stress": {"vus": 50, "duration": "25m", "rate": 10, "sync": true},
+    "stress": {"vus": 50, "duration": "25m", "rate": 10, "sync": true, "stages": [
+      {"target": 1, "duration": "4m"}, {"target": 3, "duration": "6m"},
+      {"target": 5, "duration": "6m"}, {"target": 10, "duration": "9m"}
+    ]},
     "soak": {"vus": 5, "duration": "60m", "ramp": "1m", "sync": true}
   },
   "thresholds": {
