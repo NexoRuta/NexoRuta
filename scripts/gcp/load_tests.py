@@ -47,6 +47,11 @@ def load_control_bucket(config):
     return config.get("GCP_LOAD_CONTROL_BUCKET") or f"{config['GCP_PROJECT_ID']}-nexoruta-load-control"
 
 
+def demo_control_lock(config, access):
+    store = control_lock.JsonStorage(config["GCP_STATE_BUCKET"], access)
+    return control_lock.control_lock(config, store=store)
+
+
 def token(project):
     return subprocess.run(["gcloud", "auth", "print-access-token", f"--project={project}"],
                           check=True, capture_output=True, text=True, timeout=20).stdout.strip()
@@ -311,7 +316,7 @@ def run(config, profile, run_id=None):
     image = os.environ.get("NEXORUTA_LOAD_IMAGE", "")
     if not re.fullmatch(rf"southamerica-west1-docker\.pkg\.dev/{re.escape(config['GCP_PROJECT_ID'])}/nexoruta/load-tests@sha256:[a-f0-9]{{64}}", image):
         raise ValueError("The load-test image must be pinned to an Artifact Registry digest")
-    with control_lock.control_lock({**config, "GCP_PROJECT_ID": config["GCP_PROJECT_ID"]}, store=state):
+    with demo_control_lock(config, access):
         generation, active = leases.read(LEASE_OBJECT)
         now = time.time()
         reserved_here = bool(active and active.get("run_id") == run_id
@@ -354,7 +359,7 @@ def run(config, profile, run_id=None):
             current.update(status="failed", completed_at=time.time(), failure_reason="preflight_cancelled_or_expired")
             leases.write(LEASE_OBJECT, generation, current)
         raise RuntimeError("The load-test lease was cancelled or expired during remote preflight")
-    with control_lock.control_lock({**config, "GCP_PROJECT_ID": config["GCP_PROJECT_ID"]}, store=state):
+    with demo_control_lock(config, access):
         generation, current = leases.read(LEASE_OBJECT)
         if (not current or current.get("run_id") != run_id or current.get("status") != "starting"
                 or current.get("expires_at", 0) <= time.time()):
@@ -429,7 +434,7 @@ def reserve(config, profile):
     state = Storage(config["GCP_STATE_BUCKET"], access)
     leases = Storage(load_control_bucket(config), access)
     fixture_version = latest_fixture_version(config["GCP_PROJECT_ID"])
-    with control_lock.control_lock({**config, "GCP_PROJECT_ID": config["GCP_PROJECT_ID"]}, store=state):
+    with demo_control_lock(config, access):
         generation, active = leases.read(LEASE_OBJECT)
         now = time.time()
         expired_reservation = bool(active and active.get("status") == "reserved" and active.get("expires_at", 0) <= now)
@@ -518,7 +523,7 @@ def cancel(config, run_id=None, wait_seconds=120):
     state = Storage(config["GCP_STATE_BUCKET"], access)
     leases = Storage(load_control_bucket(config), access)
     lock = (nullcontext() if os.environ.get("NEXORUTA_CONTROL_LOCK_HELD") == "true"
-            else control_lock.control_lock({**config, "GCP_PROJECT_ID": config["GCP_PROJECT_ID"]}, store=state))
+            else demo_control_lock(config, access))
     with lock:
         generation, active = leases.read(LEASE_OBJECT)
         if not active or (run_id and active.get("run_id") != run_id):
