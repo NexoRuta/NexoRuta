@@ -14,7 +14,7 @@ async function harness({ count = 1, sync = false, warmupStatus = 200, rateProfil
   const operations = Object.fromEntries(accounts.map(account => [account.jornadaId,
     Array.from({ length: 50 }, (_, index) => ({
       id: `10000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
-      tipo: 'Posicion', secuencia: index + 1, ocurridaEn: '2026-11-04T00:00:00Z',
+      tipo: 'Posicion', secuencia: index + 2, ocurridaEn: '2026-11-04T00:00:00Z',
       envioId: null, versionEnvio: null,
     })),
   ]));
@@ -83,7 +83,10 @@ test('private session readiness and warm-up precede measured traffic and never r
   assert(data.sessions.every(s => !s.token && !s.accessToken && !s.refreshToken));
   h.execution.scenario.startTime = h.elapsed();
   h.scenario.default(data);
-  assert.equal(h.requests.filter(r => r.tags.phase === 'measured' && r.tags.kind === 'sync').length, 50);
+  const replays = h.requests.filter(r => r.tags.phase === 'measured' && r.tags.kind === 'sync');
+  assert.equal(replays.length, 50);
+  assert.equal(JSON.parse(replays[0].body).secuencia, 2);
+  assert.equal(JSON.parse(replays.at(-1).body).secuencia, 51);
   assert.equal(h.requests.filter(r => r.tags.phase === 'measured' && r.tags.kind === 'read').length, 1);
 });
 

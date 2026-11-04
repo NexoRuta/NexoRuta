@@ -296,8 +296,9 @@ Antes de habilitar una corrida:
    respuestas de sincronización, CPU de las VMs, conexiones de Cloud SQL y el
    estado del gateway de métricas de A.
 2. Crear usuarios y jornadas sintéticas independientes de las cuentas de demo.
-   Para smoke, sync, stress y soak, cada jornada debe tener 50 operaciones
-   `Posicion` ya aplicadas, con IDs, secuencia y payload estables. Se repiten en
+   Para smoke, sync, stress y soak, cada jornada debe tener `InicioJornada`
+   aplicado en secuencia 1 y 50 operaciones `Posicion` aplicadas en secuencias
+   2–51, con IDs y payload estables. Se repiten en
    orden para medir reconexión e idempotencia sin insertar filas durante la
    prueba. `baseline` solo hace lecturas.
 3. Cargar las credenciales e IDs sintéticos en una versión de

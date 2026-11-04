@@ -1,5 +1,6 @@
 """Focused safety checks for remote load-test lease recovery."""
 
+import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -66,6 +67,46 @@ class LoadTestLeaseTests(unittest.TestCase):
         with patch.object(load_test_control, "gcp_request", return_value={"conditions": []}):
             self.assertFalse(load_test_control.reconcile_execution(store, "demo-project", "run-1"))
         self.assertEqual(store.value["status"], "running")
+
+
+class LatestFixtureVersionTests(unittest.TestCase):
+    @patch("load_tests.subprocess.run")
+    def test_accepts_short_version_name_from_gcloud_value_format(self, run):
+        run.return_value = subprocess.CompletedProcess([], 0, stdout="1\n", stderr="")
+
+        self.assertEqual("1", load_test_control.latest_fixture_version("nexoruta-demo-20261022"))
+        self.assertIn("--format=value(name)", run.call_args.args[0])
+
+    @patch("load_tests.subprocess.run")
+    def test_accepts_full_secret_version_resource_name(self, run):
+        run.return_value = subprocess.CompletedProcess(
+            [], 0,
+            stdout="projects/123456789/secrets/nexoruta-load-fixtures/versions/7\n",
+            stderr="",
+        )
+
+        self.assertEqual("7", load_test_control.latest_fixture_version("nexoruta-demo-20261022"))
+
+    @patch("load_tests.subprocess.run")
+    def test_rejects_unrecognized_gcloud_output(self, run):
+        run.return_value = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+
+        with self.assertRaisesRegex(RuntimeError, "No enabled synthetic fixture version"):
+            load_test_control.latest_fixture_version("nexoruta-demo-20261022")
+
+
+class DemoControlLockTests(unittest.TestCase):
+    def test_uses_the_lock_store_protocol_instead_of_the_named_object_storage(self):
+        config = {"GCP_PROJECT_ID": "nexoruta-demo-20261022", "GCP_STATE_BUCKET": "state-bucket"}
+        lock_store = object()
+        context = object()
+        with patch.object(load_test_control.control_lock, "JsonStorage", return_value=lock_store) as storage, \
+                patch.object(load_test_control.control_lock, "control_lock", return_value=context) as guard:
+            result = load_test_control.demo_control_lock(config, "access-token")
+
+        self.assertIs(context, result)
+        storage.assert_called_once_with("state-bucket", "access-token")
+        guard.assert_called_once_with(config, store=lock_store)
 
 
 if __name__ == "__main__":

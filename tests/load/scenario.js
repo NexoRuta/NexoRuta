@@ -43,9 +43,11 @@ if (profile.sync && !fixture.accounts.every((account) => Array.isArray(operation
     && operationsByJourney[account.jornadaId].length === 50
     && operationsByJourney[account.jornadaId].every((operation, index) => operation?.tipo === 'Posicion'
       && /^[0-9a-f-]{36}$/.test(operation.id) && operation.ocurridaEn
-      && operation.secuencia === index + 1 && operation.envioId === null
+      // Sequence 1 is the already-applied InicioJornada event that moved the
+      // synthetic route into EnCurso; the replay fixture contains only GPS.
+      && operation.secuencia === index + 2 && operation.envioId === null
       && operation.versionEnvio === null))) {
-  throw new Error('Each sync account needs 50 pre-seeded, ordered Posicion events for safe idempotent replay.');
+  throw new Error('Each sync account needs 50 pre-seeded Posicion events after InicioJornada for safe idempotent replay.');
 }
 if (profile.sync) {
   const ids = fixture.accounts.flatMap((account) => operationsByJourney[account.jornadaId].map((operation) => operation.id));
