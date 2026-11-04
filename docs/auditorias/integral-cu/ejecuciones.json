@@ -3152,6 +3152,58 @@
     ]
   },
   {
+    "file": "prueba-custodia.trx",
+    "sha256": "8611734104774d5333a6026bb436410db7c576b321f130d6246422d03d0557aa",
+    "counters": {
+      "total": "7",
+      "executed": "7",
+      "passed": "7",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "tests": [
+      {
+        "name": "NexoRuta.IntegrationTests.Reparto.OperacionesRepartoHttpTests.CierreDuranteLaCargaNoFingeQueElBultoCargadoEstaEnDeposito",
+        "outcome": "Passed"
+      },
+      {
+        "name": "NexoRuta.IntegrationTests.Reparto.OperacionesRepartoHttpTests.EvidenciaCifradaEsInmutableYCompletaLaPruebaAutomaticamente(cancelacionConcurrente: True, restringida: False)",
+        "outcome": "Passed"
+      },
+      {
+        "name": "NexoRuta.IntegrationTests.Reparto.OperacionesRepartoHttpTests.RendicionDeclaradaAntesDelCierreNoGeneraIncidencias",
+        "outcome": "Passed"
+      },
+      {
+        "name": "NexoRuta.IntegrationTests.Reparto.OperacionesRepartoHttpTests.EvidenciaCifradaEsInmutableYCompletaLaPruebaAutomaticamente(cancelacionConcurrente: True, restringida: True)",
+        "outcome": "Passed"
+      },
+      {
+        "name": "NexoRuta.IntegrationTests.Reparto.OperacionesRepartoHttpTests.CierreConIncidenciaEsIdempotenteConservaCustodiaYPermiteRecepcionFisicaPosterior(restringido: False)",
+        "outcome": "Passed"
+      },
+      {
+        "name": "NexoRuta.IntegrationTests.Reparto.OperacionesRepartoHttpTests.CierreConIncidenciaEsIdempotenteConservaCustodiaYPermiteRecepcionFisicaPosterior(restringido: True)",
+        "outcome": "Passed"
+      },
+      {
+        "name": "NexoRuta.IntegrationTests.Reparto.OperacionesRepartoHttpTests.EvidenciaCifradaEsInmutableYCompletaLaPruebaAutomaticamente(cancelacionConcurrente: False, restringida: False)",
+        "outcome": "Passed"
+      }
+    ]
+  },
+  {
     "file": "reproduccion-mapa.trx",
     "sha256": "c102cfac2591d53c9014c1134b5b9bb03e68a0b404aac708690f75e4ca5c5af7",
     "counters": {

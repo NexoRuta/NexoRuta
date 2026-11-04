@@ -25,3 +25,11 @@ git -C mobile status --porcelain
 ```
 
 No copiar `.local`, `.env`, bases, node_modules, bin/obj, claves ni carpetas de submódulos de otro checkout. Deben obtenerse los tres objetos desde sus remotos. La comprobación observada del clon y del último commit documental se registra a continuación al terminar la publicación.
+
+## Comprobación observada
+
+Se ejecutó el clon remoto anterior en `/workspace/nexoruta-auditoria-integral-remota`, desde GitHub y sin alternates/referencias al workspace de trabajo. Principal obtenido: `13a3c496ff7617418d19652bc0368f9a330549eb`. Los tres submódulos se clonaron/fetchearon desde sus propios remotos y resultaron exactamente Backend `5fbefe199f175b441f854e02152798a21b85b340`, Frontend `9c07de423f94e6dc0ba1f9538bdbd913b418c287`, Mobile `74a25f1b5b18c7dfc006cf7df747d73b0ec4910a`.
+
+`git status --porcelain` vacío en los cuatro repositorios; se comprobaron los caminos Git reales de `objects/info/alternates` (incluidos `.git/modules/*`), todos ausentes. Sin `.local` ni `.env` en el clon. Las comparaciones desde el checkout con historia completa contra las bases exactas muestran solamente `A` del archivo de prueba correspondiente en cada hijo; `src`, contratos, migraciones, CSS y locks no cambian.
+
+La actualización documental posterior conserva esos mismos tres gitlinks; el commit final se obtiene de la rama remota y se comprueba de nuevo sin merge mediante fetch y checkout detached. No se copiaron datos, credenciales, binarios ni submódulos de otro checkout.

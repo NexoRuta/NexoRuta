@@ -14,6 +14,7 @@ Corte03/11/2026 America/Montevideo. Las cantidades proceden de TRX nuevos, no de
 | Mobile Core | 36 pasadas,0 fallidas/omitidas | Lógica portátil; no Android |
 | Mobile Application | 85 pasadas,0 fallidas/omitidas | Cola/sincronización/proyección; no SO ni cámara/GPS |
 | Mobile Api | 63 pasadas,0 fallidas/omitidas | Contratos/transporte controlado; no conectividad Android real |
+| Controles positivos foto válida y cierre/rendición/custodia | 7 pasadas,0 fallidas/omitidas,33s | Confirma que rechazar toda foto no sería una corrección válida y que cierre no simula recepción; complementa H01 sin excluir su rojo |
 | Reproducción nueva H01 | **1 fallida**,0 pasadas/omitidas,18s | Esperado Not Entregado; actual Entregado con PNG estructuralmente inválido. Rol restringido real. Se deja roja, sin corregir producto |
 | Reproducción nueva H02 | **1 fallida**,0 pasadas/omitidas,45ms | Dispose tardío del mapa: esperado1, actual0. Barrera determinista JS, no SDK/dispositivo físico |
 | ArchitectureTests después de restore ordinario diagnóstico | **2 pasadas,1 fallida**,0 omitidas | H08: oráculo DTO universal incompatible con PDF; dependencia dominio/aplicación sí pasa |
