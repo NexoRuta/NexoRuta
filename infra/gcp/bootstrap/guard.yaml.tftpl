@@ -272,17 +272,17 @@ find_execution_by_run_id:
   - inspect_executions:
       for:
         value: candidate
-        in: $${map.get(executions, "executions", [])}
+        in: $${default(map.get(executions, "executions"), [])}
         steps:
         - inspect_containers:
             for:
               value: container
-              in: $${map.get(map.get(candidate, "template", {}), "containers", [])}
+              in: $${default(map.get(candidate, ["template", "containers"]), [])}
               steps:
               - inspect_environment:
                   for:
                     value: item
-                    in: $${map.get(container, "env", [])}
+                    in: $${default(map.get(container, "env"), [])}
                     steps:
                     - match_run_id:
                         switch:
