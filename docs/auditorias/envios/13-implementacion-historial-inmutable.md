@@ -100,3 +100,7 @@ Las pruebas unitarias completas no se ejecutaron en este bloque porque el compor
 - No hay actualmente worker escritor de estado; su contexto existe, pero requiere prueba de integración cuando se agregue uno.
 - CU-08 sigue obligatorio y separado; outbox/brokers transversales no se declaran completos.
 - El siguiente bloqueo funcional para continuar con los estados es DEC-01 del informe 12: resolver el conflicto entre vencimiento temporal de `EntregaPendienteValidacion` en el diagrama y cierre de jornada D18, incluyendo el instante de inicio y las operaciones offline tardías. No se eligió duración ni política por inferencia.
+
+## Revisión CU-12 / planificación, 03/11/2026
+
+La revisión de la base publicada `fix/cu0708` detectó y corrigió el origen de recepción en `EfRutasRepository.RecibirAsync`: la condición debe capturar el estado anterior antes de la transición. La prueba HTTP comprueba `RecepcionDeposito`, actor y referencia persistidos. La evidencia actualizada de historia/atomicidad/RLS y de CU-14–CU-16 se registra en [aceptación de planificación](../cu12-14-15-16/aceptacion.md). Los resultados históricos de este documento no sustituyen las ejecuciones nuevas.

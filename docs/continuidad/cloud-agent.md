@@ -1,6 +1,12 @@
 # Cloud para agent: preparación versionada
 
-Fuente: checkpoint raíz 8323f2905811f208b296d99fc37d8e6e6a69657c y sus tres gitlinks de scripts/cloud/checkpoint.json, sin cambios. Rama checkpoint/codex-cloud-agent-20261102. Esta preparación no implementa CU08, CU09 ni rediseño.
+Current source authority: the selected checkout HEAD and its exact gitlinks, not the historical scripts/cloud/checkpoint.json manifest. The installer recursively verifies initialized submodules and never checks out, switches or rewrites sources.
+
+## Source selection is separate from dependency installation
+
+For a new checkout: `git clone --branch develop --recurse-submodules https://github.com/NexoRuta/NexoRuta.git`. In an existing checkout, preserve local work first, explicitly select the requested branch/commit, then run `git submodule update --init --recursive` as a deliberate source-selection step. Run `python3 scripts/cloud/verify-gitlinks.py` before installing dependencies. Never use `--remote` or take current source SHAs from a historical checkpoint manifest.
+
+To reproduce a historical checkpoint, explicitly select its commit/tag in a separate clone before initializing its submodules. `checkpoint.json` remains a historical source inventory, not implicit installation instructions. `install-agent.sh` installs dependencies and restores locks without selecting sources; `environment-install.sh` checks gitlinks first. No published Codex Cloud configuration is changed by this procedure.
 
 Se recuperaron los cuatro archivos efectivos existentes de la adaptación Cloud: dev.py, check.sh, env-agent.sh e install-agent.sh. No son reconstrucciones históricas. environment-install.sh y verify-restart.py son helpers nuevos, escritos para esta publicación. Los contenidos exactos del borrador previo se conservan en cloud-agent-original-install.txt y cloud-agent-original-start.md como archivo histórico; no se ejecutan ni se necesitan para instalar.
 
@@ -32,3 +38,7 @@ check.sh, con env-agent.sh, usa fixtures Docker propias y conserva aserciones: H
 verify-restart.py verifica login y huellas de filas persistidas/estado privado antes y después de stop/start. No imprime filas, contraseñas ni claves. Logs, bases, imágenes y capturas son locales, no fuentes de preparación ni artefactos Git. No se accede a Windows ni a sus bases. No se publica el entorno automáticamente.
 
 Para validar otro clon sin reutilizar el contenedor del checkout anterior, detener el runtime anterior y exportar NEXORUTA_CLOUD_CONTAINER con un nombre nuevo exclusivo antes de start/check/verify-restart. No copiar private.json. Esta variable debe mantenerse para todas las operaciones de ese clon.
+
+## Investigación posterior de sesión (03/11/2026)
+
+[Diagnóstico y reproducción](../auditorias/sesion-401/01-diagnostico-y-verificacion.md): respuesta 401 demorada que invalidaba un ingreso posterior. El origen del 401 histórico de arranque sigue sin determinar. El harness optativo ejecuta portales reales, API Kestrel y PostgreSQL aislado; no requiere ni usa los datos de la prueba manual Mobile. Mantener HTTP y navegador en invocaciones separadas, y no recompilar DLLs mientras los portales del harness las están usando. No se cierran CU pendientes por este corte.

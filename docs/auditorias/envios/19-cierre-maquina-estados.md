@@ -1,5 +1,7 @@
 # Cierre del grafo de estados del envío — DEC-01 a DEC-07
 
+> Actualización vigente del 03/11/2026: ver [CU-11, matriz y verificación actual](20-cu11-estados-y-evidencia.md), que contrasta el código multi-bulto y CU-10. Este documento conserva el corte histórico de un bulto; sus endpoints de primera recepción y notas de despacho no describen por sí solos el circuito actual.
+
 **Corte:** 28/10/2026  
 **Alcance concluido:** recorrido servidor/API y Backoffice, cardinalidad actual de un bulto por envío. CU-08, cliente offline completo, revisión nativa y publicación/consumo externo de todos los brokers quedan fuera.  
 **Resultado:** la máquina de estados acordada está cerrada dentro de ese alcance. No implica cierre de CU-08 ni de la aplicación completa.

@@ -20,10 +20,12 @@ if [[ "$(node --version 2>/dev/null || true)" != v24.22.2 ]]; then
  rm -rf "$stage"
 fi
 cd "$ROOT"
-for project in backend/src/NexoRuta.Api backend/tests/NexoRuta.UnitTests backend/tests/NexoRuta.IntegrationTests frontend/tests/NexoRuta.ApiClient.Tests; do
+for project in backend/NexoRuta.sln frontend/NexoRuta.sln; do
  dotnet restore "$project" --locked-mode
 done
-dotnet restore mobile/tests/NexoRuta.Mobile.Core.Tests -p:NuGetLockFilePath=obj/cloud.packages.lock.json
+for layer in Core Api Storage Application; do
+ dotnet restore "mobile/tests/NexoRuta.Mobile.$layer.Tests" --locked-mode
+done
 npm ci --prefix scripts/cloud --ignore-scripts
 scripts/cloud/node_modules/.bin/playwright install chromium
 # Validate browser shared libraries and process permissions, without apt or external navigation.

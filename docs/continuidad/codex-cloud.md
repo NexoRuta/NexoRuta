@@ -1,3 +1,5 @@
+> Preparación actual: usar el checkout solicitado y sus gitlinks; ver [procedimiento vigente](cloud-agent.md). Las referencias de checkpoint siguientes documentan una reproducción histórica explícita, no seleccionan fuentes durante la instalación.
+
 # Continuar NexoRuta en Codex Cloud
 
 Para la preparación versionada de **agent con Docker**, usar [Cloud para agent](cloud-agent.md). Sus helpers publicados sustituyen el borrador de onboarding; las instrucciones nativas siguientes se conservan como procedimiento alternativo.
@@ -15,7 +17,7 @@ git submodule update --init --recursive
 git submodule status
 ```
 
-Los hijos se publican antes de la raíz. No usar `submodule update --remote` ni otras puntas de rama para sustituir los gitlinks. Conectar los cuatro repositorios a Cloud y conceder acceso GitHub para sus submódulos privados. Si Cloud los coloca como hermanos, materializar los hijos en backend/, frontend/, mobile/ con los SHAs del manifiesto. No transferir tokens, Git Credential Manager, .env ni credenciales de Windows.
+Los hijos se publican antes de la raíz. No usar `submodule update --remote` ni otras puntas de rama para sustituir los gitlinks. Conectar los cuatro repositorios a Cloud y conceder acceso GitHub para sus submódulos privados. Si Cloud los coloca como hermanos, materializar los hijos en backend/, frontend/, mobile/ con los SHA de los gitlinks del checkout seleccionado (no los de un manifiesto histórico). No transferir tokens, Git Credential Manager, .env ni credenciales de Windows.
 
 ## 2. Instalación y servicios sin Docker
 

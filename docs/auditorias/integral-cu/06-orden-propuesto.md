@@ -1,0 +1,13 @@
+# Orden de corrección y revisión posterior — no ejecutado
+
+1. **Reproducibilidad:** H07 locks de consumidores y H08 oráculo binario de arquitectura; H09 onboarding con gitlinks como autoridad. Corregir en otra tarea/rama autorizada, conservar locked-mode y política de DTO JSON. Repetir desde clon remoto limpio.
+2. **Integridad de prueba de entrega:** H01. Decoder seguro/limitado y controles positivos/negativos con PostgreSQL/RLS. La reproducción roja debe pasar sin retirar el requisito Fotografia ni reemplazar sus bytes por una foto válida. Confirmar también intentos y firmas corruptas, idempotencia y cifrado.
+3. **Ciclo de vida del selector:** H02. Cancelación/disposición durante importación, creación y callbacks; SDK controlado real, ruta abandonada, cero instancias/bindings remanentes. Preservar reentrada, selección/ajuste/guardado/reapertura y permanent=false.
+4. **Resolver interpretación con responsables:** D-P01 compromiso temporal y D-P02 discrepancias reales de depósito. No ejecutar una supuesta corrección de negocio en esta revisión. Redactar ejemplos aceptados y rechazados y actores/versionado antes de cambiar contratos o permitir una salida.
+5. **Brechas obligatorias:** H03/04/05/06. Diseñar proyecciones públicas minimizadas, reprogramación de destinatario, avisos y webhooks, tablero/reportes/ledger y caché distribuido. Reusar eventos inmutables/cargos y preservar aislamiento, atomicidad y clientes actuales. No confundir push al repartidor con avisos a destinatario/comercio.
+6. **Opcionales seleccionados:** revisar Kafka de flota/replay, NoSQL de eventos, carga remota/SLO, cobertura real publicada, cobertura E2E de CI y push real cerrado. No otorgar puntos parciales ni usar sus nombres como evidencia suficiente.
+7. **Aceptación humana por circuitos:** ejecutar 03 con datos nuevos y personas identificadas; conservar brechas y repetir solo los circuitos afectados por cada corrección. Android/hardware, CU-06, precisión vial y origen del 401 histórico permanecen explícitos.
+
+Orden técnico de una futura integración: Backend/migraciones/contratos y pruebas → Frontend/Mobile consumidores → superproyecto con gitlinks publicados y clon remoto limpio. Revisión de compatibilidad conjunta antes del merge. Si no cambia un submódulo, conservar su SHA. La rama de esta auditoría contiene **solo documentación, helpers de revisión y dos reproducciones rojas**; no debe integrarse como si fuera una corrección funcional ni suprimir esos fallos para obtener CI verde.
+
+No se ejecutó ninguno de esos arreglos, ni merge/force-push/despliegue. Se publican exclusivamente las ramas `review/auditoria-integral-cu` de los repositorios efectivamente modificados; Mobile queda intacto.
