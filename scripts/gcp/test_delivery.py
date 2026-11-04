@@ -2,6 +2,7 @@ import io
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import tarfile
 import tempfile
 import threading
@@ -74,6 +75,42 @@ class DeliveryTests(unittest.TestCase):
         )
         self.assertIn("deleteDatasources:", datasource_config)
         self.assertIn("name: Google Cloud Monitoring", datasource_config)
+
+    def test_load_test_dashboard_is_in_the_gcp_delivery_bundle(self):
+        root = Path(__file__).parents[2]
+        dashboard_path = root / "deploy/observability/grafana/load-tests.json"
+        dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+        self.assertEqual(dashboard["uid"], "nexoruta-load-tests")
+        self.assertIn("run_id", {item["name"] for item in dashboard["templating"]["list"]})
+        titles = {panel.get("title") for panel in dashboard["panels"]}
+        self.assertIn("CPU del generador k6", titles)
+        self.assertIn("Memoria del generador k6", titles)
+
+        with tempfile.TemporaryDirectory() as temp:
+            fixture = Path(temp) / "source"
+            shutil.copytree(root / "deploy/gcp", fixture / "deploy/gcp")
+            (fixture / "deploy/observability/grafana").mkdir(parents=True)
+            shutil.copyfile(root / "deploy/observability/grafana/nexoruta.json",
+                            fixture / "deploy/observability/grafana/nexoruta.json")
+            shutil.copyfile(dashboard_path, fixture / "deploy/observability/grafana/load-tests.json")
+            runtime_roles = fixture / "backend/scripts/provision-rls-runtime-roles.sql"
+            runtime_roles.parent.mkdir(parents=True)
+            runtime_roles.write_text("-- Test fixture; runtime roles are supplied by migrations.\n")
+            migrations = fixture / "backend/src/NexoRuta.Infrastructure/Persistence/Migrations"
+            migrations.mkdir(parents=True)
+            (migrations / "0001_TestRoles.cs").write_text(
+                "CREATE ROLE nexoruta_schema_owner NOLOGIN; CREATE ROLE nexoruta_api NOLOGIN;\n"
+            )
+            monitor_agent = fixture / "scripts/gcp/monitor_agent.py"
+            monitor_agent.parent.mkdir(parents=True)
+            shutil.copyfile(root / "scripts/gcp/monitor_agent.py", monitor_agent)
+
+            with patch.object(delivery, "ROOT", fixture):
+                bundle = delivery.create_bundle(Path(temp) / "output")
+            with tarfile.open(bundle, "r:gz") as archive:
+                packaged = archive.extractfile("grafana/provisioning/dashboards/load-tests.json")
+                self.assertIsNotNone(packaged)
+                self.assertEqual(packaged.read(), dashboard_path.read_bytes())
 
     def test_environment_cannot_inject_additional_lines(self):
         with self.assertRaises(ValueError):
