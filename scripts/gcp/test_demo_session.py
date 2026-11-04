@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import demo_session as session
 import delivery
+import load_tests as load_test_control
 
 
 class SessionSafetyTests(unittest.TestCase):
@@ -147,6 +148,7 @@ class SessionSafetyTests(unittest.TestCase):
         }
         with (
             patch.object(delivery, "latest_release", return_value="release-" + "a" * 32),
+            patch.object(load_test_control, "assert_no_active"),
             patch.object(session, "instance", return_value=None),
             patch.object(session, "write_lease"),
             patch.object(session, "start_database"),

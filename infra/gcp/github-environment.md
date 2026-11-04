@@ -22,13 +22,14 @@ número, que son valores diferentes.
 | `GCP_STATE_BUCKET` | `PROJECT_ID-tofu-state` |
 | `GCP_DELIVERY_BUCKET` | `PROJECT_ID-nexoruta-delivery` |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/nexoruta-github/providers/demo-vm` |
-| `GCP_DEPLOY_SERVICE_ACCOUNT` | `nexoruta-demo-deployer@PROJECT_ID.iam.gserviceaccount.com` |
+| `GCP_DEPLOY_SERVICE_ACCOUNT` | `nexoruta-demo-deployer@PROJECT_ID.iam.gserviceaccount.com` para publicación y controles de VM |
+| `GCP_LOAD_SERVICE_ACCOUNT` | `nexoruta-load-controller@PROJECT_ID.iam.gserviceaccount.com` para el workflow de carga |
 | `GCP_SECONDARY_ZONE` | `southamerica-west1-b` |
 | `MONITOR_ALLOWED_EMAILS` | Correos Google explícitamente autorizados, separados por comas |
 
 Estos son los nombres generados por OpenTofu. La preparación inicial con
-`scripts/gcp/setup.ps1` crea WIF, IAM, buckets y secretos en GCP y escribe las siete
-variables en el environment. Se pueden obtener sus valores exactos con:
+`scripts/gcp/setup.ps1` crea WIF, IAM, buckets y secretos en GCP y escribe las
+variables generadas en el environment. Se pueden obtener sus valores exactos con:
 
 ```powershell
 tofu -chdir=infra/gcp/bootstrap output -json github_variables

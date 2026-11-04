@@ -3,3 +3,7 @@
 *.tf text eol=lf
 *.hcl text eol=lf
 *.py text eol=lf
+
+# Cloud scripts must execute on Linux even when authored on Windows.
+/scripts/cloud/*.sh text eol=lf
+/scripts/cloud/*.py text eol=lf

@@ -21,3 +21,7 @@ mobile/google-services.json
 # Local infrastructure secrets (never version real values).
 .env
 secrets/
+.~lock.*#
+# Local audit captures/logs: retained locally, not a portable source fixture.
+/docs/auditorias/**/evidencias/
+/cloud-artifacts/

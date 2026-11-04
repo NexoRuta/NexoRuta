@@ -12,6 +12,12 @@ x-frontend-dev: &frontend-dev
     - ./frontend:/workspace
 
 services:
+  api:
+    environment:
+      # Existing public map token; temporary forward search only. No permanent geocoding or account-plan changes.
+      Mapbox__PublicAccessToken: "${Mapbox__PublicAccessToken:-}"
+      Geocoding__MapboxTemporal__Habilitado: "true"
+      Geocoding__Geoapify__PermitirLlamadasReales: "false"
   admin:
     <<: *frontend-dev
     build: !reset null

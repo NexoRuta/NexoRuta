@@ -1,4 +1,6 @@
 # Public deployment settings. Credentials remain in GitHub environment secrets.
+name: nexoruta
+
 x-app-settings:
   SMTP_HOST: mailpit
   SMTP_PORT: "1025"
@@ -21,16 +23,25 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nexoruta -d nexoruta"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U nexoruta -d nexoruta"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
     restart: unless-stopped
-    image: redis:8-alpine
+    image: redis:7.2.16-alpine3.21
     container_name: nexoruta-redis
-    command: redis-server --appendonly yes
+    command:
+      - redis-server
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --save
+      - ""
+      - --appendonly
+      - "no"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -86,7 +97,13 @@ services:
       DataProtection__KeysDirectory: /var/nexoruta/data-protection-keys
       DatabaseInitialization__ApplyMigrations: "false"
       DatabaseInitialization__SeedData: "false"
-      ConnectionStrings__Redis: redis:6379
+      ConnectionStrings__Redis: redis:6379,abortConnect=false,connectRetry=1,connectTimeout=500,syncTimeout=500,asyncTimeout=500,keepAlive=30
+      Caching__Enabled: "true"
+      Caching__Namespace: nexoruta-local
+      Caching__OperationTimeoutMilliseconds: "500"
+      Caching__MaxEntryBytes: "2097152"
+      Caching__OperatorBranding__TtlSeconds: "900"
+      Caching__PublishedTariff__TtlSeconds: "21600"
       OpenTelemetry__Enabled: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://dashboard:18889
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
@@ -103,6 +120,8 @@ services:
       start_period: 20s
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       dashboard:
         condition: service_started
@@ -159,6 +178,29 @@ services:
       mailpit:
         condition: service_started
 
+  worker-push:
+    image: nexoruta-worker:local
+    build: *worker-build
+    container_name: nexoruta-worker-push
+    entrypoint: ["dotnet", "NexoRuta.Worker.dll"]
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      Messaging__Transport: Push
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_worker_runtime;Password=${NEXORUTA_WORKER_DB_PASSWORD:?Set the local restricted worker role password in .env}"
+      DataProtection__KeysDirectory: /var/nexoruta/data-protection-keys
+    volumes:
+      - api_dataprotection_keys:/var/nexoruta/data-protection-keys:ro
+    healthcheck:
+      test: ["CMD-SHELL", "grep -aq 'NexoRuta.Worker.dll' /proc/1/cmdline"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   rls-migrator:
     profiles: ["rls-admin"]
     build:
@@ -171,7 +213,7 @@ services:
     container_name: nexoruta-rls-migrator
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Postgres: ${NEXORUTA_POSTGRES_CONNECTION:?Set the local migration connection in .env}
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta;Password=${NEXORUTA_POSTGRES_PASSWORD:?Set existing development password in .env}"
     command: ["database-migrate"]
     depends_on:
       postgres:
@@ -330,6 +372,7 @@ services:
         --config min.insync.replicas=1 --config retention.ms=2592000000
 
   admin:
+    restart: unless-stopped
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -346,6 +389,7 @@ services:
         condition: service_healthy
 
   backoffice:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: frontend/Dockerfile.Backoffice
@@ -364,6 +408,7 @@ services:
         condition: service_healthy
 
   commerce:
+    restart: unless-stopped
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -377,6 +422,8 @@ services:
       Portales__BackofficeLoginUrl: http://localhost:5101/ingresar
       Portales__AdminLoginUrl: http://localhost:5104/ingresar
       Tracking__BaseAddress: http://localhost:5103/
+      Mapbox__PublicAccessToken: "${Mapbox__PublicAccessToken:-}"
+      Mapbox__StyleUrl: "${Mapbox__StyleUrl:-}"
     ports:
       - "5102:8080"
     depends_on:
@@ -384,6 +431,7 @@ services:
         condition: service_healthy
 
   tracking:
+    restart: unless-stopped
     build:
       context: ./frontend
       dockerfile: Dockerfile

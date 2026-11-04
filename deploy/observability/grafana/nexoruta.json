@@ -1,0 +1,2199 @@
+{
+  "description": "Dashboard compartido local/GCP para servicios, contenedores, aplicación, infraestructura, logs y trazas.",
+  "editable": false,
+  "id": 254541098643456,
+  "links": [],
+  "panels": [
+    {
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "content": "Dashboard compartido por desarrollo local y GCP. Muestra disponibilidad de servicios, métricas de aplicación y contenedores, colas, logs y trazas. En local se ven todos los contenedores Docker; la fila plegable de infraestructura GCP añade VMs, balanceador, Cloud SQL y señales de sesión.",
+        "mode": "markdown"
+      },
+      "title": "Observabilidad integral de NexoRuta",
+      "type": "text"
+    },
+    {
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 3
+      },
+      "id": 16,
+      "options": {
+        "content": "Métricas OpenTelemetry en Prometheus, logs de todos los contenedores en Loki y trazas distribuidas en Tempo. Filtra por nodo, servicio o `correlation_id`; los logs estructurados enlazan con Tempo por `trace_id`.",
+        "mode": "markdown"
+      },
+      "title": "Aplicación, logs y trazas",
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Estado de las comprobaciones locales y de los servicios de GCP: 1 disponible, 0 no disponible.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "gray",
+            "mode": "fixed"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "text": "No disponible"
+                },
+                "1": {
+                  "color": "green",
+                  "text": "Disponible"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "Sin datos",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 6
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "min by (node, service) (nexoruta_gcp_service_up{node=~\"$node\",service=~\"$service\"} or probe_success{node=~\"$node\",service=~\"$service\"})",
+          "legendFormat": "{{node}} · {{service}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Servicios disponibles",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Media de duración de las solicitudes HTTP del API, en segundos.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "lineWidth": 2
+          },
+          "noValue": "Sin datos",
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 12
+      },
+      "id": 17,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (node, service_name) (rate(http_server_request_duration_seconds_sum{node=~\"$node\",service_name=~\"$otel_service\"}[5m])) / sum by (node, service_name) (rate(http_server_request_duration_seconds_count{node=~\"$node\",service_name=~\"$otel_service\"}[5m]))",
+          "instant": false,
+          "legendFormat": "{{service_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Latencia HTTP media por servicio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Percentil 95 de la distribución de duración de solicitudes HTTP.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "lineWidth": 2
+          },
+          "noValue": "Sin datos",
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 12
+      },
+      "id": 18,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, node, service_name) (rate(http_server_request_duration_seconds_bucket{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
+          "instant": false,
+          "legendFormat": "{{service_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Latencia HTTP p95 por servicio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Percentil 99 de la distribución de duración de solicitudes HTTP.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "lineWidth": 2
+          },
+          "noValue": "Sin datos",
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 12
+      },
+      "id": 19,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum by (le, node, service_name) (rate(http_server_request_duration_seconds_bucket{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
+          "instant": false,
+          "legendFormat": "{{service_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Latencia HTTP p99 por servicio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Porcentaje de solicitudes HTTP 5xx respecto de las solicitudes del API, calculado por nodo en una ventana móvil de cinco minutos.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "noValue": "Sin datos",
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 18
+      },
+      "id": 20,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "100 * (sum by (node, service_name) (rate(http_server_request_duration_seconds_count{node=~\"$node\",service_name=~\"$otel_service\",http_response_status_code=~\"5..\"}[5m])) or on (node, service_name) (sum by (node, service_name) (rate(http_server_request_duration_seconds_count{node=~\"$node\",service_name=~\"$otel_service\"}[5m])) * 0)) / clamp_min(sum by (node, service_name) (rate(http_server_request_duration_seconds_count{node=~\"$node\",service_name=~\"$otel_service\"}[5m])), 1e-9)",
+          "instant": true,
+          "legendFormat": "{{service_name}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Errores HTTP 5xx · 5 min por servicio",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Percentil 95 de operaciones locales pendientes observadas durante sincronizaciones móviles en los últimos cinco minutos.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "noValue": "Sin datos",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 18
+      },
+      "id": 21,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, node, service_name) (rate(nexoruta_mobile_sync_pending_bucket{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
+          "instant": true,
+          "legendFormat": "{{service_name}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Operaciones móviles pendientes · p95 por servicio",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Proporción acumulada de consultas de geocodificación resueltas desde caché por instancia del API.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "noValue": "Sin datos",
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 18
+      },
+      "id": 22,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "avg by (node, service_name) (nexoruta_cache_hit_ratio{node=~\"$node\",service_name=~\"$otel_service\"})",
+          "instant": true,
+          "legendFormat": "{{service_name}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Aciertos del caché Geoapify por servicio",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "El contador existe, pero el flujo de avisos a comercios todavía no está registrado; aparecerá sin datos hasta que el flujo emita un fallo.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "noValue": "Sin datos",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 18
+      },
+      "id": 23,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "round(sum by (node, service_name, transport) (increase(nexoruta_worker_failures_total{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
+          "instant": true,
+          "legendFormat": "{{service_name}} · {{transport}}",
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "round(sum by (node, service_name) (increase(nexoruta_commerce_notifications_failed_total{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
+          "instant": true,
+          "legendFormat": "{{service_name}} · notificaciones",
+          "range": false,
+          "refId": "B"
+        }
+      ],
+      "title": "Fallos de workers y avisos a comercios · 5 min",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Segundos desde el último contacto SQL de cada transporte de worker. -1 indica que todavía no se completó la primera consulta.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "drawStyle": "line",
+            "fillOpacity": 6,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "showPoints": "auto",
+            "spanNulls": false
+          },
+          "mappings": [],
+          "noValue": "Sin datos",
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "nexoruta_worker_sql_contact_age_seconds{node=~\"$node\",service_name=~\"$otel_service\"}",
+          "instant": false,
+          "legendFormat": "{{service_name}} · {{transport}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Workers · tiempo sin contacto SQL",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Cantidad estimada de intentos fallidos de notificaciones push durante los últimos cinco minutos.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "noValue": "Sin datos",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 12,
+        "y": 24
+      },
+      "id": 26,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "round(sum by (node, service_name) (increase(nexoruta_worker_push_failures_total{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
+          "instant": true,
+          "legendFormat": "{{service_name}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Fallos de entrega Push por servicio · 5 min",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Percentil 99 de operaciones locales pendientes en sincronizaciones durante los últimos 15 minutos.",
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 16,
+        "y": 24
+      },
+      "id": 27,
+      "options": {
+        "colorMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum by (le, node, service_name) (rate(nexoruta_mobile_sync_pending_bucket{node=~\"$node\",service_name=~\"$otel_service\"}[15m])))",
+          "refId": "A",
+          "legendFormat": "{{service_name}}"
+        }
+      ],
+      "title": "Operaciones móviles pendientes · p99 por servicio",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Métrica scrapeada directamente desde RabbitMQ en desarrollo local. En GCP, la profundidad de RabbitMQ y Kafka aparece en la fila de infraestructura.",
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 20,
+        "y": 24
+      },
+      "id": 28,
+      "options": {
+        "colorMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "max by (queue) (rabbitmq_detailed_queue_messages)",
+          "refId": "A",
+          "legendFormat": "{{queue}}"
+        }
+      ],
+      "title": "Mensajes pendientes por cola RabbitMQ",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "1 indica que el contenedor está levantado y saludable; 0 indica que está detenido o no saludable.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "gray",
+            "mode": "fixed"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "text": "No disponible"
+                },
+                "1": {
+                  "color": "green",
+                  "text": "Disponible"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "Sin datos",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 8
+      },
+      "id": 29,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "max by (node, service, container) (nexoruta_container_up{node=~\"$node\",service=~\"$service\"}) or label_replace(nexoruta_gcp_container_up{node=~\"$node\",service=~\"$service\"}, \"container\", \"$1\", \"service\", \"(.+)\")",
+          "legendFormat": "{{node}} · {{service}} · {{container}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Estado de contenedores",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "description": "Eventos JSON de la aplicación con correlación y acceso a la traza cuando se propagó trace_id.",
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 24,
+        "h": 14
+      },
+      "id": 24,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{job=\"docker\",node=~\"$node\",service=~\"$service\"} |= \"$correlation_id\" | json correlation_id=\"Properties.correlation_id\", trace_id=\"Properties.trace_id\", level=\"Level\", message=\"RenderedMessage\" | __error__=\"\" | line_format \"{{.service}} {{.level}} {{.message}} correlation_id={{.correlation_id}} trace_id={{.trace_id}}\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Logs correlacionados · API y workers",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "description": "Salida stdout/stderr de cada servicio del proyecto Compose, incluidos aplicación, base de datos, colas y observabilidad.",
+      "gridPos": {
+        "x": 0,
+        "y": 54,
+        "w": 24,
+        "h": 12
+      },
+      "id": 30,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{job=\"docker\",node=~\"$node\",service=~\"$service\"} |= \"$correlation_id\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Logs de todos los contenedores",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Operaciones móviles aplicadas o rechazadas en los últimos 5 minutos, por servicio.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "lineWidth": 2
+          },
+          "noValue": "Sin datos",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 66,
+        "w": 24,
+        "h": 7
+      },
+      "id": 31,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (node, service_name, result) (increase(nexoruta_mobile_sync_operations_total{node=~\"$node\",service_name=~\"$otel_service\"}[5m]))",
+          "instant": false,
+          "legendFormat": "{{service_name}} · {{result}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Operaciones de sincronización por resultado",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Una fila por alerta en estado firing. Sin filas significa que no hay alertas activas.",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 73,
+        "w": 24,
+        "h": 8
+      },
+      "id": 32,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "13.2.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "{{alertname}} · {{service_name}} · {{service}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Alertas activas por servicio",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 81
+      },
+      "id": 1010,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Lecturas de snapshots que encontraron una entrada válida en Redis.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "lineWidth": 2
+              },
+              "noValue": "Sin datos",
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 0,
+            "y": 82
+          },
+          "id": 101,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by (cache) (rate(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=\"hit\"}[$__rate_interval]))",
+              "instant": false,
+              "legendFormat": "{{cache}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Aciertos por segundo",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Lecturas válidas sin entrada. Un miss es normal al consultar una nueva versión.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "lineWidth": 2
+              },
+              "noValue": "Sin datos",
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 6,
+            "y": 82
+          },
+          "id": 102,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by (cache) (rate(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=\"miss\"}[$__rate_interval]))",
+              "instant": false,
+              "legendFormat": "{{cache}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Fallos de caché por segundo",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Aciertos / (aciertos + misses), agregados entre nodos. Sin tráfico no se dibuja un porcentaje.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "lineWidth": 2
+              },
+              "noValue": "Sin tráfico",
+              "unit": "percent",
+              "max": 100,
+              "min": 0
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 12,
+            "y": 82
+          },
+          "id": 103,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "(100 * (sum by (cache) (rate(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=\"hit\"}[$__rate_interval])) or on (cache) (0 * sum by (cache) (rate(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=\"miss\"}[$__rate_interval])))) / sum by (cache) (rate(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=~\"hit|miss\"}[$__rate_interval]))) and on (cache) sum by (cache) (increase(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=~\"hit|miss\"}[$__rate_interval])) > 0",
+              "instant": false,
+              "legendFormat": "{{cache}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Porcentaje de aciertos",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Errores de lectura, errores de operación Redis, bypass y cancelaciones se muestran por separado; no afectan el porcentaje de aciertos.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "lineWidth": 2
+              },
+              "noValue": "Sin datos",
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 18,
+            "y": 82
+          },
+          "id": 104,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by (cache, result) (rate(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=~\"error|bypass|cancelled\"}[$__rate_interval])) or label_replace(sum by (cache) (rate(nexoruta_cache_distributed_operations_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=\"error\"}[$__rate_interval])), \"result\", \"operation_error\", \"cache\", \".+\")",
+              "instant": false,
+              "legendFormat": "{{cache}} · {{result}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Errores y bypass",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Percentil 95 de las operaciones GET y SET observadas por la API.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "lineWidth": 2
+              },
+              "noValue": "Sin datos",
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 24,
+            "x": 0,
+            "y": 88
+          },
+          "id": 105,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le, cache, operation) (rate(nexoruta_cache_distributed_operation_duration_seconds_bucket{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",operation=~\"get|set\"}[$__rate_interval])))",
+              "instant": false,
+              "legendFormat": "{{cache}} · {{operation}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Latencia p95 de Redis",
+          "type": "timeseries"
+        }
+      ],
+      "title": "Caché distribuida",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 94,
+        "w": 24,
+        "h": 1
+      },
+      "id": 100,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Hora de la última muestra de disponibilidad recibida. Si deja de avanzar, los estados anteriores pueden estar desactualizados.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "gray",
+                "mode": "fixed"
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "dateTimeAsIso"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 12,
+            "x": 0,
+            "y": 95
+          },
+          "id": 2,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "Time",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by (node) (nexoruta_gcp_last_sample{node=~\"$node\"})",
+              "legendFormat": "Nodo {{node}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Última muestra por nodo",
+          "transformations": [
+            {
+              "id": "reduce",
+              "options": {
+                "fields": {
+                  "id": "byName",
+                  "options": "Time"
+                },
+                "includeTimeField": true,
+                "mode": "reduceFields",
+                "reducers": [
+                  "lastNotNull"
+                ]
+              }
+            }
+          ],
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Vencimiento común; el contador no debe ampliarse al actualizar o recuperar un nodo.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "gray",
+                "mode": "fixed"
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 12,
+            "x": 12,
+            "y": 95
+          },
+          "id": 3,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by (node) (nexoruta_gcp_session_remaining{node=~\"$node\"})",
+              "legendFormat": "Nodo {{node}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Tiempo restante de sesión",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Utilización media. Identificador nativo de instancia; independiente del filtro Nodo.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "drawStyle": "line",
+                "fillOpacity": 6,
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "showPoints": "auto",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "percentunit"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 0,
+            "y": 99
+          },
+          "id": 5,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "nexoruta_gcp_vm_cpu_utilization",
+              "legendFormat": "VM {{instance_id}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "CPU por VM",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Porcentaje usado informado por Ops Agent; excluye estados cache y buffered.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "drawStyle": "line",
+                "fillOpacity": 6,
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "showPoints": "auto",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 8,
+            "y": 99
+          },
+          "id": 6,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "nexoruta_gcp_vm_memory_percent{state=\"used\"}",
+              "legendFormat": "VM {{instance_id}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "RAM utilizada por VM",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Porcentaje por dispositivo informado por Ops Agent, incluido el disco persistente cuando se monta.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "drawStyle": "line",
+                "fillOpacity": 6,
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "showPoints": "auto",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 16,
+            "y": 99
+          },
+          "id": 7,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "nexoruta_gcp_vm_disk_percent{state=\"used\"}",
+              "legendFormat": "VM {{instance_id}} · {{device}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Disco utilizado por VM",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Percentil 95 de latencia total HTTP; incluye recorrido hasta el backend. Métrica nativa independiente de los logs de peticiones.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "drawStyle": "line",
+                "fillOpacity": 6,
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "showPoints": "auto",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "ms"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 106
+          },
+          "id": 8,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le, url_map_name) (rate(nexoruta_gcp_lb_latency_ms_bucket{url_map_name=\"nexoruta-demo-https\"}[5m])))",
+              "legendFormat": "P95 {{url_map_name}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Latencia del balanceador · p95",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Tasa de respuestas clase 500 observadas por el balanceador. Sin datos no se transforma en cero.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "drawStyle": "line",
+                "fillOpacity": 6,
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "showPoints": "auto",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 106
+          },
+          "id": 9,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by (url_map_name) (nexoruta_gcp_lb_request_count{url_map_name=\"nexoruta-demo-https\",response_code_class=\"500\"})",
+              "legendFormat": "5xx {{url_map_name}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Errores 5xx del balanceador",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Conexiones de todas las bases del Cloud SQL compartido.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "drawStyle": "line",
+                "fillOpacity": 6,
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "showPoints": "auto",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 113
+          },
+          "id": 10,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by (database_id) (nexoruta_gcp_cloudsql_connections)",
+              "legendFormat": "{{database_id}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Conexiones PostgreSQL",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Cantidad agregada. REDUCE_MAX evita sumar dos lecturas de la misma base realizadas por A y B.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "drawStyle": "line",
+                "fillOpacity": 6,
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "showPoints": "auto",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 113
+          },
+          "id": 11,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by (transport, status) (nexoruta_gcp_outbox_pending{node=~\"$node\"})",
+              "legendFormat": "{{transport}} · {{status}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Outbox por transporte y estado",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Contador del contenedor actual; puede reiniciarse al recrearlo durante el despliegue.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "drawStyle": "line",
+                "fillOpacity": 6,
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "showPoints": "auto",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 120
+          },
+          "id": 13,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by (node, service) (nexoruta_gcp_container_restarts{node=~\"$node\",service=~\"$service\"})",
+              "legendFormat": "{{node}} · {{service}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Reinicios de contenedores",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Indicador OOM del contenedor actual; conservar logs para investigar eventos anteriores.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "drawStyle": "line",
+                "fillOpacity": 6,
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "showPoints": "auto",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 120
+          },
+          "id": 14,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by (node, service) (nexoruta_gcp_container_oom{node=~\"$node\",service=~\"$service\"})",
+              "legendFormat": "{{node}} · {{service}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Contenedores terminados por falta de memoria",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "La etiqueta identifica la release informada por cada nodo; ambos deben coincidir al completar un despliegue.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "gray",
+                "mode": "fixed"
+              },
+              "mappings": [
+                {
+                  "options": {
+                    "1": {
+                      "text": "Aplicada"
+                    }
+                  },
+                  "type": "value"
+                }
+              ],
+              "noValue": "Sin datos",
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 12,
+            "x": 0,
+            "y": 127
+          },
+          "id": 15,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by (node, release) (nexoruta_gcp_applied_release{node=~\"$node\"})",
+              "legendFormat": "{{node}} · {{release}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Release aplicada por nodo",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Mensajes listos en RabbitMQ y lag del grupo consumidor de Kafka, reportados por el agente de monitoreo.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "lineWidth": 2
+              },
+              "decimals": 0,
+              "noValue": "Sin datos",
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 127
+          },
+          "id": 25,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by (node) (nexoruta_gcp_rabbit_queue_pending{node=~\"$node\"})",
+              "legendFormat": "RabbitMQ · {{node}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by (node) (nexoruta_gcp_kafka_lag{node=~\"$node\"})",
+              "legendFormat": "Kafka · {{node}}",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Profundidad de cola · RabbitMQ y Kafka",
+          "type": "timeseries"
+        }
+      ],
+      "title": "Infraestructura GCP · Prometheus",
+      "type": "row"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 40,
+  "tags": [
+    "nexoruta",
+    "observabilidad"
+  ],
+  "templating": {
+    "list": [
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "Todos"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "includeAll": true,
+        "label": "Nodo",
+        "multi": true,
+        "name": "node",
+        "options": [
+          {
+            "selected": true,
+            "text": "Todos",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "a",
+            "value": "a"
+          },
+          {
+            "selected": false,
+            "text": "b",
+            "value": "b"
+          }
+        ],
+        "query": "local,a,b",
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": ".*",
+          "value": ".*"
+        },
+        "hide": 0,
+        "label": "Servicio en logs y contenedores",
+        "name": "service",
+        "options": [
+          {
+            "selected": true,
+            "text": ".*",
+            "value": ".*"
+          }
+        ],
+        "query": ".*",
+        "type": "textbox"
+      },
+      {
+        "allValue": "NexoRuta[.].*",
+        "current": {
+          "selected": true,
+          "text": "Todos",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values({service_name=~\"NexoRuta[.].*\"}, service_name)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Servicio de aplicación",
+        "multi": true,
+        "name": "otel_service",
+        "options": [],
+        "query": {
+          "query": "label_values({service_name=~\"NexoRuta[.].*\"}, service_name)",
+          "refId": "PrometheusVariableQueryEditor-otel_service"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "Todos"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\"}, cache)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Caso de caché",
+        "multi": true,
+        "name": "cache",
+        "options": [],
+        "query": {
+          "query": "label_values(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\"}, cache)",
+          "refId": "PrometheusVariableQueryEditor-cache"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "",
+          "value": ""
+        },
+        "hide": 0,
+        "label": "ID de correlación",
+        "name": "correlation_id",
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-4h",
+    "to": "now"
+  },
+  "timezone": "America/Montevideo",
+  "title": "NexoRuta · Observabilidad",
+  "uid": "nexoruta-observabilidad",
+  "version": 1
+}

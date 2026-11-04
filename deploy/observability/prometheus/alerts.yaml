@@ -1,0 +1,156 @@
+groups:
+  - name: nexoruta-service-health
+    interval: 15s
+    rules:
+      - alert: NexoRutaServiceUnavailable
+        expr: |
+          max by (node, service) (nexoruta_container_up{service=~"api|worker|worker-rabbit|worker-kafka|worker-push|admin|backoffice|commerce|tracking|postgres|redis|rabbitmq|kafka|mongodb|mailpit|dashboard|prometheus|prometheus-write-gateway|loki|tempo|grafana|alloy|otel-collector|docker-status-exporter"}) == 0
+          or max by (node, service) (nexoruta_gcp_container_up{service=~"api|worker|worker-rabbit|worker-kafka|worker-push|admin|backoffice|commerce|tracking|postgres|redis|rabbitmq|kafka|mongodb|mailpit|dashboard|prometheus|prometheus-write-gateway|loki|tempo|grafana|alloy|otel-collector|docker-status-exporter"}) == 0
+          or max by (node, service) (probe_success{service=~"api|admin|backoffice|commerce|tracking|postgres|redis|rabbitmq|mailpit|dashboard|prometheus|loki|tempo|grafana|alloy|docker-status-exporter"}) == 0
+          or max by (node, service) (nexoruta_gcp_service_up{service=~"api|admin|backoffice|commerce|tracking|postgres|redis|rabbitmq|mailpit|dashboard|prometheus|loki|tempo|grafana|alloy|docker-status-exporter"}) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Servicio NexoRuta no disponible: {{ $labels.service }}"
+          description: "No se observa ninguna instancia saludable del servicio {{ $labels.service }} en {{ $labels.node }} durante 2 minutos."
+
+      - alert: NexoRutaHttp5xxRateHigh
+        expr: |
+          (
+            sum by (node, service_name) (rate(http_server_request_duration_seconds_count{service_name=~"NexoRuta[.](Api|Admin|Backoffice|Commerce|Tracking)", http_response_status_code=~"5.."}[5m]))
+            /
+            clamp_min(sum by (node, service_name) (rate(http_server_request_duration_seconds_count{service_name=~"NexoRuta[.](Api|Admin|Backoffice|Commerce|Tracking)"}[5m])), 0.001)
+          ) > 0.05
+          and on (node, service_name)
+          sum by (node, service_name) (increase(http_server_request_duration_seconds_count{service_name=~"NexoRuta[.](Api|Admin|Backoffice|Commerce|Tracking)"}[5m])) > 20
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tasa 5xx alta en {{ $labels.service_name }}"
+          description: "Más del 5% de las solicitudes HTTP fueron 5xx en 5 minutos, con al menos 20 solicitudes."
+
+      - alert: NexoRutaHttpP95LatencyHigh
+        expr: |
+          histogram_quantile(0.95, sum by (le, node, service_name) (rate(http_server_request_duration_seconds_bucket{service_name=~"NexoRuta[.](Api|Admin|Backoffice|Commerce|Tracking)"}[5m]))) > 2
+          and on (node, service_name)
+          sum by (node, service_name) (increase(http_server_request_duration_seconds_count{service_name=~"NexoRuta[.](Api|Admin|Backoffice|Commerce|Tracking)"}[5m])) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latencia p95 alta en {{ $labels.service_name }}"
+          description: "La latencia p95 supera 2 segundos durante 5 minutos, con al menos 20 solicitudes."
+
+      - alert: NexoRutaWorkerFailures
+        expr: sum by (node, service_name, transport) (increase(nexoruta_worker_failures_total{service_name=~"NexoRuta[.]Worker[.](RabbitMq|Kafka|Push)"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fallos en {{ $labels.service_name }}"
+          description: "El worker {{ $labels.service_name }} registró fallos para el transporte {{ $labels.transport }} durante los últimos 5 minutos."
+
+      - alert: NexoRutaRabbitQueueBacklog
+        expr: max by (queue) (rabbitmq_detailed_queue_messages) > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: rabbitmq
+        annotations:
+          summary: "Cola RabbitMQ acumulada: {{ $labels.queue }}"
+          description: "La cola supera 100 mensajes durante 5 minutos."
+
+      - alert: NexoRutaKafkaConsumerLag
+        expr: max by (node) (nexoruta_gcp_kafka_lag) > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: kafka
+        annotations:
+          summary: "Retraso Kafka alto en {{ $labels.node }}"
+          description: "El retraso del consumidor supera 100 mensajes durante 5 minutos."
+
+      - alert: NexoRutaMobileSyncFailures
+        expr: sum by (node, service_name) (increase(nexoruta_mobile_sync_operations_total{service_name="NexoRuta.Api", result="Error"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fallos de sincronización móvil en {{ $labels.service_name }}"
+          description: "La API registró una o más operaciones móviles con error durante los últimos 5 minutos."
+
+      - alert: NexoRutaPushDeliveryFailures
+        expr: sum by (node, service_name) (increase(nexoruta_worker_push_failures_total{service_name="NexoRuta.Worker.Push"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fallos de entrega Push en {{ $labels.service_name }}"
+          description: "El worker Push registró entregas fallidas durante los últimos 5 minutos."
+
+      - alert: NexoRutaGeoapifyCacheHitRatioLow
+        expr: |
+          nexoruta_cache_hit_ratio{service_name="NexoRuta.Api"} < 0.25
+          and on (node, service_name)
+          (
+            sum by (node, service_name) (increase(nexoruta_cache_hits_total{service_name="NexoRuta.Api"}[15m]))
+            + sum by (node, service_name) (increase(nexoruta_cache_misses_total{service_name="NexoRuta.Api"}[15m]))
+          ) > 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Aciertos del caché Geoapify bajos en {{ $labels.service_name }}"
+          description: "La proporción de aciertos del caché local Geoapify es menor a 25% con más de 20 consultas en 15 minutos."
+
+      - alert: NexoRutaDistributedCacheHitRatioLow
+        expr: |
+          (
+            (
+              sum by (cache) (increase(nexoruta_cache_distributed_requests_total{
+                service_name="NexoRuta.Api", result="hit"
+              }[15m]))
+              or on (cache)
+              (0 * sum by (cache) (increase(nexoruta_cache_distributed_requests_total{
+                service_name="NexoRuta.Api", result="miss"
+              }[15m])))
+            )
+            /
+            clamp_min(sum by (cache) (increase(nexoruta_cache_distributed_requests_total{
+              service_name="NexoRuta.Api", result=~"hit|miss"
+            }[15m])), 0.001)
+          ) < 0.25
+          and on (cache)
+          sum by (cache) (increase(nexoruta_cache_distributed_requests_total{
+            service_name="NexoRuta.Api", result=~"hit|miss"
+          }[15m])) > 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pocos aciertos de caché distribuida: {{ $labels.cache }}"
+          description: "El caso {{ $labels.cache }} mantiene menos de 25% de aciertos con más de 20 lecturas válidas en 15 minutos, ponderadas entre instancias."
+
+      - alert: NexoRutaDistributedCacheErrorsHigh
+        expr: |
+          (
+            sum by (cache) (increase(nexoruta_cache_distributed_operations_total{
+              service_name="NexoRuta.Api", result="error"
+            }[5m]))
+            /
+            clamp_min(sum by (cache) (increase(nexoruta_cache_distributed_operations_total{
+              service_name="NexoRuta.Api"
+            }[5m])), 0.001)
+          ) > 0.05
+          and on (cache)
+          sum by (cache) (increase(nexoruta_cache_distributed_operations_total{
+            service_name="NexoRuta.Api"
+          }[5m])) > 20
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Errores de Redis elevados: {{ $labels.cache }}"
+          description: "Más del 5% de las operaciones de caché fallaron durante 5 minutos, con más de 20 operaciones."

@@ -115,7 +115,7 @@ resource "google_compute_instance" "demo" {
   machine_type              = "n4-custom-6-16384"
   desired_status            = var.running ? "RUNNING" : "TERMINATED"
   allow_stopping_for_update = true
-  tags                      = [local.name]
+  tags                      = [local.name, "nexoruta-demo-observability"]
   labels = {
     application = "nexoruta"
     environment = "demo"

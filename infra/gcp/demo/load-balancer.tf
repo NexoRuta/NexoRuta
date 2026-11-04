@@ -156,7 +156,7 @@ resource "google_compute_firewall" "shared_services" {
   target_service_accounts = ["nexoruta-demo-runtime@${var.project_id}.iam.gserviceaccount.com"]
   allow {
     protocol = "tcp"
-    ports    = ["5672", "19092", "27017", "1025", "15692"]
+    ports    = ["5672", "19092", "27017", "1025", "15692", "9090", "3100", "3200", "4317"]
   }
 }
 

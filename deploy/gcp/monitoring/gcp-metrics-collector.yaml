@@ -1,0 +1,67 @@
+receivers:
+  googlecloudmonitoring:
+    collection_interval: 60s
+    timeout: 30s
+    project_id: ${env:PROJECT_ID}
+    metrics_list:
+      - metric_name: compute.googleapis.com/instance/cpu/utilization
+      - metric_name: agent.googleapis.com/memory/percent_used
+      - metric_name: agent.googleapis.com/disk/percent_used
+      - metric_name: loadbalancing.googleapis.com/https/total_latencies
+      - metric_name: loadbalancing.googleapis.com/https/request_count
+      - metric_name: cloudsql.googleapis.com/database/postgresql/num_backends
+      - metric_name: custom.googleapis.com/nexoruta/service_up
+      - metric_name: custom.googleapis.com/nexoruta/container_up
+      - metric_name: custom.googleapis.com/nexoruta/session_remaining
+      - metric_name: custom.googleapis.com/nexoruta/last_sample
+      - metric_name: custom.googleapis.com/nexoruta/outbox_pending
+      - metric_name: custom.googleapis.com/nexoruta/container_restarts
+      - metric_name: custom.googleapis.com/nexoruta/container_oom
+      - metric_name: custom.googleapis.com/nexoruta/applied_release
+      - metric_name: custom.googleapis.com/nexoruta/rabbit_queue_pending
+      - metric_name: custom.googleapis.com/nexoruta/kafka_lag
+      - metric_name: custom.googleapis.com/nexoruta/node_running
+      - metric_name: custom.googleapis.com/nexoruta/session_active
+      - metric_name: custom.googleapis.com/nexoruta/collection_success
+
+processors:
+  transform/gcp_names:
+    error_mode: ignore
+    metric_statements:
+      - context: metric
+        statements:
+          - set(name, "nexoruta_gcp_vm_cpu_utilization") where name == "compute.googleapis.com/instance/cpu/utilization"
+          - set(name, "nexoruta_gcp_vm_memory_percent") where name == "agent.googleapis.com/memory/percent_used"
+          - set(name, "nexoruta_gcp_vm_disk_percent") where name == "agent.googleapis.com/disk/percent_used"
+          - set(name, "nexoruta_gcp_lb_latency_ms") where name == "loadbalancing.googleapis.com/https/total_latencies"
+          - set(name, "nexoruta_gcp_lb_request_count") where name == "loadbalancing.googleapis.com/https/request_count"
+          - set(name, "nexoruta_gcp_cloudsql_connections") where name == "cloudsql.googleapis.com/database/postgresql/num_backends"
+          - set(name, "nexoruta_gcp_service_up") where name == "custom.googleapis.com/nexoruta/service_up"
+          - set(name, "nexoruta_gcp_container_up") where name == "custom.googleapis.com/nexoruta/container_up"
+          - set(name, "nexoruta_gcp_session_remaining") where name == "custom.googleapis.com/nexoruta/session_remaining"
+          - set(name, "nexoruta_gcp_last_sample") where name == "custom.googleapis.com/nexoruta/last_sample"
+          - set(name, "nexoruta_gcp_outbox_pending") where name == "custom.googleapis.com/nexoruta/outbox_pending"
+          - set(name, "nexoruta_gcp_container_restarts") where name == "custom.googleapis.com/nexoruta/container_restarts"
+          - set(name, "nexoruta_gcp_container_oom") where name == "custom.googleapis.com/nexoruta/container_oom"
+          - set(name, "nexoruta_gcp_applied_release") where name == "custom.googleapis.com/nexoruta/applied_release"
+          - set(name, "nexoruta_gcp_rabbit_queue_pending") where name == "custom.googleapis.com/nexoruta/rabbit_queue_pending"
+          - set(name, "nexoruta_gcp_kafka_lag") where name == "custom.googleapis.com/nexoruta/kafka_lag"
+          - set(name, "nexoruta_gcp_node_running") where name == "custom.googleapis.com/nexoruta/node_running"
+          - set(name, "nexoruta_gcp_session_active") where name == "custom.googleapis.com/nexoruta/session_active"
+          - set(name, "nexoruta_gcp_collection_success") where name == "custom.googleapis.com/nexoruta/collection_success"
+  batch: {}
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:9464
+    translation_strategy: UnderscoreEscapingWithoutSuffixes
+    metric_expiration: 3m
+    resource_to_telemetry_conversion:
+      enabled: true
+
+service:
+  pipelines:
+    metrics:
+      receivers: [googlecloudmonitoring]
+      processors: [transform/gcp_names, batch]
+      exporters: [prometheus]

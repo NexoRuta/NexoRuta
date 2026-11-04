@@ -57,6 +57,11 @@ control:
       args:
         state_bucket: ${state_bucket}
       result: lease
+  - cancel_expired_load:
+      call: cancel_expired_load_test
+      args:
+        project_id: ${project_id}
+        load_control_bucket: ${load_control_bucket}
   - read_nodes:
       for:
         value: node
@@ -139,6 +144,165 @@ control:
               errors: $${cleanup_errors}
   - done:
       return: stopped
+
+cancel_expired_load_test:
+  params: [project_id, load_control_bucket]
+  steps:
+  - read_metadata:
+      try:
+        call: http.get
+        args:
+          url: $${"https://storage.googleapis.com/storage/v1/b/" + load_control_bucket + "/o/leases%2Fload-test.json"}
+          timeout: 20
+          auth:
+            type: OAuth2
+        result: metadata
+      except:
+        as: error
+        steps:
+        - missing:
+            switch:
+            - condition: $${map.get(error, "code") == 404}
+              steps:
+              - no_load_test:
+                  return: null
+        - metadata_error:
+            raise: $${error}
+  - read_execution_lease:
+      try:
+        call: http.get
+        args:
+          url: $${"https://storage.googleapis.com/storage/v1/b/" + load_control_bucket + "/o/leases%2Fload-test.json?alt=media&ifGenerationMatch=" + metadata.body.generation}
+          timeout: 20
+          auth:
+            type: OAuth2
+        result: lease
+      except:
+        as: error
+        steps:
+        - changed_lease:
+            switch:
+            - condition: $${map.get(error, "code") == 404 or map.get(error, "code") == 412}
+              steps:
+              - return_changed:
+                  return: null
+        - lease_error:
+            raise: $${error}
+  - validate_lease:
+      switch:
+      - condition: $${get_type(lease.body.expires_at) != "integer" and get_type(lease.body.expires_at) != "double"}
+        steps:
+        - malformed_lease:
+            raise: The load-test lease is malformed; refusing to guess whether traffic is active.
+      - condition: $${lease.body.status in ["starting", "running", "cancelling"] and sys.now() >= lease.body.expires_at}
+        next: resolve_execution
+  - no_expired_execution:
+      return: null
+  - resolve_execution:
+      assign:
+      - execution: $${map.get(lease.body, "execution")}
+  - resolve_pending_operation:
+      switch:
+      - condition: $${execution == null and map.get(lease.body, "operation") != null}
+        steps:
+        - read_operation:
+            call: http.get
+            args:
+              url: $${"https://run.googleapis.com/v2/" + lease.body.operation}
+              timeout: 20
+              auth:
+                type: OAuth2
+            result: operation
+        - save_operation_execution:
+            assign:
+            - execution: $${map.get(map.get(operation.body, "response"), "name")}
+  - recover_lost_run_response:
+      switch:
+      - condition: $${execution == null and map.get(lease.body, "operation") == null and map.get(lease.body, "launch_requested_at") != null}
+        steps:
+        - list_recent_executions:
+            call: http.get
+            args:
+              url: "https://run.googleapis.com/v2/projects/${project_id}/locations/southamerica-west1/jobs/nexoruta-load-tests/executions?pageSize=100&orderBy=createTime%20desc"
+              timeout: 20
+              auth:
+                type: OAuth2
+            result: execution_list
+        - find_execution_for_run:
+            call: find_execution_by_run_id
+            args:
+              executions: $${execution_list.body}
+              run_id: $${lease.body.run_id}
+            result: execution
+  - no_execution_yet:
+      switch:
+      - condition: $${execution == null}
+        steps:
+        - wait_for_next_guard:
+            return: pending_execution_resolution
+  - request_cancel:
+      try:
+        call: http.post
+        args:
+          url: $${"https://run.googleapis.com/v2/" + execution + ":cancel"}
+          timeout: 20
+          auth:
+            type: OAuth2
+        result: cancelled
+      except:
+        as: error
+        steps:
+        - already_finished:
+            switch:
+            - condition: $${map.get(error, "code") == 409 or map.get(error, "code") == 404}
+              steps:
+              - finished:
+                  return: already_finished
+        - cancel_error:
+            raise: $${error}
+  - done:
+      return: cancel_requested
+
+find_execution_by_run_id:
+  params: [executions, run_id]
+  steps:
+  - init:
+      assign:
+      - matches: []
+  - inspect_executions:
+      for:
+        value: candidate
+        in: $${map.get(executions, "executions", [])}
+        steps:
+        - inspect_containers:
+            for:
+              value: container
+              in: $${map.get(map.get(candidate, "template", {}), "containers", [])}
+              steps:
+              - inspect_environment:
+                  for:
+                    value: item
+                    in: $${map.get(container, "env", [])}
+                    steps:
+                    - match_run_id:
+                        switch:
+                        - condition: $${map.get(item, "name") == "NEXORUTA_RUN_ID" and map.get(item, "value") == run_id}
+                          steps:
+                          - append_execution:
+                              assign:
+                              - matches: $${list.concat(matches, [candidate.name])}
+  - validate_match:
+      switch:
+      - condition: $${len(matches) > 1}
+        steps:
+        - refuse_ambiguous_match:
+            raise: Multiple Cloud Run executions match one load-test run ID; refusing to guess.
+      - condition: $${len(matches) == 1}
+        steps:
+        - return_match:
+            return: $${matches[0]}
+  - no_match:
+      return: null
 
 read_lease:
   params: [state_bucket]

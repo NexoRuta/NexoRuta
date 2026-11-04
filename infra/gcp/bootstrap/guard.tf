@@ -7,7 +7,7 @@ resource "google_service_account" "guard" {
 resource "google_project_iam_custom_role" "guard" {
   role_id     = "nexorutaDemoGuard"
   title       = "NexoRuta demo session guard"
-  permissions = ["compute.instances.get", "compute.instances.stop"]
+  permissions = ["compute.instances.get", "compute.instances.stop", "run.executions.get", "run.executions.list", "run.executions.cancel", "run.operations.get"]
 }
 
 resource "google_project_iam_member" "guard" {
@@ -20,6 +20,10 @@ resource "google_storage_bucket_iam_member" "guard" {
   bucket = google_storage_bucket.state.name
   role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.guard.email}"
+  condition {
+    title      = "Demo guard control objects only"
+    expression = "resource.name == 'projects/_/buckets/${google_storage_bucket.state.name}/objects/locks/demo-control.json' || resource.name == 'projects/_/buckets/${google_storage_bucket.state.name}/objects/leases/demo.json'"
+  }
 }
 
 resource "google_workflows_workflow" "guard" {
@@ -27,10 +31,11 @@ resource "google_workflows_workflow" "guard" {
   region          = var.region
   service_account = google_service_account.guard.email
   source_contents = templatefile("${path.module}/guard.yaml.tftpl", {
-    project_id     = var.project_id
-    zone           = "${var.region}-a"
-    secondary_zone = var.secondary_zone
-    state_bucket   = google_storage_bucket.state.name
+    project_id          = var.project_id
+    zone                = "${var.region}-a"
+    secondary_zone      = var.secondary_zone
+    state_bucket        = google_storage_bucket.state.name
+    load_control_bucket = "${var.project_id}-nexoruta-load-control"
   })
   depends_on = [google_project_service.required, google_project_iam_member.guard]
 }

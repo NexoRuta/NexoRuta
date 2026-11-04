@@ -136,6 +136,10 @@ def stage_sources(destination):
 def create_bundle(destination):
     assets = destination / "assets"
     shutil.copytree(ROOT / "deploy/gcp", assets)
+    shutil.copyfile(ROOT / "deploy/observability/grafana/nexoruta.json",
+                    assets / "grafana/provisioning/dashboards/nexoruta.json")
+    shutil.copyfile(ROOT / "deploy/observability/grafana/load-tests.json",
+                    assets / "grafana/provisioning/dashboards/load-tests.json")
     sql = assets / "sql"
     shutil.copyfile(ROOT / "backend/scripts/provision-rls-runtime-roles.sql", sql / "runtime-roles.sql")
     migrations = ROOT / "backend/src/NexoRuta.Infrastructure/Persistence/Migrations"
@@ -148,14 +152,27 @@ def create_bundle(destination):
     for role in sorted(roles):
         statements.append(
             f"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='{role}') "
-            f"THEN CREATE ROLE {role} NOLOGIN NOSUPERUSER NOBYPASSRLS; END IF; END $$;"
+            f"THEN CREATE ROLE {role} NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; END IF; END $$;"
         )
         # CREATEROLE already grants ADMIN to the creator. Regranting ADMIN to
         # yourself is rejected by PostgreSQL 18; only enable object privileges.
-        statements.append(f"GRANT {role} TO postgres WITH INHERIT TRUE, SET TRUE;")
+        inherit = "FALSE" if role in {"nexoruta_api", "nexoruta_worker", "nexoruta_bootstrap"} else "TRUE"
+        statements.append(f"GRANT {role} TO postgres WITH INHERIT {inherit}, SET TRUE;")
     statements.append("GRANT CREATE ON DATABASE nexoruta TO nexoruta_schema_owner;")
     statements.append("CREATE SCHEMA IF NOT EXISTS nexoruta_app AUTHORIZATION nexoruta_schema_owner;")
     statements.append(f"GRANT CREATE ON SCHEMA public, nexoruta_app TO {', '.join(sorted(roles))};")
+    # Existing managed databases need the same owner-only validator privilege as fresh migrations.
+    statements.append("""DO $owner_execute$
+    DECLARE item record;
+    BEGIN
+        FOR item IN SELECT p.oid::regprocedure AS signature,r.rolname AS owner_name
+            FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+            JOIN pg_roles r ON r.oid=p.proowner
+            WHERE n.nspname='nexoruta_app' AND NOT r.rolcanlogin
+        LOOP
+            EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO %I',item.signature,item.owner_name);
+        END LOOP;
+    END $owner_execute$;""")
     (sql / "preflight.sql").write_text("\n".join(statements) + "\n", encoding="utf-8")
     with open(sql / "postflight.sql", "a", encoding="utf-8") as output:
         restricted = sorted(roles - {"nexoruta_schema_owner"})

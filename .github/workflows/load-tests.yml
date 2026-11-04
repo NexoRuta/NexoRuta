@@ -1,0 +1,155 @@
+name: NexoRuta - pruebas de carga
+run-name: NexoRuta load / ${{ inputs.operation }} / ${{ inputs.profile }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Ejecutar o cancelar una prueba remota
+        required: true
+        default: run
+        type: choice
+        options: [run, cancel]
+      profile:
+        description: Perfil con límites revisados
+        required: true
+        default: baseline
+        type: choice
+        options: [smoke, baseline, sync, stress, soak]
+      run_id:
+        description: ID que muestra el resumen para cancelar una corrida
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ inputs.operation == 'run' && 'nexoruta-gcp-load-run' || format('nexoruta-gcp-load-cancel-{0}', inputs.run_id || 'active') }}
+  queue: max
+
+jobs:
+  load:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 105
+    environment: nexoruta-demo
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GCP_ZONE: ${{ vars.GCP_ZONE }}
+      GCP_STATE_BUCKET: ${{ vars.GCP_STATE_BUCKET }}
+      GCP_DELIVERY_BUCKET: ${{ vars.GCP_DELIVERY_BUCKET }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_LOAD_SERVICE_ACCOUNT: ${{ vars.GCP_LOAD_SERVICE_ACCOUNT }}
+      GCP_BASE_DOMAIN: ${{ vars.GCP_BASE_DOMAIN }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        if: inputs.operation == 'run' || inputs.operation == 'cancel'
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_LOAD_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          version: "590.0.0"
+      - name: Validate demo settings
+        run: python3 scripts/gcp/github_environment.py validate load
+      - name: Cancel the identified execution
+        if: inputs.operation == 'cancel'
+        env:
+          REQUESTED_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          if [[ -n "$REQUESTED_RUN_ID" ]]; then
+            python3 scripts/gcp/load_tests.py cancel "$REQUESTED_RUN_ID"
+          else
+            python3 scripts/gcp/load_tests.py cancel
+          fi
+      - name: Reserve the active demo session
+        if: inputs.operation == 'run'
+        id: reservation
+        env:
+          PROFILE: ${{ inputs.profile }}
+        run: python3 scripts/gcp/load_tests.py reserve "$PROFILE"
+      - name: Publish the live Grafana link
+        if: inputs.operation == 'run'
+        id: live-link
+        env:
+          RUN_ID: ${{ steps.reservation.outputs.run_id }}
+          PROFILE: ${{ inputs.profile }}
+        run: |
+          if [[ -n "${GCP_BASE_DOMAIN}" ]]; then
+            monitor="https://monitor.${GCP_BASE_DOMAIN}"
+          else
+            address="$(gcloud compute addresses describe nexoruta-demo-frontend --global --project "$GCP_PROJECT_ID" --format='value(address)')"
+            monitor="https://monitor.$(tr '.' '-' <<< "$address" | tr -d '\n').sslip.io"
+          fi
+          grafana="${monitor}/d/nexoruta-load-tests?from=now-2h&to=now&var-run_id=${RUN_ID}"
+          echo "monitor_url=${monitor}" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Grafana load test::${grafana}"
+          {
+            echo "## Prueba de carga · preparación"
+            echo
+            echo "- Perfil: ${PROFILE}"
+            echo "- Corrida: ${RUN_ID}"
+            echo "- Grafana en vivo: ${grafana}"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Build the immutable k6 runner image
+        if: inputs.operation == 'run'
+        id: image
+        env:
+          PROFILE: ${{ inputs.profile }}
+          FIXTURE_VERSION: ${{ steps.reservation.outputs.fixture_version }}
+        run: |
+          image="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/nexoruta/load-tests:${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gcloud builds submit --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --service-account="projects/${GCP_PROJECT_ID}/serviceAccounts/nexoruta-demo-builder@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
+            --gcs-source-staging-dir="gs://${GCP_DELIVERY_BUCKET}/sources" \
+            --tag "$image" --file tests/load/Dockerfile .
+          digest="$(gcloud artifacts docker images describe "$image" --project "$GCP_PROJECT_ID" --format='value(image_summary.digest)')"
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          gcloud run jobs update nexoruta-load-tests --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --image "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/nexoruta/load-tests@${digest}" \
+            --update-secrets="NEXORUTA_LOAD_FIXTURE=nexoruta-load-fixtures:${FIXTURE_VERSION}"
+          echo "image=${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/nexoruta/load-tests@${digest}" >> "$GITHUB_OUTPUT"
+      - name: Start one bounded load-test execution
+        if: inputs.operation == 'run'
+        id: execution
+        env:
+          PROFILE: ${{ inputs.profile }}
+          RUN_ID: ${{ steps.reservation.outputs.run_id }}
+          NEXORUTA_FIXTURE_VERSION: ${{ steps.reservation.outputs.fixture_version }}
+          NEXORUTA_LOAD_IMAGE: ${{ steps.image.outputs.image }}
+        run: python3 scripts/gcp/load_tests.py run "$PROFILE" "$RUN_ID"
+      - name: Wait for the exact execution and check its result
+        if: inputs.operation == 'run'
+        env:
+          RUN_ID: ${{ steps.execution.outputs.run_id }}
+        run: python3 scripts/gcp/load_tests.py wait "$RUN_ID"
+      - name: Publish run links
+        if: always() && inputs.operation == 'run'
+        env:
+          RUN_ID: ${{ steps.execution.outputs.run_id }}
+          IMAGE: ${{ steps.image.outputs.image }}
+          MONITOR_URL: ${{ steps.live-link.outputs.monitor_url }}
+        run: |
+          monitor="${MONITOR_URL}"
+          {
+            echo "## Prueba de carga remota"
+            echo
+            echo "- Perfil: ${{ inputs.profile }}"
+            echo "- Corrida: ${RUN_ID:-sin ejecución registrada}"
+            echo "- Imagen k6: ${IMAGE:-no construida}"
+            if [[ -n "$monitor" && -n "$RUN_ID" ]]; then
+              echo "- Grafana: ${monitor}/d/nexoruta-load-tests?from=now-2h&to=now&var-run_id=${RUN_ID}"
+            fi
+            echo "- Resultados privados: gs://${GCP_PROJECT_ID}-nexoruta-load-results/runs/${RUN_ID}/"
+            echo "- Cloud Run: https://console.cloud.google.com/run/jobs/details/${GCP_REGION}/nexoruta-load-tests?project=${GCP_PROJECT_ID}"
+          } >> "$GITHUB_STEP_SUMMARY"

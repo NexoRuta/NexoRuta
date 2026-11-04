@@ -17,8 +17,11 @@ from vm_deploy import BASE, secret, token
 
 PROJECT = "nexoruta-demo"
 APPLICATIONS = ("api", "admin", "backoffice", "commerce", "tracking", "grafana",
-                "worker-rabbit", "worker-kafka", "worker-push", "sql-proxy")
-INFRASTRUCTURE = ("rabbitmq", "kafka", "mongo", "mailpit", "proxy")
+                "worker-rabbit", "worker-kafka", "worker-push", "sql-proxy", "otel-collector", "alloy")
+INFRASTRUCTURE = (
+    "rabbitmq", "kafka", "mongo", "mailpit", "proxy", "prometheus", "prometheus-write-gateway",
+    "gcp-metrics-collector", "loki", "tempo"
+)
 HTTP_PORTS = {"api": 18080, "admin": 18081, "backoffice": 18082,
               "commerce": 18083, "tracking": 18084, "monitor": 13000}
 TRANSPORTS = ("RabbitMq", "Kafka", "PushFcm")
@@ -55,6 +58,9 @@ def read_config(path):
         addresses = [ipaddress.ip_address(entry[4][0]) for entry in socket.getaddrinfo(host, None)]
     if not addresses or any(not address.is_private for address in addresses):
         raise ValueError("Monitoring shared services must resolve to private addresses")
+    redis_host = ipaddress.ip_address(config["redis_host"])
+    if not redis_host.is_private or config["redis_port"] != 6378:
+        raise ValueError("Redis monitoring requires a private TLS endpoint on port 6378")
     for service, port in config.get("service_ports", {}).items():
         if service not in HTTP_PORTS or not isinstance(port, int) or not 1024 <= port <= 65535:
             raise ValueError("Invalid monitoring service port")
@@ -166,6 +172,12 @@ class Collector:
             except OSError:
                 healthy = False
             self.metric("service_up", int(healthy), service=service + "_tcp")
+        try:
+            with socket.create_connection((self.config["redis_host"], self.config["redis_port"]), timeout=2):
+                redis_healthy = True
+        except OSError:
+            redis_healthy = False
+        self.metric("service_up", int(redis_healthy), service="redis")
 
     def collect_outbox(self):
         if self.runtime is None or time.monotonic() - self.runtime_loaded > 300:

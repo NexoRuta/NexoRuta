@@ -51,7 +51,9 @@ docker compose up -d
 docker compose ps
 ```
 
-Para API y portales, la configuración local ignorada por Git (`.env`) debe mantener `NEXORUTA_POSTGRES_CONNECTION` apuntando al servicio Compose `postgres` (`nexoruta:5432`), `NEXORUTA_APPLY_MIGRATIONS=false` y `NEXORUTA_SEED_DATA=false`. Arranque habitual en PowerShell:
+El Compose local sigue el orden de despliegue de GCP: el servicio de una sola ejecución `rls-migrator` aplica migraciones a `postgres/nexoruta`, después `rls-role-provisioner` sincroniza los logins restringidos y finalmente arrancan API y workers. El migrador tiene fijado el host interno `postgres`; la API conserva `NEXORUTA_APPLY_MIGRATIONS=false` y `NEXORUTA_SEED_DATA=false`. En Windows, `levantar-entorno-dev.bat` valida el destino y también ejecuta importación de catálogo y bootstrap local.
+
+Para API y portales, la configuración local ignorada por Git (`.env`) debe mantener `NEXORUTA_APPLY_MIGRATIONS=false` y `NEXORUTA_SEED_DATA=false`. Arranque habitual en PowerShell:
 
 ```powershell
 docker compose config --quiet
@@ -59,18 +61,14 @@ docker compose up -d --build postgres api backoffice commerce
 docker compose ps
 ```
 
-Aplicar una migración local es una operación administrativa separada: revisar previamente el SQL y confirmar que el destino es el PostgreSQL de este Compose. Sin cambiar `NEXORUTA_SEED_DATA=false`, habilitar solo la migración para el primer arranque de API y después volver a la configuración protegida:
+El migrador de Compose ejecuta las migraciones como un paso separado antes del API; la API nunca las aplica al arrancar. Para invocarlo manualmente, confirma que estás trabajando con el PostgreSQL local y ejecuta:
 
 ```powershell
-docker compose stop api admin backoffice commerce tracking worker worker-kafka
-$env:NEXORUTA_APPLY_MIGRATIONS = 'true'
-docker compose up -d --no-deps --force-recreate api
-docker compose ps api  # esperar a que la API quede healthy
-Remove-Item Env:NEXORUTA_APPLY_MIGRATIONS
-docker compose up -d --build api admin backoffice commerce tracking worker worker-kafka
+docker compose --profile rls-admin run --rm --build rls-migrator
+docker compose up -d
 ```
 
-No dejar el override de proceso habilitado luego de la aplicación. No se versionan credenciales ni cadenas de conexión; `.env` permanece local e ignorado.
+El migrador usa el host y base locales definidos en Compose; no se versionan credenciales. `.env` permanece local e ignorado.
 
 El Compose inicia diez servicios. Para el primer monitoreo del 8 de octubre de 2026 se verificó el alta de un envío desde el portal, su persistencia con bulto en PostgreSQL y la consulta del mismo ID en Backoffice. Se inicializan un operador, un comercio, una cuenta del dueño y una cuenta del operador. El comercio puede elegir cualquier operador registrado, sin un vínculo previo; cada envío conserva `OperadorId` y `ComercioId`. El ingreso al portal selecciona la cuenta del comercio, y el operador se elige al crear cada envío. Backoffice solo admite cuentas del operador. El selector es sin credenciales; no se implementaron CRUD ni perfiles laborales.
 
@@ -88,16 +86,19 @@ docker compose down
 | Backoffice | `http://localhost:5101` | Portal autenticado del operador: su organización, usuarios/roles propios y envíos asignados. |
 | Admin | `http://localhost:5104` | Operaciones de plataforma: alta/consulta/estado de organizaciones y resolución de solicitudes. Ver [guía de plataforma](backend/docs/workflow/platform-administration.md). |
 | Commerce | `http://localhost:5102` | Registro, alta propia y autogestión de la organización de comercio, usuarios/roles, envíos y consulta. |
-| Mailpit | `http://localhost:8025` | Bandeja SMTP local de pruebas, publicada solo en loopback. Ver [guía de recuperación de contraseña](docs/recuperacion-contrasena.md). |
+| Mailpit | `http://localhost:18025` | Bandeja SMTP local de pruebas, publicada solo en loopback. Ver [guía de recuperación de contraseña](docs/recuperacion-contrasena.md). |
 | Tracking | `http://localhost:5103` | Plantilla Blazor Server. |
 | Aspire Dashboard | `http://localhost:18888` | Observabilidad local; recibe telemetría de la API. |
+| Grafana local | `http://localhost:3000` | Métricas, estado de servicios y contenedores, logs y trazas. Se levanta con `docker compose up`. |
 | RabbitMQ Management | `http://localhost:15672` | Interfaz de administración; credenciales locales de desarrollo: `nexoruta` / `nexoruta_dev`. |
 | PostgreSQL | `localhost:5432` | Puerto TCP; base `nexoruta`, usuario `nexoruta`, contraseña `nexoruta_dev` (solo desarrollo local). |
 | RabbitMQ | `localhost:5672` | Puerto AMQP; las mismas credenciales locales de desarrollo. |
-| Redis | Sin puerto publicado en el host | Disponible para otros contenedores en `redis:6379` dentro de la red Compose. |
+| Redis 7.2.16 | Sin puerto publicado en el host | Disponible para otros contenedores en `redis:6379` dentro de la red Compose. |
 | Worker | Sin puerto HTTP publicado | Proceso de plantilla que registra actividad periódica. |
 
 Las credenciales del archivo Compose son públicas y no deben reutilizarse fuera del entorno local. EF Core/PostgreSQL persiste los datos; outbox y workers participan en la publicación de eventos y generación de seguimiento. Redis no define la autorización de CU-01. El bootstrap conserva `AccesoInicial` y `DatosInicialesSeeder`, con cuatro valores explícitos requeridos: `AccesoInicial:UsuarioEmail`, `AccesoInicial:OperadorNombre`, `AccesoInicial:ComercioNombre` y `AccesoInicial:OperadorUsuarioEmail`. `Demo:Enabled` y las transformaciones históricas por nombres Demo fueron eliminados; no se borraron registros existentes. La configuración y su alcance se describen en [CU-01](backend/docs/cu/CU-01-comercios-usuarios.md).
+
+La caché distribuida de Compose guarda snapshots de identidad visual por 15 minutos y tarifarios publicados por 6 horas; las simulaciones recalculan importes y consultan el estado activo de la zona en cada solicitud. Si Redis no responde, la API vuelve a PostgreSQL. El dashboard de Grafana muestra hits, misses, ratio y errores/bypass por caso en la fila **Caché distribuida**. El Compose habitual levanta Grafana, Prometheus, Loki, Tempo y Alloy junto con la aplicación, y conserva Aspire Dashboard. Seguí [la guía local de observabilidad](deploy/local/observability/README.md) para ver el dashboard compartido con GCP y las métricas de estado de los contenedores.
 
 ### Initial platform administrator (local Compose)
 

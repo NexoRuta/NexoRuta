@@ -12,6 +12,25 @@ resource "google_service_networking_connection" "sql" {
   reserved_peering_ranges = [google_compute_global_address.sql_range.name]
 }
 
+resource "google_redis_instance" "cache" {
+  name                    = "nexoruta-demo-cache"
+  display_name            = "NexoRuta demo distributed cache"
+  region                  = local.region
+  tier                    = "BASIC"
+  memory_size_gb          = 1
+  redis_version           = "REDIS_7_2"
+  authorized_network      = google_compute_network.demo.id
+  connect_mode            = "PRIVATE_SERVICE_ACCESS"
+  auth_enabled            = true
+  transit_encryption_mode = "SERVER_AUTHENTICATION"
+  labels = {
+    application = "nexoruta"
+    environment = "demo"
+    managed_by  = "opentofu"
+  }
+  depends_on = [google_service_networking_connection.sql]
+}
+
 resource "google_sql_database_instance" "demo" {
   name                = "nexoruta-demo-db"
   region              = local.region
@@ -96,7 +115,14 @@ resource "google_secret_manager_secret_version" "runtime" {
     keys             = { for key, item in random_bytes.key : key => item.base64 }
     organization_ids = { for key, item in random_uuid.organization : key => item.result }
     endpoints        = local.endpoints
-    registry         = "${local.region}-docker.pkg.dev/${var.project_id}/nexoruta"
+    redis = {
+      host = google_redis_instance.cache.host
+      # Memorystore uses the TLS port rather than Redis's plaintext port.
+      port            = 6378
+      auth_string     = google_redis_instance.cache.auth_string
+      ca_certificates = [for certificate in google_redis_instance.cache.server_ca_certs : base64encode(certificate.cert)]
+    }
+    registry = "${local.region}-docker.pkg.dev/${var.project_id}/nexoruta"
   })
 }
 

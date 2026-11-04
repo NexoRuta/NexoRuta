@@ -1,0 +1,244 @@
+{
+  "surfaces": [
+    {
+      "name": "commerce",
+      "url": "/envios/crear",
+      "width": 1440,
+      "title": "Crear envío",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "name": "commerce",
+      "url": "/envios/crear",
+      "width": 320,
+      "title": "Crear envío",
+      "overflow": false,
+      "violations": [],
+      "text200Overflow": false
+    },
+    {
+      "name": "envios",
+      "url": "/envios",
+      "width": 1440,
+      "title": "Mis envíos",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "name": "envios",
+      "url": "/envios",
+      "width": 320,
+      "title": "Mis envíos",
+      "overflow": false,
+      "violations": [],
+      "text200Overflow": false
+    },
+    {
+      "name": "importacion",
+      "url": "/envios/importar",
+      "width": 1440,
+      "title": "Importar desde CSV",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "name": "importacion",
+      "url": "/envios/importar",
+      "width": 320,
+      "title": "Importar desde CSV",
+      "overflow": false,
+      "violations": [],
+      "text200Overflow": false
+    },
+    {
+      "name": "comercio",
+      "url": "/mi-comercio",
+      "width": 1440,
+      "title": "Mi comercio",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "name": "comercio",
+      "url": "/mi-comercio",
+      "width": 320,
+      "title": "Mi comercio",
+      "overflow": false,
+      "violations": [],
+      "text200Overflow": false
+    },
+    {
+      "name": "backoffice",
+      "url": "/",
+      "width": 1440,
+      "title": "Envíos recibidos",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "name": "backoffice",
+      "url": "/",
+      "width": 320,
+      "title": "Envíos recibidos",
+      "overflow": false,
+      "violations": [],
+      "text200Overflow": false
+    },
+    {
+      "name": "configuracion",
+      "url": "/tarifas",
+      "width": 1440,
+      "title": "Tarifas",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "name": "configuracion",
+      "url": "/tarifas",
+      "width": 320,
+      "title": "Tarifas",
+      "overflow": false,
+      "violations": [],
+      "text200Overflow": false
+    },
+    {
+      "name": "reglas",
+      "url": "/reglas-operativas",
+      "width": 1440,
+      "title": "Reglas operativas",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "name": "reglas",
+      "url": "/reglas-operativas",
+      "width": 320,
+      "title": "Reglas operativas",
+      "overflow": false,
+      "violations": [],
+      "text200Overflow": false
+    },
+    {
+      "name": "rutas",
+      "url": "/rutas/planificar",
+      "width": 1440,
+      "title": "Planificar ruta",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "name": "rutas",
+      "url": "/rutas/planificar",
+      "width": 320,
+      "title": "Planificar ruta",
+      "overflow": false,
+      "violations": [],
+      "text200Overflow": false
+    },
+    {
+      "name": "vehiculos",
+      "url": "/vehiculos",
+      "width": 1440,
+      "title": "Vehículos",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "name": "vehiculos",
+      "url": "/vehiculos",
+      "width": 320,
+      "title": "Vehículos",
+      "overflow": false,
+      "violations": [],
+      "text200Overflow": false
+    },
+    {
+      "name": "zonas",
+      "url": "/zonas",
+      "width": 1440,
+      "title": "Zonas y franjas",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "name": "zonas",
+      "url": "/zonas",
+      "width": 320,
+      "title": "Zonas y franjas",
+      "overflow": false,
+      "violations": [],
+      "text200Overflow": false
+    },
+    {
+      "name": "admin",
+      "url": "/operadores",
+      "width": 1440,
+      "title": "Operadores",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "name": "admin",
+      "url": "/operadores",
+      "width": 320,
+      "title": "Operadores",
+      "overflow": false,
+      "violations": [],
+      "text200Overflow": false
+    },
+    {
+      "name": "admin-formulario",
+      "url": "/operadores/crear",
+      "width": 1440,
+      "title": "Crear operador",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "name": "admin-formulario",
+      "url": "/operadores/crear",
+      "width": 320,
+      "title": "Crear operador",
+      "overflow": false,
+      "violations": [],
+      "text200Overflow": false
+    },
+    {
+      "name": "tracking",
+      "url": "/",
+      "width": 1440,
+      "title": "Seguimiento de envíos",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "name": "tracking",
+      "url": "/",
+      "width": 320,
+      "title": "Seguimiento de envíos",
+      "overflow": false,
+      "violations": [],
+      "text200Overflow": false
+    },
+    {
+      "name": "tracking-error",
+      "url": "/not-found",
+      "width": 1440,
+      "title": "No encontramos esa página",
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "name": "tracking-error",
+      "url": "/not-found",
+      "width": 320,
+      "title": "No encontramos esa página",
+      "overflow": false,
+      "violations": [],
+      "text200Overflow": false
+    }
+  ],
+  "failures": [],
+  "externalBlocked": []
+}
