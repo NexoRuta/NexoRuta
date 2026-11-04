@@ -288,7 +288,12 @@ def latest_fixture_version(project):
         f"--project={project}", "--filter=state=ENABLED", "--sort-by=~createTime",
         "--limit=1", "--format=value(name)",
     ], check=True, capture_output=True, text=True, timeout=30).stdout.strip()
-    match = re.fullmatch(r"projects/[^/]+/secrets/nexoruta-load-fixtures/versions/([1-9][0-9]*)", name)
+    # `gcloud secrets versions list --format=value(name)` returns the short
+    # version ID (for example, "1"), not the full resource path.
+    match = re.fullmatch(
+        r"(?:projects/[^/]+/secrets/nexoruta-load-fixtures/versions/)?([1-9][0-9]*)",
+        name,
+    )
     if not match:
         raise RuntimeError("No enabled synthetic fixture version exists in Secret Manager")
     return match.group(1)
