@@ -31,6 +31,12 @@ resource "google_service_account_iam_member" "act_as_builder" {
   member             = "serviceAccount:${google_service_account.deployer.email}"
 }
 
+resource "google_service_account_iam_member" "act_as_builder_load_controller" {
+  service_account_id = google_service_account.builder.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.load_controller.email}"
+}
+
 resource "google_project_iam_member" "builder_logs" {
   project = var.project_id
   role    = "roles/logging.logWriter"
@@ -51,10 +57,24 @@ resource "google_artifact_registry_repository_iam_member" "runtime" {
   member     = "serviceAccount:${google_service_account.runtime.email}"
 }
 
+resource "google_artifact_registry_repository_iam_member" "load_controller" {
+  location   = var.region
+  repository = google_artifact_registry_repository.containers.name
+  role       = "roles/artifactregistry.reader"
+  member     = "serviceAccount:${google_service_account.load_controller.email}"
+}
+
 resource "google_storage_bucket_iam_member" "delivery_deployer" {
   bucket = google_storage_bucket.delivery.name
   role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.deployer.email}"
+}
+
+resource "google_storage_bucket_iam_member" "delivery_load_controller" {
+  for_each = toset(["roles/storage.objectViewer", "roles/storage.objectCreator", "roles/storage.legacyBucketReader"])
+  bucket   = google_storage_bucket.delivery.name
+  role     = each.key
+  member   = "serviceAccount:${google_service_account.load_controller.email}"
 }
 
 resource "google_storage_bucket_iam_member" "delivery_reader" {

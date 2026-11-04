@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "profiles": {
+    "smoke": {"vus": 1, "duration": "2m", "ramp": "10s", "sync": true},
+    "baseline": {"vus": 5, "duration": "15m", "ramp": "1m", "sync": false},
+    "sync": {"vus": 20, "duration": "15m", "ramp": "30s", "sync": true},
+    "stress": {"vus": 50, "duration": "25m", "rate": 10, "sync": true},
+    "soak": {"vus": 5, "duration": "60m", "ramp": "1m", "sync": true}
+  },
+  "thresholds": {
+    "http_req_failed": ["rate<0.01"],
+    "http_req_duration{kind:read}": ["p(95)<500", "p(99)<1000"],
+    "http_req_duration{kind:sync}": ["p(95)<1000", "p(99)<2000"],
+    "dropped_iterations": ["count==0"],
+    "nexoruta_load_unexpected_results": ["count==0"]
+  }
+}

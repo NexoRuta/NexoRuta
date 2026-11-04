@@ -60,6 +60,7 @@ def configuration():
     values["GCP_SECONDARY_ZONE"] = os.environ.get("GCP_SECONDARY_ZONE", REGION + "-b")
     if values["GCP_SECONDARY_ZONE"] not in (REGION + "-b", REGION + "-c"):
         raise ValueError("Use southamerica-west1-b or southamerica-west1-c for the second VM")
+    values["GCP_LOAD_CONTROL_BUCKET"] = f"{values['GCP_PROJECT_ID']}-nexoruta-load-control"
     return values
 
 
@@ -170,6 +171,15 @@ def stop_after_failure(config):
 def stop_session(config):
     # Close the lease first; stop both VMs independently and leave SQL running.
     errors = []
+    if config.get("GCP_PROJECT_ID") and config.get("GCP_STATE_BUCKET"):
+        try:
+            import load_tests
+            os.environ["NEXORUTA_CONTROL_LOCK_HELD"] = "true"
+            measure("cancel_load_test", lambda: load_tests.cancel(config, wait_seconds=90))
+        except (RuntimeError, subprocess.CalledProcessError, ValueError) as error:
+            errors.append(f"load test cancellation: {error}")
+        finally:
+            os.environ.pop("NEXORUTA_CONTROL_LOCK_HELD", None)
     try:
         measure("close_session_lease", lambda: end_lease(config))
     except (RuntimeError, subprocess.CalledProcessError, ValueError) as error:
@@ -244,6 +254,9 @@ def run(config):
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
                 output.write(message)
         return
+    if config.get("GCP_PROJECT_ID") and config.get("GCP_STATE_BUCKET"):
+        import load_tests
+        measure("check_load_test_lease", lambda: load_tests.assert_no_active(config))
     nodes = node_configs(config)
     existing = [instance(node) for node in nodes]
     for vm in existing:

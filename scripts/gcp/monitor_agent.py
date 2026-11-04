@@ -19,7 +19,8 @@ PROJECT = "nexoruta-demo"
 APPLICATIONS = ("api", "admin", "backoffice", "commerce", "tracking", "grafana",
                 "worker-rabbit", "worker-kafka", "worker-push", "sql-proxy", "otel-collector", "alloy")
 INFRASTRUCTURE = (
-    "rabbitmq", "kafka", "mongo", "mailpit", "proxy", "prometheus", "gcp-metrics-collector", "loki", "tempo"
+    "rabbitmq", "kafka", "mongo", "mailpit", "proxy", "prometheus", "prometheus-write-gateway",
+    "gcp-metrics-collector", "loki", "tempo"
 )
 HTTP_PORTS = {"api": 18080, "admin": 18081, "backoffice": 18082,
               "commerce": 18083, "tracking": 18084, "monitor": 13000}

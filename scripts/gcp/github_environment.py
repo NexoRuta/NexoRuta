@@ -60,16 +60,25 @@ def validate(job):
         "GCP_PROJECT_ID": r"[a-z][a-z0-9-]{4,28}[a-z0-9]",
         "GCP_REGION": re.escape(session.REGION),
         "GCP_WORKLOAD_IDENTITY_PROVIDER": r"projects/[0-9]+/locations/global/workloadIdentityPools/[a-z0-9-]+/providers/[a-z0-9-]+",
-        "GCP_DEPLOY_SERVICE_ACCOUNT": r"[a-z][a-z0-9-]*@[a-z][a-z0-9-]*\.iam\.gserviceaccount\.com",
     }
+    if job in ("publish", "deploy"):
+        patterns["GCP_DEPLOY_SERVICE_ACCOUNT"] = r"[a-z][a-z0-9-]*@[a-z][a-z0-9-]*\.iam\.gserviceaccount\.com"
+    if job == "load":
+        patterns["GCP_LOAD_SERVICE_ACCOUNT"] = r"nexoruta-load-controller@[a-z][a-z0-9-]*\.iam\.gserviceaccount\.com"
     if job in ("publish", "deploy"):
         patterns.update({
             "GCP_ZONE": re.escape(session.REGION + "-a"),
             "GCP_STATE_BUCKET": r"[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]",
             "GCP_DELIVERY_BUCKET": r"[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]",
         })
+    if job == "load":
+        patterns.update({
+            "GCP_ZONE": re.escape(session.REGION + "-a"),
+            "GCP_STATE_BUCKET": r"[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]",
+            "GCP_DELIVERY_BUCKET": r"[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]",
+        })
     errors = [name for name, pattern in patterns.items() if not re.fullmatch(pattern, os.environ.get(name, ""))]
-    if job == "deploy":
+    if job in ("deploy", "load"):
         manage_dns = os.environ.get("GCP_MANAGE_DNS", "").lower()
         domain = os.environ.get("GCP_BASE_DOMAIN", "")
         if manage_dns not in ("", "true", "false"):
@@ -139,7 +148,7 @@ def sync_integrations():
 
 if __name__ == "__main__":
     try:
-        if len(sys.argv) == 3 and sys.argv[1] == "validate" and sys.argv[2] in ("publish", "deploy", "android"):
+        if len(sys.argv) == 3 and sys.argv[1] == "validate" and sys.argv[2] in ("publish", "deploy", "load", "android"):
             validate(sys.argv[2])
         elif sys.argv[1:] == ["sync-integrations"]:
             sync_integrations()

@@ -277,6 +277,80 @@ el otro nodo nuevo puede seguir atendiendo. No se recuperan automáticamente
 contenedores anteriores ni se revierten migraciones; corregir el código y
 desplegar una release nueva. No hay recuperación mediante backups de la demo.
 
+## Pruebas de carga remotas OPT-06
+
+El workflow manual `.github/workflows/load-tests.yml` ejecuta k6 en un Cloud Run
+Job de `southamerica-west1`, separado de las dos VMs. Primero se debe aplicar el
+bootstrap actualizado y luego `infra/gcp/demo`, con ambas VMs apagadas para que
+el tag de observabilidad de A pueda actualizarse sin interrumpir una sesión. El
+workflow usa `GCP_LOAD_SERVICE_ACCOUNT`, con permisos de carga distintos del
+deployer de VM. El Job usa una subred propia; su egress privado permite solo el
+gateway de escritura de A por TCP 9091 y deniega los otros destinos RFC1918. El
+gateway acepta `POST /api/v1/write` y `GET /-/ready`; no permite consultas al API
+de Prometheus. La carga funcional entra por el HTTPS público del balanceador.
+
+Antes de habilitar una corrida:
+
+1. Publicar el dashboard `nexoruta-load-tests` con un `start` o `update` de la
+   demo. Grafana muestra carga k6, errores, p95/p99 del cliente, p95 del API,
+   respuestas de sincronización, CPU de las VMs, conexiones de Cloud SQL y el
+   estado del gateway de métricas de A.
+2. Crear usuarios y jornadas sintéticas independientes de las cuentas de demo.
+   Para smoke, sync, stress y soak, cada jornada debe tener 50 operaciones
+   `Posicion` ya aplicadas, con IDs, secuencia y payload estables. Se repiten en
+   orden para medir reconexión e idempotencia sin insertar filas durante la
+   prueba. `baseline` solo hace lecturas.
+3. Cargar las credenciales e IDs sintéticos en una versión de
+   `nexoruta-load-fixtures` de Secret Manager. Guardar el objeto JSON de
+   operaciones en el bucket `nexoruta-load-fixtures`, bajo una ruta nueva por
+   versión, y añadir su SHA-256 al secreto. El secreto queda bajo el límite de
+   64 KiB; el dataset privado admite hasta 4 MiB y se valida antes de enviar
+   carga. Ver el esquema y formato de objeto en `tests/load/README.md`. Mantener
+   ambos archivos fuera del repositorio y no imprimirlos:
+
+   ```powershell
+   gcloud secrets versions add nexoruta-load-fixtures --project=PROJECT_ID --data-file=RUTA_PRIVADA\fixtures.json
+   ```
+
+4. Iniciar las dos VMs con el workflow existente. La acción de carga valida la
+   sesión y su plazo, que ambas ejecutan la misma release, salud HTTPS del API,
+   backends A/B, workers y SQL. Si una condición falla, no envía carga.
+
+En GitHub Actions elegir `NexoRuta - pruebas de carga`, operación `run` y uno de
+estos perfiles:
+
+| Perfil | Carga máxima | Ventana |
+| --- | --- | --- |
+| `smoke` | 1 VU | 2 min |
+| `baseline` | 5 VUs | 15 min, lectura |
+| `sync` | 20 VUs × 50 operaciones preaplicadas | 15 min |
+| `stress` | hasta 50 VUs × 50 operaciones, 1/3/5/10 iteraciones/s | 25 min |
+| `soak` | 5 VUs | 60 min |
+
+Los logins se espacian para respetar el límite vigente por IP. Las operaciones
+sync se reenvían una sola vez en la primera iteración de cada VU. Stress mantiene
+la tasa de llegada en 1/3/5/10 iteraciones por segundo, con su dataset de sync
+acotado. Las métricas se envían cada 5 s a Prometheus y se distinguen por
+`run_id`. El runner consulta la lease durante la carga y detiene k6 si se cancela,
+vence el plazo o deja de poder leer el control.
+El workflow ofrece `cancel`; `stop` de VM solicita cancelación antes de apagar
+los nodos, y el guard vuelve a intentar cancelar leases vencidas.
+
+El resumen del workflow incluye Grafana, Cloud Run y la ruta de resultados
+privados de GCS. Los resultados y leases expiran a los 30 días; los datasets
+conservan versiones hasta su retiro deliberado. La identidad de Cloud Run solo
+puede leer el secreto sintético y los eventos aprobados, escribir resultados y
+leer el bucket separado de control. El firewall limita su egress privado a
+Prometheus: no abre puertos hacia SQL, Redis, brokers ni otras VMs. Tampoco puede
+leer el estado de OpenTofu ni otros secretos.
+
+El workflow OIDC tiene su propia identidad `nexoruta-load-controller`; solo lee
+los objetos `leases/demo.json` y `locks/demo-control.json` del bucket de estado,
+no puede leer ni modificar objetos de OpenTofu. El acceso SSH por IAP y OS Login
+se concede por instancia únicamente a A y B.
+El Job no cambia el plazo de cuatro horas de las VMs. Cloud SQL conserva su
+política existente y permanece encendido al detener la demo.
+
 ## Plazo y costos residuales
 
 Las cuatro horas comienzan al entrar la primera VM en RUNNING e incluyen instalación,

@@ -25,8 +25,9 @@ import urllib.request
 BASE = Path("/srv/nexoruta")
 APPS = ("api", "worker-rabbit", "worker-kafka", "worker-push", "admin", "backoffice", "commerce", "tracking",
         "grafana", "otel-collector", "alloy")
-SHARED = ("rabbitmq", "kafka", "mongo", "mailpit", "proxy", "prometheus", "gcp-metrics-collector", "loki", "tempo")
-OBSERVABILITY_CORE = ("prometheus", "gcp-metrics-collector", "loki", "tempo")
+SHARED = ("rabbitmq", "kafka", "mongo", "mailpit", "proxy", "prometheus", "prometheus-write-gateway",
+          "gcp-metrics-collector", "loki", "tempo")
+OBSERVABILITY_CORE = ("prometheus", "prometheus-write-gateway", "gcp-metrics-collector", "loki", "tempo")
 RINGS = ("api", "admin", "backoffice", "commerce", "tracking")
 LOAD_BALANCER_PROXIES = ("35.191.0.0/16", "130.211.0.0/22")
 DIRECT_PORTS = {"api": 18080, "admin": 18081, "backoffice": 18082,

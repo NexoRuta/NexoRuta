@@ -257,6 +257,8 @@ class VmDeploymentTests(unittest.TestCase):
                 self.assertFalse(set(vm_deploy.SHARED).intersection(call.args))
 
     def test_prepare_of_existing_session_preserves_brokers_and_keeps_password_out_of_arguments(self):
+        self.assertIn("prometheus-write-gateway", vm_deploy.SHARED)
+        self.assertIn("prometheus-write-gateway", vm_deploy.OBSERVABILITY_CORE)
         runtime, integrations, hosting, images = self.configuration()
         with tempfile.TemporaryDirectory() as directory, patch.object(vm_deploy, "BASE", Path(directory)):
             root = Path(directory)

@@ -4,8 +4,8 @@ groups:
     rules:
       - alert: NexoRutaServiceUnavailable
         expr: |
-          max by (node, service) (nexoruta_container_up{service=~"api|worker|worker-rabbit|worker-kafka|worker-push|admin|backoffice|commerce|tracking|postgres|redis|rabbitmq|kafka|mongodb|mailpit|dashboard|prometheus|loki|tempo|grafana|alloy|otel-collector|docker-status-exporter"}) == 0
-          or max by (node, service) (nexoruta_gcp_container_up{service=~"api|worker|worker-rabbit|worker-kafka|worker-push|admin|backoffice|commerce|tracking|postgres|redis|rabbitmq|kafka|mongodb|mailpit|dashboard|prometheus|loki|tempo|grafana|alloy|otel-collector|docker-status-exporter"}) == 0
+          max by (node, service) (nexoruta_container_up{service=~"api|worker|worker-rabbit|worker-kafka|worker-push|admin|backoffice|commerce|tracking|postgres|redis|rabbitmq|kafka|mongodb|mailpit|dashboard|prometheus|prometheus-write-gateway|loki|tempo|grafana|alloy|otel-collector|docker-status-exporter"}) == 0
+          or max by (node, service) (nexoruta_gcp_container_up{service=~"api|worker|worker-rabbit|worker-kafka|worker-push|admin|backoffice|commerce|tracking|postgres|redis|rabbitmq|kafka|mongodb|mailpit|dashboard|prometheus|prometheus-write-gateway|loki|tempo|grafana|alloy|otel-collector|docker-status-exporter"}) == 0
           or max by (node, service) (probe_success{service=~"api|admin|backoffice|commerce|tracking|postgres|redis|rabbitmq|mailpit|dashboard|prometheus|loki|tempo|grafana|alloy|docker-status-exporter"}) == 0
           or max by (node, service) (nexoruta_gcp_service_up{service=~"api|admin|backoffice|commerce|tracking|postgres|redis|rabbitmq|mailpit|dashboard|prometheus|loki|tempo|grafana|alloy|docker-status-exporter"}) == 0
         for: 2m

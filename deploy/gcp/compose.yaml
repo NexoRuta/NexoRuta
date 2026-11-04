@@ -560,6 +560,24 @@ services:
     - prometheus:/prometheus
     profiles:
     - shared
+  prometheus-write-gateway:
+    image: python:3.13-slim-bookworm@sha256:281d39ff02e3b389401586134ff9e6572954687822a58055ec07a60ded4e0b7f
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 64m
+    cpus: 0.25
+    command: [python3, /etc/nexoruta/prometheus-write-gateway.py]
+    ports:
+    - ${NODE_PRIVATE_IP:?}:9091:9091
+    volumes:
+    - ./monitoring/prometheus-write-gateway.py:/etc/nexoruta/prometheus-write-gateway.py:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+    profiles:
+    - shared
   gcp-metrics-collector:
     image: otel/opentelemetry-collector-contrib:0.164.0
     command: ["--config=/etc/otelcol-contrib/config.yaml"]

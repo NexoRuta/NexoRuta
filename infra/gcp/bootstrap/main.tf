@@ -87,6 +87,7 @@ locals {
     "monitoring.googleapis.com",
     "logging.googleapis.com",
     "cloudtrace.googleapis.com",
+    "run.googleapis.com",
     "secretmanager.googleapis.com",
     "cloudscheduler.googleapis.com",
     "workflows.googleapis.com",
@@ -137,6 +138,31 @@ resource "google_service_account" "deployer" {
   depends_on   = [google_project_service.required]
 }
 
+resource "google_service_account" "load_controller" {
+  account_id   = "nexoruta-load-controller"
+  display_name = "Orchestrate bounded NexoRuta load tests"
+  depends_on   = [google_project_service.required]
+}
+
+resource "google_project_iam_custom_role" "load_execution" {
+  role_id     = "nexorutaLoadExecution"
+  title       = "NexoRuta load execution observer and canceller"
+  permissions = ["run.executions.get", "run.executions.list", "run.executions.cancel", "run.operations.get"]
+}
+
+resource "google_project_iam_member" "load_controller" {
+  for_each = toset([
+    "roles/compute.viewer",
+    "roles/cloudsql.viewer",
+    "roles/cloudbuild.builds.editor",
+    "roles/serviceusage.serviceUsageConsumer",
+    google_project_iam_custom_role.load_execution.name,
+  ])
+  project = var.project_id
+  role    = each.key
+  member  = "serviceAccount:${google_service_account.load_controller.email}"
+}
+
 resource "google_service_account" "runtime" {
   account_id   = "nexoruta-demo-runtime"
   display_name = "NexoRuta demo VM runtime"
@@ -174,6 +200,16 @@ resource "google_storage_bucket_iam_member" "state" {
   member = "serviceAccount:${google_service_account.deployer.email}"
 }
 
+resource "google_storage_bucket_iam_member" "load_controller_control_objects" {
+  bucket = google_storage_bucket.state.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.load_controller.email}"
+  condition {
+    title      = "NexoRuta load control objects only"
+    expression = "resource.name == 'projects/_/buckets/${local.state_bucket}/objects/locks/demo-control.json' || resource.name == 'projects/_/buckets/${local.state_bucket}/objects/leases/demo.json'"
+  }
+}
+
 resource "google_iam_workload_identity_pool" "github" {
   workload_identity_pool_id = "nexoruta-github"
   display_name              = "NexoRuta GitHub Actions"
@@ -194,7 +230,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "assertion.repository == '${var.github_repository}'",
     "assertion.ref == 'refs/heads/main'",
     "assertion.sub in ['repo:${var.github_repository}:environment:nexoruta-demo', 'repo:${split("/", var.github_repository)[0]}@${var.github_owner_id}/${split("/", var.github_repository)[1]}@${var.github_repository_id}:environment:nexoruta-demo']",
-    "assertion.workflow_ref in ['${var.github_repository}/.github/workflows/publish.yml@refs/heads/main', '${var.github_repository}/.github/workflows/vm-controls.yml@refs/heads/main']",
+    "assertion.workflow_ref in ['${var.github_repository}/.github/workflows/publish.yml@refs/heads/main', '${var.github_repository}/.github/workflows/vm-controls.yml@refs/heads/main', '${var.github_repository}/.github/workflows/load-tests.yml@refs/heads/main']",
     "assertion.event_name in ['workflow_dispatch', 'push']",
   ])
   oidc {
@@ -208,6 +244,12 @@ resource "google_service_account_iam_member" "github" {
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository_id/${var.github_repository_id}"
 }
 
+resource "google_service_account_iam_member" "github_load_controller" {
+  service_account_id = google_service_account.load_controller.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository_id/${var.github_repository_id}"
+}
+
 output "github_variables" {
   value = {
     GCP_PROJECT_ID                 = var.project_id
@@ -217,6 +259,7 @@ output "github_variables" {
     GCP_DELIVERY_BUCKET            = google_storage_bucket.delivery.name
     GCP_WORKLOAD_IDENTITY_PROVIDER = google_iam_workload_identity_pool_provider.github.name
     GCP_DEPLOY_SERVICE_ACCOUNT     = google_service_account.deployer.email
+    GCP_LOAD_SERVICE_ACCOUNT       = google_service_account.load_controller.email
   }
 }
 

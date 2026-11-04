@@ -194,6 +194,7 @@ services:
       - ./deploy/local/observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./deploy/local/observability/grafana/provisioning/dashboards/provider.yaml:/etc/grafana/provisioning/dashboards/provider.yaml:ro
       - ./deploy/observability/grafana/nexoruta.json:/etc/grafana/provisioning/dashboards/nexoruta.json:ro
+      - ./deploy/observability/grafana/load-tests.json:/etc/grafana/provisioning/dashboards/load-tests.json:ro
       - grafana_data:/var/lib/grafana
     depends_on:
       - prometheus
