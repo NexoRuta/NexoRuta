@@ -1,0 +1,965 @@
+[
+  {
+    "cu": "CU-01",
+    "nombre": "Comercios y usuarios",
+    "fuente": "PDF §5.1 nº1; XLSM «CU obligatorios» A4:I4",
+    "actor": "Administrador operador/comercio",
+    "entrada": "/usuarios; /roles; Admin /operadores, /comercios; autogestión /mi-comercio",
+    "implementacion": "UsuariosController, RolesController, OrganizacionPropiaController",
+    "persistencia": "Usuarios, AccesosUsuario, Roles y políticas RLS",
+    "tests": "UsuariosHttpTests, RolesHttpTests, OrganizacionPropiaHttpTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "A: crear usuario y rol restringido; B/C2: aislamiento",
+    "pasos": [
+      "Crear usuario en la organización A y asignarle un rol sin envios.gestionar",
+      "Ingresar con ese usuario y comprobar menú y acceso directo a Depósito rechazado",
+      "Editar, suspender/reactivar el acceso; comprobar efectos tras nueva consulta y auditoría",
+      "Intentar gestionar usuarios de B y C2; no deben aparecer ni modificarse"
+    ],
+    "negativos": "Confirmar con negocio la administración de comercios clientes desde operador: autogestión/administración de plataforma no equivalen por sí solas al ABM solicitado.",
+    "dependencias": [
+      {
+        "id": "D01",
+        "fuente": "XLSM Dependencias fila 4",
+        "consumidor": "CU-07",
+        "proveedor": "CU-01",
+        "contrato": "Contexto de operador + vínculo comercio-operador"
+      }
+    ]
+  },
+  {
+    "cu": "CU-02",
+    "nombre": "Zonas y franjas",
+    "fuente": "PDF §5.1 nº2; XLSM «CU obligatorios» A5:I5",
+    "actor": "Administrador operador",
+    "entrada": "/zonas; /api/configuracion/zonas y /{id}/franjas",
+    "implementacion": "ZonasCoberturaController, ZonaCobertura",
+    "persistencia": "ZonasCobertura, FranjasEntrega, ZonasCoberturaRevisiones",
+    "tests": "ZonasCoberturaHttpTests, ZonaCoberturaPostgisTests, UruguayCatalogAndTerritoryTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "A/B con zonas distintas y puntos dentro/borde/fuera",
+    "pasos": [
+      "Crear polígono sintético y franjas para A en America/Montevideo",
+      "Guardar y reabrir para comparar geometría, zona horaria y horarios",
+      "Probar punto interior, sobre borde y exterior; verificar cobertura coherente",
+      "Editar desde dos pestañas con misma versión; el segundo guardado debe informar conflicto sin perder campos"
+    ],
+    "negativos": "No extender cobertura real ni inferir aceptación por ver mapa.",
+    "dependencias": [
+      {
+        "id": "D04",
+        "fuente": "XLSM Dependencias fila 7",
+        "consumidor": "CU-13",
+        "proveedor": "CU-02",
+        "contrato": "Zona y franja del envío"
+      },
+      {
+        "id": "D07",
+        "fuente": "XLSM Dependencias fila 10",
+        "consumidor": "CU-14",
+        "proveedor": "CU-02",
+        "contrato": "Calendario y ventanas configuradas"
+      }
+    ]
+  },
+  {
+    "cu": "CU-03",
+    "nombre": "Tarifas configurables",
+    "fuente": "PDF §5.1 nº3; XLSM «CU obligatorios» A6:I6",
+    "actor": "Administrador operador",
+    "entrada": "/tarifas, /tarifas/borrador, /tarifas/simular; /api/configuracion/tarifas",
+    "implementacion": "TarifarioController, CalculadoraTarifas",
+    "persistencia": "TarifariosOperador, VersionesTarifario, tarifas y ajustes versionados",
+    "tests": "TarifarioHttpTests, TarifarioPersistenceTests, CalculadoraTarifasTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "Zonas A publicadas; juego tarifario sintético explícito",
+    "pasos": [
+      "Crear borrador con zona/peso/volumen/Estandar/Urgente y ajustes",
+      "Simular con calculadora independiente y guardar el cálculo esperado",
+      "Publicar, reabrir y verificar número/versionado",
+      "Publicar una segunda tarifa y comprobar que envíos anteriores conservan su cargo e historial"
+    ],
+    "negativos": "Comparar redondeo, límites, recargo y bonificación; rechazar edición concurrente.",
+    "dependencias": [
+      {
+        "id": "D02",
+        "fuente": "XLSM Dependencias fila 5",
+        "consumidor": "CU-09",
+        "proveedor": "CU-03",
+        "contrato": "Servicio de cálculo + ID de versión de tarifa"
+      }
+    ]
+  },
+  {
+    "cu": "CU-04",
+    "nombre": "Reglas operativas",
+    "fuente": "PDF §5.1 nº4; XLSM «CU obligatorios» A7:I7",
+    "actor": "Administrador operador",
+    "entrada": "/reglas-operativas; /api/configuracion/reglas-operativas",
+    "implementacion": "ReglasOperativasController, VersionReglasOperativas",
+    "persistencia": "ReglasOperativasOperador, versiones, requisitos y motivos",
+    "tests": "ReglasOperativasHttpTests, ReglasEnvioAdmisionHttpTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "A con foto+nombre, intentos y catálogo sintéticos; B distinto",
+    "pasos": [
+      "Configurar intentos, intervalo, prueba, motivos, devolución y plazos",
+      "Publicar y admitir un envío; anotar VersionReglasId",
+      "Cambiar/publicar y admitir otro envío",
+      "Intentar usar motivo/prueba de la versión nueva en el envío anterior; debe respetar la original"
+    ],
+    "negativos": "No reducir reglas operativas de datos ajenos para conseguir pruebas verdes.",
+    "dependencias": [
+      {
+        "id": "D03",
+        "fuente": "XLSM Dependencias fila 6",
+        "consumidor": "CU-11",
+        "proveedor": "CU-04",
+        "contrato": "Versión de reglas asociada al envío"
+      },
+      {
+        "id": "D10",
+        "fuente": "XLSM Dependencias fila 13",
+        "consumidor": "CU-20",
+        "proveedor": "CU-04",
+        "contrato": "Política de evidencia versionada"
+      },
+      {
+        "id": "D11",
+        "fuente": "XLSM Dependencias fila 14",
+        "consumidor": "CU-21",
+        "proveedor": "CU-04",
+        "contrato": "Catálogo de motivos versionado"
+      },
+      {
+        "id": "D16",
+        "fuente": "XLSM Dependencias fila 19",
+        "consumidor": "CU-26",
+        "proveedor": "CU-04",
+        "contrato": "Validador de reprogramación"
+      }
+    ]
+  },
+  {
+    "cu": "CU-05",
+    "nombre": "Identidad visual",
+    "fuente": "PDF §5.1 nº5; XLSM «CU obligatorios» A8:I8",
+    "actor": "Administrador operador; destinatario",
+    "entrada": "/identidad-visual; Commerce; Tracking; comunicaciones",
+    "implementacion": "IdentidadVisualOperadorController, IdentidadVisualPublicaResponse",
+    "persistencia": "VersionesIdentidadVisualOperador y consumidores por tenant",
+    "tests": "IdentidadVisualOperadorHttpTests, IdentidadVisualPagesTests",
+    "estado": "Brecha encontrada",
+    "precondiciones": "Marca A y B diferentes; correo local capturado",
+    "pasos": [
+      "Guardar marca/contacto/colores A y abrir Commerce y Tracking de un envío A",
+      "Abrir B en otra sesión y verificar que no aparece marca A",
+      "Probar colores sin contraste y versión obsoleta; conservar valores/advertencias",
+      "Inspeccionar una comunicación real local al destinatario; registrar bloqueo si el aviso de estado no existe"
+    ],
+    "negativos": "H04: avisos al destinatario por estado no implementados; no dar por integrado ese consumidor.",
+    "dependencias": [
+      {
+        "id": "D15",
+        "fuente": "XLSM Dependencias fila 18",
+        "consumidor": "CU-25",
+        "proveedor": "CU-05",
+        "contrato": "Identidad visual por tenant"
+      }
+    ]
+  },
+  {
+    "cu": "CU-06",
+    "nombre": "Repartidores y vehículos",
+    "fuente": "PDF §5.1 nº6; XLSM «CU obligatorios» A9:I9",
+    "actor": "Administrador y despachador",
+    "entrada": "/repartidores; /vehiculos; /flota; /api/repartidores, /api/reparto/vehiculos, /api/reparto/flota",
+    "implementacion": "FlotaController, RepartidoresController, EfRutasRepository.Flota",
+    "persistencia": "Vehiculos, accesos de repartidor, OcupacionesRuta e historial",
+    "tests": "CapacidadVigenteHttpTests, OcupacionFlotaHttpTests; navegadores Vehiculos/Flota",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "V1/V2 con capacidades distintas, R1/R2; confirmaciones físicas pendientes",
+    "pasos": [
+      "Crear/editar repartidor y vehículo con peso y volumen; reabrir",
+      "Probar precisión decimal, límites y edición concurrente",
+      "Comprobar disponibilidad inicial solo tras constatación humana explícita",
+      "Despachar, cerrar jornada y verificar que cierre no libera recursos; retorno/liberación requieren sus constataciones"
+    ],
+    "negativos": "CU-06 permanece abierto: B1–B5 y pruebas de lógica no acreditan hardware, precisión vial ni habilitación operativa.",
+    "dependencias": []
+  },
+  {
+    "cu": "CU-07",
+    "nombre": "Alta de envíos",
+    "fuente": "PDF §5.2 nº7; XLSM «CU obligatorios» A10:I10",
+    "actor": "Comercio C1",
+    "entrada": "/envios/crear; /envios/importar; POST /api/envios y /api/envios/importaciones",
+    "implementacion": "CrearEnvioUseCase, ImportarEnviosUseCase, CsvEnviosParser",
+    "persistencia": "Envios, identidades de importación v2 y outbox en transacción",
+    "tests": "ShipmentCsvImportHttpTests, CommerceCsvImportKestrelTests, AdmissionSelectsAdjustsQuotesSavesAndReopensBeforeShipping",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "CSV nuevos del generador; operador/zona/tarifa propios",
+    "pasos": [
+      "Crear envío individual y comparar con GET autenticado",
+      "Importar 01-alta-v2.csv declarando VersionFormato=2",
+      "Reimportar completo y parcial 02: mismas referencias, ningún duplicado",
+      "Importar lote 03 con fila nueva válida e inválida: ningún alta parcial; corregir y reintentar"
+    ],
+    "negativos": "Referencia existente con distinto contenido da conflicto; identidad v1 no se reinterpreta silenciosamente; no reutilizar datos manuales previos.",
+    "dependencias": [
+      {
+        "id": "D01",
+        "fuente": "XLSM Dependencias fila 4",
+        "consumidor": "CU-07",
+        "proveedor": "CU-01",
+        "contrato": "Contexto de operador + vínculo comercio-operador"
+      }
+    ]
+  },
+  {
+    "cu": "CU-08",
+    "nombre": "Bultos",
+    "fuente": "PDF §5.2 nº8; XLSM «CU obligatorios» A11:I11",
+    "actor": "Comercio y depósito",
+    "entrada": "Alta multibulto; etiquetas; recepción y ruta",
+    "implementacion": "CrearEnvioRequest, Bulto, EtiquetasEnvioPdf",
+    "persistencia": "Bultos con UUID, código, peso y dimensiones",
+    "tests": "CrearEnvioUseCaseTests, EtiquetasEnvioHttpTests, RecepcionDepositoHttpTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "MULTI con dos bultos y medidas declaradas diferentes",
+    "pasos": [
+      "Agregar dos bultos con identificación/peso/dimensiones y guardar",
+      "Reabrir y descargar PDF de etiquetas; comprobar ambos UUID y códigos",
+      "Escanear cada etiqueta y cotejar el bulto exacto",
+      "Quitar/agregar antes de confirmar y probar cero/negativos/precisión; no perder los demás datos"
+    ],
+    "negativos": "Medidas declaradas no son mediciones físicas ni justifican custodia.",
+    "dependencias": [
+      {
+        "id": "D06",
+        "fuente": "XLSM Dependencias fila 9",
+        "consumidor": "CU-14",
+        "proveedor": "CU-08",
+        "contrato": "Datos de bultos y envío"
+      }
+    ]
+  },
+  {
+    "cu": "CU-09",
+    "nombre": "Cálculo de tarifa",
+    "fuente": "PDF §5.2 nº9; XLSM «CU obligatorios» A12:I12",
+    "actor": "Comercio C1",
+    "entrada": "Cotización en alta; POST /api/envios/cotizacion; GET /api/envios/{id}/tarifa e historial",
+    "implementacion": "TarifasAdmision, CalculadoraTarifas",
+    "persistencia": "TarifasEnvio append-only; procedencia tarifaria/geográfica",
+    "tests": "TarifaAdmisionHttpTests, AdmissionSelectsAdjustsQuotesSavesAndReopensBeforeShipping",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "Publicación A, MULTI e HISTORIA; operador sin Rivera",
+    "pasos": [
+      "Elegir punto interior y servicio; calcular con todos los bultos y contrastar desglose independiente",
+      "Confirmar y reabrir cargo/versiones",
+      "Cambiar publicación entre cotizar y confirmar: conflicto sin alta ni valores perdidos",
+      "Intentar Rivera, zona de B, modalidad ausente e importe HTTP manipulado: rechazos sin cargos/envíos parciales"
+    ],
+    "negativos": "D02/D22: nueva publicación no cambia cargos anteriores; franja individual aún no forma parte del contrato (D-P01).",
+    "dependencias": [
+      {
+        "id": "D02",
+        "fuente": "XLSM Dependencias fila 5",
+        "consumidor": "CU-09",
+        "proveedor": "CU-03",
+        "contrato": "Servicio de cálculo + ID de versión de tarifa"
+      },
+      {
+        "id": "D22",
+        "fuente": "XLSM Dependencias fila 25",
+        "consumidor": "CU-30",
+        "proveedor": "CU-09",
+        "contrato": "Tarifa aplicada e historial"
+      }
+    ]
+  },
+  {
+    "cu": "CU-10",
+    "nombre": "Recepción en depósito",
+    "fuente": "PDF §5.2 nº10; XLSM «CU obligatorios» A13:I13",
+    "actor": "Operario depósito",
+    "entrada": "/deposito/recepcion; GET /api/deposito/consulta; POST /api/deposito/bultos/{id}/recepcion",
+    "implementacion": "EfRutasRepository.Recepcion, RecepcionModel",
+    "persistencia": "RecepcionesBulto inmutable, custodia/versiones e historia canónica al completar",
+    "tests": "RecepcionDepositoHttpTests y RecepcionDepositoBrowserTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "MULTI físicamente disponible; lector/cámara propios opcionales",
+    "pasos": [
+      "Buscar UUID/código y comprobar que GET/Enter no recibe físicamente nada",
+      "Una persona constata y coteja primer bulto conforme: custodia Depósito; el otro sigue pendiente",
+      "Registrar discrepancia REAL en segundo bulto con observaciones; no inventar medidas",
+      "Conservar discrepancia; resolver según decisión humana D-P02. Solo si físicamente se subsanó, registrar nuevo cotejo conforme",
+      "Repetir comando exacto y escaneo; no duplicar historia; versión vencida debe conservar valores y pedir revisión"
+    ],
+    "negativos": "Admitido con custodia Depósito es posible y no implica pérdida física. No falsear conformidad para desbloquear planificación.",
+    "dependencias": []
+  },
+  {
+    "cu": "CU-11",
+    "nombre": "Estado del envío",
+    "fuente": "PDF §5.2 nº11; XLSM «CU obligatorios» A14:I14",
+    "actor": "Sistema; operadores; repartidor",
+    "entrada": "Comandos de recepción, ruta, móvil, cancelación y decisiones; sin setter de estado",
+    "implementacion": "TransicionesEstadoEnvio, Envio, guard_shipment_state_transition",
+    "persistencia": "Envios, versiones, hechos físicos y trigger de historia",
+    "tests": "EnvioStateMachineTests, ShipmentStatePolicySqlTests, RecepcionDepositoHttpTests.Estados",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "Envíos separados para éxito/fallo/devolución/cancelación",
+    "pasos": [
+      "Seguir flujo admitido→depósito→asignado→tránsito usando acciones específicas",
+      "En otro envío registrar intento fallido y reprogramación/devolución conforme a versión",
+      "Probar cancelar tras entrega física; no debe deshacerla ni habilitar otra entrega",
+      "Consultar estados terminales y probar comandos incompatibles/versiones viejas; no deben mutar estado ni custodia"
+    ],
+    "negativos": "Diagrama corregido agrega Cancelado/pendiente/sin validación. El PDF de propuesta es histórico; no resolver divergencias de negocio solo con paridad SQL.",
+    "dependencias": [
+      {
+        "id": "D03",
+        "fuente": "XLSM Dependencias fila 6",
+        "consumidor": "CU-11",
+        "proveedor": "CU-04",
+        "contrato": "Versión de reglas asociada al envío"
+      },
+      {
+        "id": "D05",
+        "fuente": "XLSM Dependencias fila 8",
+        "consumidor": "CU-13",
+        "proveedor": "CU-11",
+        "contrato": "Consulta de candidatos + comando de asignación"
+      },
+      {
+        "id": "D12",
+        "fuente": "XLSM Dependencias fila 15",
+        "consumidor": "CU-24",
+        "proveedor": "CU-11",
+        "contrato": "API de eventos idempotente + versión de estado"
+      },
+      {
+        "id": "D20",
+        "fuente": "XLSM Dependencias fila 23",
+        "consumidor": "CU-29",
+        "proveedor": "CU-11",
+        "contrato": "Lectura de envíos y ventanas"
+      }
+    ]
+  },
+  {
+    "cu": "CU-12",
+    "nombre": "Eventos del envío",
+    "fuente": "PDF §5.2 nº12; XLSM «CU obligatorios» A15:I15",
+    "actor": "Sistema; comercio y operador consultan",
+    "entrada": "Sin endpoint general de eventos encontrado; consulta de recepción y verificación PostgreSQL en fixture",
+    "implementacion": "EnvioEvento, triggers, SetShipmentHistoryContextAsync",
+    "persistencia": "EnvioEventos append-only, origen/responsable/fecha/GPS según operación",
+    "tests": "EnvioEventsHttpTests, EnvioHistoryMigrationTests, RlsRestrictedHttpFlowTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "HISTORIA y ejecución nueva; dos actores",
+    "pasos": [
+      "Con técnico, inspeccionar historia en la fixture aislada tras cada acción; no inventar un endpoint de consulta general",
+      "Comprobar origen/responsable, versiones, hora física vs recibida y geolocalización donde corresponde",
+      "Repetir comando aplicado: no debe agregar hechos",
+      "Intentar lectura de B/C2: denegada; rollback/concurrencia/inmutabilidad SQL se reproducen con fixtures, no en la base manual"
+    ],
+    "negativos": "No reconstruir hechos anteriores al corte de migración ni considerar completa una proyección pública que no muestra historial (H03).",
+    "dependencias": [
+      {
+        "id": "D13",
+        "fuente": "XLSM Dependencias fila 16",
+        "consumidor": "CU-22",
+        "proveedor": "CU-12",
+        "contrato": "Comandos y eventos de devolución"
+      },
+      {
+        "id": "D14",
+        "fuente": "XLSM Dependencias fila 17",
+        "consumidor": "CU-25",
+        "proveedor": "CU-12",
+        "contrato": "Proyección pública por token opaco"
+      },
+      {
+        "id": "D17",
+        "fuente": "XLSM Dependencias fila 20",
+        "consumidor": "CU-27",
+        "proveedor": "CU-12",
+        "contrato": "Evento de dominio mediante outbox"
+      },
+      {
+        "id": "D18",
+        "fuente": "XLSM Dependencias fila 21",
+        "consumidor": "CU-28",
+        "proveedor": "CU-12",
+        "contrato": "Evento de dominio mediante outbox"
+      },
+      {
+        "id": "D23",
+        "fuente": "XLSM Dependencias fila 26",
+        "consumidor": "CU-30",
+        "proveedor": "CU-12",
+        "contrato": "Eventos inmutables / proyección analítica"
+      }
+    ]
+  },
+  {
+    "cu": "CU-13",
+    "nombre": "Armar rutas",
+    "fuente": "PDF §5.3 nº13; XLSM «CU obligatorios» A16:I16",
+    "actor": "Despachador",
+    "entrada": "/rutas/planificar; POST /api/rutas",
+    "implementacion": "GestionarRutasUseCase, EfRutasRepository.PlanificarAsync",
+    "persistencia": "HojasRuta, ParadasRuta, recursos y snapshot temporal",
+    "tests": "RutasHttpTests, BasePlanificacionHttpTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "Bultos físicamente recibidos; destinos confirmados; V/R activos",
+    "pasos": [
+      "Seleccionar dos envíos elegibles, repartidor, vehículo y fecha operativa",
+      "Definir orden, llegada y servicio, revisar y planificar",
+      "Reabrir detalle y comparar asignaciones y snapshot",
+      "Intentar incluir envío de B, no recibido o ya asignado: rechazo sin ruta/paradas parciales"
+    ],
+    "negativos": "Ruta vacía reserva recursos si el producto lo permite, pero no se despacha; no confundir reserva con ocupación física.",
+    "dependencias": [
+      {
+        "id": "D04",
+        "fuente": "XLSM Dependencias fila 7",
+        "consumidor": "CU-13",
+        "proveedor": "CU-02",
+        "contrato": "Zona y franja del envío"
+      },
+      {
+        "id": "D05",
+        "fuente": "XLSM Dependencias fila 8",
+        "consumidor": "CU-13",
+        "proveedor": "CU-11",
+        "contrato": "Consulta de candidatos + comando de asignación"
+      },
+      {
+        "id": "D09",
+        "fuente": "XLSM Dependencias fila 12",
+        "consumidor": "CU-19",
+        "proveedor": "CU-13",
+        "contrato": "Lista de bultos por ruta"
+      },
+      {
+        "id": "D21",
+        "fuente": "XLSM Dependencias fila 24",
+        "consumidor": "CU-29",
+        "proveedor": "CU-13",
+        "contrato": "Proyección de ruta y asignación"
+      }
+    ]
+  },
+  {
+    "cu": "CU-14",
+    "nombre": "Validar restricciones",
+    "fuente": "PDF §5.3 nº14; XLSM «CU obligatorios» A17:I17",
+    "actor": "Despachador",
+    "entrada": "Planificación, reasignación, despacho y confirmación de carga",
+    "implementacion": "CapacidadCarga, RestriccionesTemporales, VentanaRuta",
+    "persistencia": "Revisión histórica de zona/cargo, versión de configuración y snapshot de ruta",
+    "tests": "VentanaRutaTests, HistoricalCoverageRequiresArrivalAndWholeServiceInsideWindow, CapacidadVigenteHttpTests",
+    "estado": "Brecha encontrada",
+    "precondiciones": "Rutas separadas para límites; franja local A y servicio en borde",
+    "pasos": [
+      "Probar máximo exacto de paradas, peso y volumen, después exceder cada uno aisladamente",
+      "Probar inicio incluido, fin excluido y servicio que termina exactamente en fin",
+      "Modificar capacidad o configuración actual antes de despacho/salida y observar la revalidación aplicable",
+      "Intentar verificar una franja prometida individual: documentar que alta no la captura y resolver D-P01 antes de aceptación"
+    ],
+    "negativos": "La comprobación actual usa CUALQUIER franja activa histórica, no una ventana individual comprometida. No aceptar la interpretación por tener pruebas verdes.",
+    "dependencias": [
+      {
+        "id": "D06",
+        "fuente": "XLSM Dependencias fila 9",
+        "consumidor": "CU-14",
+        "proveedor": "CU-08",
+        "contrato": "Datos de bultos y envío"
+      },
+      {
+        "id": "D07",
+        "fuente": "XLSM Dependencias fila 10",
+        "consumidor": "CU-14",
+        "proveedor": "CU-02",
+        "contrato": "Calendario y ventanas configuradas"
+      }
+    ]
+  },
+  {
+    "cu": "CU-15",
+    "nombre": "Evitar doble asignación",
+    "fuente": "PDF §5.3 nº15; XLSM «CU obligatorios» A18:I18",
+    "actor": "Dos despachadores",
+    "entrada": "POST /api/rutas concurrente; reasignación",
+    "implementacion": "Bloqueo PostgreSQL de operador e índice único de parada activa",
+    "persistencia": "ParadasRuta activas + Envios en transacción",
+    "tests": "DosPlanificacionesConcurrentesSoloAsignanUnaVez",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "Mismo envío; R1/V1 y R2/V2 distintos; barrera del test",
+    "pasos": [
+      "Abrir mismo candidato en dos sesiones con recursos diferentes",
+      "Ejecutar la prueba de competencia con bloqueo/barrera de PostgreSQL",
+      "Verificar un éxito y un 409, una sola asignación/evento y ningún recurso fantasma",
+      "Recuperar la sesión perdedora y releer estado antes de otro comando"
+    ],
+    "negativos": "Clics rápidos humanos no demuestran solapamiento; la prueba de barrera sí acredita transacciones concurrentes, no aceptación funcional.",
+    "dependencias": []
+  },
+  {
+    "cu": "CU-16",
+    "nombre": "Ordenar paradas",
+    "fuente": "PDF §5.3 nº16; XLSM «CU obligatorios» A19:I19",
+    "actor": "Despachador",
+    "entrada": "/rutas/planificar; orden y llegada manual en detalle",
+    "implementacion": "HojaRuta.AgregarParada y PlanTemporal",
+    "persistencia": "Orden persistido y snapshot temporal inicial",
+    "tests": "ExactStopLimitUsesShipmentsAndPreservesExplicitOrder, PlanTemporalTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "Tres envíos con orden y servicios distintos",
+    "pasos": [
+      "Establecer orden explícito y llegadas cronológicas que incluyan duración de servicio",
+      "Planificar y reabrir; comprobar posiciones consecutivas y orden elegido",
+      "Probar solapamiento y medianoche; no corregir silenciosamente horas ni orden",
+      "Intentar agregar/reordenar tras despacho: debe rechazarse donde el circuito no lo admite"
+    ],
+    "negativos": "Criterio obligatorio manual documentado; no equivale a optimización opcional OPT-12.",
+    "dependencias": []
+  },
+  {
+    "cu": "CU-17",
+    "nombre": "Despachar ruta",
+    "fuente": "PDF §5.3 nº17; XLSM «CU obligatorios» A20:I20",
+    "actor": "Despachador y repartidor",
+    "entrada": "Detalle /rutas/{id}; POST /api/rutas/{id}/despacho; /api/mobile/rutas",
+    "implementacion": "EfRutasRepository.DespacharAsync",
+    "persistencia": "HojasRuta Despachada + OcupacionRuta e historial",
+    "tests": "RutasHttpTests, OcupacionFlotaHttpTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "Fecha de hoy del operador; V/R verificados humanamente",
+    "pasos": [
+      "Despachar una ruta válida del día y descargar con el repartidor asignado",
+      "Comprobar que envíos siguen AsignadoRuta y bultos siguen Depósito",
+      "Repetir con versión vieja: no duplicar despacho ni ocupación",
+      "Intentar despacho futuro, sin verificación inicial o con ocupación de otra fecha: rechazo explicativo"
+    ],
+    "negativos": "Despacho NO acredita carga ni salida. Se requiere escaneo y ConfirmarCarga.",
+    "dependencias": [
+      {
+        "id": "D08",
+        "fuente": "XLSM Dependencias fila 11",
+        "consumidor": "CU-18",
+        "proveedor": "CU-17",
+        "contrato": "Contrato versionado de hoja de ruta"
+      }
+    ]
+  },
+  {
+    "cu": "CU-18",
+    "nombre": "Descargar ruta",
+    "fuente": "PDF §5.4 nº18; XLSM «CU obligatorios» A21:I21",
+    "actor": "Repartidor Android",
+    "entrada": "MAUI hoja del día; GET /api/mobile/rutas y /{id}",
+    "implementacion": "HojaRutaViewModel, repositorio local y ApiReparto",
+    "persistencia": "SQLite y snapshot de hoja/reglas",
+    "tests": "Mobile Api/Application Tests; RutasHttpTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "Android real/emulador autorizado con usuario R1",
+    "pasos": [
+      "Ingresar, descargar ruta despachada y abrir cada parada",
+      "Activar modo avión y reiniciar app; hoja y reglas deben seguir disponibles",
+      "Intentar hoja planificada o de otro repartidor: no visible/denegada",
+      "Restablecer conexión sin borrar trabajo local"
+    ],
+    "negativos": "Pruebas portátiles no acreditan Android, persistencia del sistema operativo ni GPS.",
+    "dependencias": [
+      {
+        "id": "D08",
+        "fuente": "XLSM Dependencias fila 11",
+        "consumidor": "CU-18",
+        "proveedor": "CU-17",
+        "contrato": "Contrato versionado de hoja de ruta"
+      }
+    ]
+  },
+  {
+    "cu": "CU-19",
+    "nombre": "Escanear carga",
+    "fuente": "PDF §5.4 nº19; XLSM «CU obligatorios» A22:I22",
+    "actor": "Repartidor y depósito",
+    "entrada": "MAUI escaneo de carga; operaciones CargarBulto/ConfirmarCarga",
+    "implementacion": "HojaRutaViewModel, EfOperacionesRepartoRepository",
+    "persistencia": "Custodia Bultos y operación idempotente por jornada/secuencia",
+    "tests": "OperacionesRepartoHttpTests; Mobile Application/Core Tests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "MULTI recibido físicamente; lector/cámara REAL",
+    "pasos": [
+      "Escanear físicamente primer bulto y observar pendiente del segundo",
+      "Escanear un código ajeno/sobrante: aviso, sin cargarlo",
+      "Completar carga y confirmar salida tras constatación humana",
+      "Con faltantes probar política configurada: bloquear o suspender sin fingir carga; volver a consultar custodia"
+    ],
+    "negativos": "No usar MediaStream sintético como aceptación de cámara/lector. No ejecutar carga intermedia después de salir.",
+    "dependencias": [
+      {
+        "id": "D09",
+        "fuente": "XLSM Dependencias fila 12",
+        "consumidor": "CU-19",
+        "proveedor": "CU-13",
+        "contrato": "Lista de bultos por ruta"
+      }
+    ]
+  },
+  {
+    "cu": "CU-20",
+    "nombre": "Registrar entrega",
+    "fuente": "PDF §5.4 nº20; XLSM «CU obligatorios» A23:I23",
+    "actor": "Repartidor y receptor",
+    "entrada": "MAUI entrega; operaciones EntregaFisica/EvidenciaEntrega; PUT evidencias",
+    "implementacion": "Envio.DeclararEntregaFisica, AplicarPrueba, GuardarEvidenciaAsync",
+    "persistencia": "PruebasEntrega, EvidenciasReparto cifradas, estado y custodia",
+    "tests": "OperacionesRepartoHttpTests; AuditoriaIntegral_InvalidPngMustNotValidateDelivery",
+    "estado": "Brecha encontrada",
+    "precondiciones": "PRUEBA con reglas foto+nombre; receptor/GPS reales en Android",
+    "pasos": [
+      "Capturar los requisitos exigidos, hora y posición del dispositivo durante entrega física real",
+      "Sin foto válida registrar hecho solo cuando ocurrió; debe quedar pendiente según versión",
+      "Enviar la reproducción de PNG inválido en fixture aislada: hoy valida indebidamente (H01)",
+      "Después de corregir, repetir prueba válida/imagen corrupta/plazo vencido/cancelación concurrente"
+    ],
+    "negativos": "No declarar aceptación mientras H01 permita Entregado sin foto decodificable. Una persona confirma entrega física; el script no la acredita.",
+    "dependencias": [
+      {
+        "id": "D10",
+        "fuente": "XLSM Dependencias fila 13",
+        "consumidor": "CU-20",
+        "proveedor": "CU-04",
+        "contrato": "Política de evidencia versionada"
+      }
+    ]
+  },
+  {
+    "cu": "CU-21",
+    "nombre": "Registrar intento fallido",
+    "fuente": "PDF §5.4 nº21; XLSM «CU obligatorios» A24:I24",
+    "actor": "Repartidor",
+    "entrada": "MAUI intento fallido; operación IntentoFallido",
+    "implementacion": "ResumenIntentosEntrega y catálogo de reglas del envío",
+    "persistencia": "OperacionesJornada, estado NoEntregado y devolución si corresponde",
+    "tests": "OperacionesRepartoHttpTests, ReasignacionPushTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "INTENTO con motivos y foto exigida configurados",
+    "pasos": [
+      "Registrar intento real con motivo vigente y evidencia del dispositivo",
+      "Probar motivo ajeno, falta de evidencia y plazo entre intentos incumplido",
+      "Sincronizar repetido: un solo intento y contador estable",
+      "Al agotar intentos observar decisión manual/automática configurada sin inventar recepción física"
+    ],
+    "negativos": "Foto corrupta también puede superar el control de archivo (H01); requiere regresión negativa después de corrección.",
+    "dependencias": [
+      {
+        "id": "D11",
+        "fuente": "XLSM Dependencias fila 14",
+        "consumidor": "CU-21",
+        "proveedor": "CU-04",
+        "contrato": "Catálogo de motivos versionado"
+      }
+    ]
+  },
+  {
+    "cu": "CU-22",
+    "nombre": "Devolución y rendición",
+    "fuente": "PDF §5.4 nº22; XLSM «CU obligatorios» A25:I25",
+    "actor": "Repartidor, depósito y despachador",
+    "entrada": "MAUI Rendicion/FinJornada; /deposito; /flota",
+    "implementacion": "EfOperacionesRepartoRepository, EfRutasRepository.RecibirAsync, flota",
+    "persistencia": "Custodia Repartidor→PendienteDeposito→Deposito y ocupación separada",
+    "tests": "OperacionesRepartoHttpTests, OcupacionFlotaHttpTests, ConciliacionEntregaHttpTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "RETORNO con presencia física de bultos/vehículo confirmable",
+    "pasos": [
+      "Declarar rendición de bultos que una persona realmente trae",
+      "Cerrar jornada; comprobar que no simula recepción ni libera vehículo",
+      "Depósito constata y recibe físicamente; verificar estado comercial que corresponde",
+      "Confirmar retorno y liberación por actores autorizados; repetir comando/versiones viejas y revisar historia"
+    ],
+    "negativos": "Cierre, rendición, retorno, recepción y liberación son hechos diferentes. No usar ni consultar la ruta/envío reservados.",
+    "dependencias": [
+      {
+        "id": "D13",
+        "fuente": "XLSM Dependencias fila 16",
+        "consumidor": "CU-22",
+        "proveedor": "CU-12",
+        "contrato": "Comandos y eventos de devolución"
+      }
+    ]
+  },
+  {
+    "cu": "CU-23",
+    "nombre": "Posición del vehículo",
+    "fuente": "PDF §5.4 nº23; XLSM «CU obligatorios» A26:I26",
+    "actor": "Repartidor; despachador",
+    "entrada": "MAUI tracking; operación Posicion; estimaciones B5",
+    "implementacion": "TrackingJornada, ServicioUbicacion, EfOperacionesRepartoRepository",
+    "persistencia": "OperacionesJornada con posición/precisión/instantes",
+    "tests": "Mobile Application/Core; EstimacionesVialesHttpTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "Android con permisos foreground/background y ruta en curso",
+    "pasos": [
+      "Dar permisos, iniciar jornada y moverse con dispositivo real",
+      "Apagar pantalla y dejar app en segundo plano; registrar duración/consumo y posiciones reales",
+      "Recuperar red y comprobar conservación de hora física, recepción y precisión",
+      "Denegar ubicación y revisar aviso/recuperación; no generar coordenadas ficticias"
+    ],
+    "negativos": "Recepción API/B5 no demuestra seguimiento continuo ni tablero SignalR (H05).",
+    "dependencias": [
+      {
+        "id": "D19",
+        "fuente": "XLSM Dependencias fila 22",
+        "consumidor": "CU-29",
+        "proveedor": "CU-23",
+        "contrato": "Evento de ubicación y canal SignalR"
+      }
+    ]
+  },
+  {
+    "cu": "CU-24",
+    "nombre": "Sincronización diferida",
+    "fuente": "PDF §5.4 nº24; XLSM «CU obligatorios» A27:I27",
+    "actor": "Repartidor y sistema",
+    "entrada": "MAUI cola offline; API operaciones/evidencias",
+    "implementacion": "SincronizadorJornada y RepositorioJornadasSqlite.Sincronizacion",
+    "persistencia": "SQLite/archivos cifrados; secuencias, hash, conflicto explícito",
+    "tests": "Mobile Core 36, Application 85, Api 63; OperacionesRepartoHttpTests",
+    "estado": "Pendiente de validación humana",
+    "precondiciones": "Ruta descargada; red controlable y segunda sesión despachador",
+    "pasos": [
+      "Sin red registrar carga/entrega/intento según circuito; cerrar/reabrir app",
+      "En servidor cambiar el mismo envío de forma autorizada desde otra sesión",
+      "Restablecer red; observar orden de archivos/operaciones y estado Conflicto si incompatible",
+      "Reintentar/cortar respuesta: no duplicar y conservar trabajo/evidencia para resolución humana"
+    ],
+    "negativos": "No sustituir resolución por éxito forzado; Android/SQLite real/cifrado en reposo siguen pendientes de prueba en dispositivo.",
+    "dependencias": [
+      {
+        "id": "D12",
+        "fuente": "XLSM Dependencias fila 15",
+        "consumidor": "CU-24",
+        "proveedor": "CU-11",
+        "contrato": "API de eventos idempotente + versión de estado"
+      },
+      {
+        "id": "D24",
+        "fuente": "XLSM Dependencias fila 27",
+        "consumidor": "CU-27",
+        "proveedor": "CU-24",
+        "contrato": "Evento confirmado por servidor"
+      }
+    ]
+  },
+  {
+    "cu": "CU-25",
+    "nombre": "Seguimiento público",
+    "fuente": "PDF §5.5 nº25; XLSM «CU obligatorios» A28:I28",
+    "actor": "Destinatario sin cuenta",
+    "entrada": "Tracking /seguimiento/{token}; GET /api/public/seguimiento/{token}",
+    "implementacion": "SeguimientoPublicoController, SeguimientoEstadoResponse",
+    "persistencia": "Enlaces opacos y estado actual RLS mediante función pública",
+    "tests": "PublicCancellationTests, EnlaceSeguimientoPostgresTests, ConsultarSeguimientoPublicoUseCaseTests",
+    "estado": "Brecha encontrada",
+    "precondiciones": "Enlace NUEVO obtenido del envío sintético",
+    "pasos": [
+      "Abrir enlace en sesión anónima y comprobar estado/marca correctos",
+      "Intentar token inválido y enumeración: no filtrar IDs/PII ni distinguir datos de terceros",
+      "Consultar historial y ventana estimada: actualmente no existen en el contrato (H03)",
+      "Probar límites de tasa en entorno aislado, no sobre servicio operativo"
+    ],
+    "negativos": "No confundir un enlace público existente con cumplimiento del recorrido público completo.",
+    "dependencias": [
+      {
+        "id": "D14",
+        "fuente": "XLSM Dependencias fila 17",
+        "consumidor": "CU-25",
+        "proveedor": "CU-12",
+        "contrato": "Proyección pública por token opaco"
+      },
+      {
+        "id": "D15",
+        "fuente": "XLSM Dependencias fila 18",
+        "consumidor": "CU-25",
+        "proveedor": "CU-05",
+        "contrato": "Identidad visual por tenant"
+      }
+    ]
+  },
+  {
+    "cu": "CU-26",
+    "nombre": "Reprogramación",
+    "fuente": "PDF §5.5 nº26; XLSM «CU obligatorios» A29:I29",
+    "actor": "Destinatario sin cuenta",
+    "entrada": "No se encontró solicitud pública de reprogramación; solo POST operador /api/envios/{id}/reprogramacion",
+    "implementacion": "RutasController.Reprogramar exige envios.gestionar; Tracking carece del formulario",
+    "persistencia": "No se encontró solicitud pública persistida",
+    "tests": "Pruebas de reprogramación OPERATIVA no prueban al destinatario",
+    "estado": "No implementado",
+    "precondiciones": "Token público nuevo y reglas de reprogramación definidas",
+    "pasos": [
+      "Abrir enlace como destinatario y buscar acción de reprogramar",
+      "Registrar que falta acción/endpoint público y detener ejecución funcional con brecha H04",
+      "Después de implementar: solicitar fecha/franja válida y probar política/versionado/doble envío",
+      "Comprobar que otro token no puede reprogramar este envío"
+    ],
+    "negativos": "Una cancelación pública ni la reprogramación interna por despachador sustituyen CU-26.",
+    "dependencias": [
+      {
+        "id": "D16",
+        "fuente": "XLSM Dependencias fila 19",
+        "consumidor": "CU-26",
+        "proveedor": "CU-04",
+        "contrato": "Validador de reprogramación"
+      }
+    ]
+  },
+  {
+    "cu": "CU-27",
+    "nombre": "Avisos al destinatario",
+    "fuente": "PDF §5.5 nº27; XLSM «CU obligatorios» A30:I30",
+    "actor": "Sistema; destinatario",
+    "entrada": "Worker: seguimiento, recuperación, código cancelación y push repartidor; no avisos de estado al destinatario",
+    "implementacion": "Program Worker, OutboxMessageTypes/OutboxHandlerRegistry",
+    "persistencia": "No se encontró entrega de avisos por transiciones a destinatarios",
+    "tests": "CreacionAutomaticaSeguimientoTests prueba crear enlace, no avisos CU-27",
+    "estado": "No implementado",
+    "precondiciones": "Buzón SMTP local/capturador nuevo; nunca proveedor pago",
+    "pasos": [
+      "Cambiar estado de envío nuevo con circuito válido",
+      "Observar que no hay mensaje CU-27 en contratos/handlers; registrar H04",
+      "Tras implementar, inspeccionar buzón local y correlación estado→outbox→worker→correo",
+      "Interrumpir receptor local y comprobar reintentos/idempotencia sin aviso prematuro por offline"
+    ],
+    "negativos": "No enviar a correos de personas; ejemplo.test no acredita entrega externa.",
+    "dependencias": [
+      {
+        "id": "D17",
+        "fuente": "XLSM Dependencias fila 20",
+        "consumidor": "CU-27",
+        "proveedor": "CU-12",
+        "contrato": "Evento de dominio mediante outbox"
+      },
+      {
+        "id": "D24",
+        "fuente": "XLSM Dependencias fila 27",
+        "consumidor": "CU-27",
+        "proveedor": "CU-24",
+        "contrato": "Evento confirmado por servidor"
+      }
+    ]
+  },
+  {
+    "cu": "CU-28",
+    "nombre": "Avisos a comercios",
+    "fuente": "PDF §5.5 nº28; XLSM «CU obligatorios» A31:I31",
+    "actor": "Comercio y worker",
+    "entrada": "No se encontró configuración de suscripción, historial/reenvío webhook ni receptor de prueba",
+    "implementacion": "OutboxMessageTypes y Worker sin contrato webhook de cambio de estado",
+    "persistencia": "Sin modelo de suscripción/entrega HTTP por comercio localizado",
+    "tests": "No hay prueba de firma/reintento/reenvío de webhook de comercio",
+    "estado": "No implementado",
+    "precondiciones": "C1/C2, receptor HTTP local con verificación de firma",
+    "pasos": [
+      "Buscar suscripción por evento en Commerce y registrar ausencia H04",
+      "Tras implementar, configurar receptor local y evento para C1",
+      "Generar estado, comprobar firma, tenant/evento e idempotencia del receptor",
+      "Apagar/reabrir receptor, inspeccionar backoff/fallidos y reenvío aislado C1/C2"
+    ],
+    "negativos": "Push FCM al repartidor y Kafka EnvioCreado no equivalen al webhook exigido por §6.9.",
+    "dependencias": [
+      {
+        "id": "D18",
+        "fuente": "XLSM Dependencias fila 21",
+        "consumidor": "CU-28",
+        "proveedor": "CU-12",
+        "contrato": "Evento de dominio mediante outbox"
+      }
+    ]
+  },
+  {
+    "cu": "CU-29",
+    "nombre": "Tablero en vivo",
+    "fuente": "PDF §5.5 nº29; XLSM «CU obligatorios» A32:I32",
+    "actor": "Despachador",
+    "entrada": "/flota muestra disponibilidad; no tablero de posición/riesgo SignalR localizado",
+    "implementacion": "Catálogo Backoffice sin tablero; API sin Hub/MapHub",
+    "persistencia": "Posiciones/estimaciones puntuales no constituyen proyección en vivo",
+    "tests": "B5/Flota prueban consultas y snapshots; no SignalR multinstancia",
+    "estado": "No implementado",
+    "precondiciones": "R1/R2 en jornada; dos operadores; dos API para prueba completa",
+    "pasos": [
+      "Abrir operación y buscar mapa vivo de flota con riesgo de ventanas",
+      "Registrar ausencia de hub/tablero H05; no presentar /flota como equivalente",
+      "Tras implementar, mover dispositivo real y observar actualización sin refrescar",
+      "Abrir B y cortar una API: aislamiento y continuidad del canal"
+    ],
+    "negativos": "Sin aceptación de precisión GPS/vial ni escalabilidad por ver un mapa estático.",
+    "dependencias": [
+      {
+        "id": "D19",
+        "fuente": "XLSM Dependencias fila 22",
+        "consumidor": "CU-29",
+        "proveedor": "CU-23",
+        "contrato": "Evento de ubicación y canal SignalR"
+      },
+      {
+        "id": "D20",
+        "fuente": "XLSM Dependencias fila 23",
+        "consumidor": "CU-29",
+        "proveedor": "CU-11",
+        "contrato": "Lectura de envíos y ventanas"
+      },
+      {
+        "id": "D21",
+        "fuente": "XLSM Dependencias fila 24",
+        "consumidor": "CU-29",
+        "proveedor": "CU-13",
+        "contrato": "Proyección de ruta y asignación"
+      }
+    ]
+  },
+  {
+    "cu": "CU-30",
+    "nombre": "Reportes y liquidación",
+    "fuente": "PDF §5.5 nº30; XLSM «CU obligatorios» A33:I33",
+    "actor": "Operador y comercio",
+    "entrada": "No reportes de cumplimiento/motivos/volumen/liquidación ni cuenta corriente localizados",
+    "implementacion": "Navegaciones y API sin reportes/liquidaciones; TarifaAplicada muestra cargo individual",
+    "persistencia": "Cargos/historia son insumos, sin agregados/ledger localizado",
+    "tests": "TarifaAdmisionHttpTests conserva cargos; no prueba liquidación",
+    "estado": "No implementado",
+    "precondiciones": "Varios envíos nuevos de zonas/comercios distintos; resultados conocidos",
+    "pasos": [
+      "Buscar reportes por zona/repartidor/comercio y registrar ausencia H05",
+      "Tras implementar, preparar totales independientes desde hechos sintéticos",
+      "Comparar filtros, período, zona horaria, paginación y aislamiento",
+      "Cambiar tarifa y recalcular reporte: cargo histórico no debe cambiar (D22/D23)"
+    ],
+    "negativos": "No contar el desglose de una tarifa individual como cuenta corriente o liquidación.",
+    "dependencias": [
+      {
+        "id": "D22",
+        "fuente": "XLSM Dependencias fila 25",
+        "consumidor": "CU-30",
+        "proveedor": "CU-09",
+        "contrato": "Tarifa aplicada e historial"
+      },
+      {
+        "id": "D23",
+        "fuente": "XLSM Dependencias fila 26",
+        "consumidor": "CU-30",
+        "proveedor": "CU-12",
+        "contrato": "Eventos inmutables / proyección analítica"
+      }
+    ]
+  }
+]

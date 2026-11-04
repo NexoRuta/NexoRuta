@@ -1,0 +1,2259 @@
+{
+  "source_sha256": {
+    "docs/alcance/ADR-MT-001-PostgreSQL-RLS.md": "705373c353299e8ffdfc29c7a042b905527af7b4625ad7acd78915cfa600b42c",
+    "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm": "fe1a0843dd8a7c5075414fc2796ab65c630e955b598edb123ce1840a1f9de389",
+    "docs/alcance/Calcs/Estrategia Multitenancy.xlsx": "6776547e862eb41eb4ad12adfd0fcad54e34256cd90fcb8b6bc39015f4c88566",
+    "docs/alcance/Diagramas/Diagrama-Arquitectura-Logica.png": "212fed36eee59db499d43afe59c3a91f0e6aa559f24f43664fc0d92d96f068ad",
+    "docs/alcance/Diagramas/Diagrama-Desplegue.png": "ec6952ac3943b4b2e1842c93e54910089c38a53de9a52f5ba0ce689e1db543b5",
+    "docs/alcance/Diagramas/Diagrama-Dominio.png": "245b7857adb6633eae54d56d64db67d3f5a9b0f42d6e79ade67272f7d39b9478",
+    "docs/alcance/Diagramas/Enlaces.docx": "64e822069db951c8dbccad073f58b36eeb13e419f12f7751bba1def1cefaa371",
+    "docs/alcance/Diagramas/Maquina-De-Estados-Propuesta.pdf": "d30d5d48bd39663d2967151b691256e060fa9642d857b69bb42a09f1c5d6893f",
+    "docs/alcance/Diagramas/maquina-estados-envio-corregida.png": "2837b931552cb05305800a7240aa8ab67ecb9a3fe5e10324f70cca0104d1b24e",
+    "docs/alcance/Entregas/Entrega-10-4-2026-Grupo-4.pdf": "e64f598c43bbea7d9958a9cd4470b3aeb6e5cd30d726052eb3566f92ad7cd1cf",
+    "docs/alcance/Laboratorio__NET_2026.pdf": "bc6ed3e25273f70495c120a1090edd6afc8934373b0856ca923afcf0adc5a679",
+    "docs/alcance/Monitoreo_2026-10-08_CU.xlsx": "09d73a9640e2b529f9a2edca391981e9a740c0870bbd189da743e531dadcc59a",
+    "docs/alcance/PDF_s/ADR-Multitenancy-Y-Arquitectura.pdf": "aa4046d9ab9dc18a294af3002635ac4730ea9b9f4bd13a7b8c88cb5e3ce39577",
+    "docs/alcance/PDF_s/ADR-Multitenancy.pdf": "078a2639b2dca5cfa50f326a822e6b70258fe453e7582f761fbe33d33e399b2e"
+  },
+  "heads": {
+    "principal": "13aefdb15d0f4d00cd870220e961717dcb48a1fd",
+    "backend": "bf4da61134e2c04db66f0e21bb99167dfb49306e",
+    "frontend": "1ca0172bec203af3fa860b34925e4562ec11ee44",
+    "mobile": "74a25f1b5b18c7dfc006cf7df747d73b0ec4910a"
+  },
+  "sheets": {
+    "Módulos": [
+      {
+        "A1": "Propuesta de agrupación funcional. Los números de CU remiten a los 30 requerimientos funcionales del enunciado. Fuente: Laboratorio__NET_2026.pdf, §5."
+      },
+      {
+        "A3": "ID",
+        "B3": "Módulo",
+        "C3": "Alcance funcional",
+        "D3": "Aplicaciones",
+        "E3": "Criterio de cierre propuesto",
+        "F3": "Integrante responsable"
+      },
+      {
+        "A4": "M01",
+        "B4": "Administración y configuración",
+        "C4": "Operadores, comercios, usuarios, zonas, franjas, tarifas, reglas y marca.",
+        "D4": "Backoffice Razor Pages; API",
+        "E4": "Configuración distinta para dos operadores, editable sin despliegue y con historial de versiones.",
+        "F4": "José Garcia"
+      },
+      {
+        "A5": "M02",
+        "B5": "Envíos y depósito",
+        "C5": "Alta, bultos, precio, recepción, estados y trazabilidad.",
+        "D5": "Portal Blazor; backoffice; API",
+        "E5": "Un envío puede registrarse, recibirse y avanzar por transiciones válidas con eventos inmutables."
+      },
+      {
+        "A6": "M03",
+        "B6": "Planificación, flota y despacho",
+        "C6": "Repartidores, vehículos, capacidad, rutas, asignación y despacho.",
+        "D6": "Backoffice Razor Pages; API",
+        "E6": "Una ruta válida se despacha una sola vez y queda disponible para el repartidor.",
+        "F6": "Nacho"
+      },
+      {
+        "A7": "M04",
+        "B7": "Ejecución y sincronización móvil",
+        "C7": "Trabajo de calle, carga, entrega, fallos, devolución, ubicación y operación sin conexión.",
+        "D7": ".NET MAUI; API",
+        "E7": "El repartidor completa la jornada sin red y sincroniza con conflictos resueltos explícitamente.",
+        "F7": "Nacho"
+      },
+      {
+        "A8": "M05",
+        "B8": "Seguimiento y comunicaciones",
+        "C8": "Consulta pública, reprogramación, notificaciones y avisos a sistemas de comercios.",
+        "D8": "Blazor público; worker; API",
+        "E8": "El destinatario consulta con enlace seguro y las notificaciones se entregan o quedan registradas para reintento.",
+        "F8": "José Hernández"
+      },
+      {
+        "A9": "M06",
+        "B9": "Monitoreo y liquidaciones",
+        "C9": "Tablero operativo en vivo y reportes de cumplimiento, volumen y liquidación.",
+        "D9": "Backoffice Razor Pages; SignalR; worker",
+        "E9": "El operador ve flota y riesgos en tiempo real y obtiene reportes por los cortes solicitados.",
+        "F9": "José Hernández"
+      },
+      {
+        "A11": "Criterio: cohesión del proceso y de las reglas de negocio. Seis módulos funcionales; la asignación entre cuatro integrantes queda abierta."
+      },
+      {
+        "A12": "Cada CU obligatorio tiene un único módulo principal. Las dependencias entre módulos están en la hoja Dependencias."
+      },
+      {
+        "A13": "El alcance §4 sin número funcional propio se registra aparte. Los opcionales siguen sin seleccionar; mínimo: 12 puntos."
+      }
+    ],
+    "CU obligatorios": [
+      {
+        "A1": "Fuente: Laboratorio__NET_2026.pdf, secciones 4 a 8 (UTEC, edición 2026)."
+      },
+      {
+        "A3": "CU ID",
+        "B3": "Nº fuente",
+        "C3": "Nombre breve",
+        "D3": "Requisito resumido",
+        "E3": "Módulo",
+        "F3": "Sección",
+        "G3": "Superficie",
+        "H3": "Actor principal",
+        "I3": "Tipo"
+      },
+      {
+        "A4": "CU-01",
+        "B4": "1",
+        "C4": "Comercios y usuarios",
+        "D4": "ABM de comercios y usuarios, perfiles y permisos.",
+        "E4": "M01",
+        "F4": "5.1",
+        "G4": "Backoffice",
+        "H4": "Operador / administrador",
+        "I4": "Obligatorio"
+      },
+      {
+        "A5": "CU-02",
+        "B5": "2",
+        "C5": "Zonas y franjas",
+        "D5": "Definir zonas de cobertura y franjas de entrega ofrecidas por zona.",
+        "E5": "M01",
+        "F5": "5.1",
+        "G5": "Backoffice",
+        "H5": "Operador / administrador",
+        "I5": "Obligatorio"
+      },
+      {
+        "A6": "CU-03",
+        "B6": "3",
+        "C6": "Tarifas configurables",
+        "D6": "Configurar tarifas por zona, peso, volumen y modalidad, con recargos y bonificaciones, desde la interfaz.",
+        "E6": "M01",
+        "F6": "5.1",
+        "G6": "Backoffice",
+        "H6": "Operador / administrador",
+        "I6": "Obligatorio"
+      },
+      {
+        "A7": "CU-04",
+        "B7": "4",
+        "C7": "Reglas operativas",
+        "D7": "Configurar intentos, intervalos, prueba exigida, motivos, devoluciones y plazos por modalidad.",
+        "E7": "M01",
+        "F7": "5.1",
+        "G7": "Backoffice",
+        "H7": "Operador / administrador",
+        "I7": "Obligatorio"
+      },
+      {
+        "A8": "CU-05",
+        "B8": "5",
+        "C8": "Identidad visual",
+        "D8": "Configurar marca, colores y contacto para portal, seguimiento y comunicaciones.",
+        "E8": "M01",
+        "F8": "5.1",
+        "G8": "Backoffice",
+        "H8": "Operador / administrador",
+        "I8": "Obligatorio"
+      },
+      {
+        "A9": "CU-06",
+        "B9": "6",
+        "C9": "Repartidores y vehículos",
+        "D9": "Gestionar repartidores, vehículos y capacidad de carga.",
+        "E9": "M03",
+        "F9": "5.1",
+        "G9": "Backoffice",
+        "H9": "Operador / administrador",
+        "I9": "Obligatorio"
+      },
+      {
+        "A10": "CU-07",
+        "B10": "7",
+        "C10": "Alta de envíos",
+        "D10": "Alta individual, por archivo y API; importación masiva idempotente, incluso parcial.",
+        "E10": "M02",
+        "F10": "5.2",
+        "G10": "Portal / API",
+        "H10": "Comercio",
+        "I10": "Obligatorio"
+      },
+      {
+        "A11": "CU-08",
+        "B11": "8",
+        "C11": "Bultos",
+        "D11": "Registrar uno o más bultos por envío, con identificación, peso y dimensiones.",
+        "E11": "M02",
+        "F11": "5.2",
+        "G11": "Portal / API",
+        "H11": "Comercio",
+        "I11": "Obligatorio"
+      },
+      {
+        "A12": "CU-09",
+        "B12": "9",
+        "C12": "Cálculo de tarifa",
+        "D12": "Calcular la tarifa automáticamente al alta según el cuadro vigente.",
+        "E12": "M02",
+        "F12": "5.2",
+        "G12": "Portal / API",
+        "H12": "Comercio",
+        "I12": "Obligatorio"
+      },
+      {
+        "A13": "CU-10",
+        "B13": "10",
+        "C13": "Recepción en depósito",
+        "D13": "Escanear y cotejar bultos contra lo declarado; registrar discrepancias.",
+        "E13": "M02",
+        "F13": "5.2",
+        "G13": "Backoffice / API",
+        "H13": "Operario de depósito",
+        "I13": "Obligatorio"
+      },
+      {
+        "A14": "CU-11",
+        "B14": "11",
+        "C14": "Estado del envío",
+        "D14": "Aplicar máquina de estados explícita y transiciones declarativas verificables.",
+        "E14": "M02",
+        "F14": "5.2",
+        "G14": "API / dominio",
+        "H14": "Sistema",
+        "I14": "Obligatorio"
+      },
+      {
+        "A15": "CU-12",
+        "B15": "12",
+        "C15": "Eventos del envío",
+        "D15": "Guardar historial completo e inmutable con fecha, origen, responsable y ubicación cuando corresponda.",
+        "E15": "M02",
+        "F15": "5.2",
+        "G15": "API / dominio",
+        "H15": "Sistema",
+        "I15": "Obligatorio"
+      },
+      {
+        "A16": "CU-13",
+        "B16": "13",
+        "C16": "Armar rutas",
+        "D16": "Asignar envíos a repartidor y vehículo en una hoja de ruta.",
+        "E16": "M03",
+        "F16": "5.3",
+        "G16": "Backoffice",
+        "H16": "Despachador",
+        "I16": "Obligatorio"
+      },
+      {
+        "A17": "CU-14",
+        "B17": "14",
+        "C17": "Validar restricciones",
+        "D17": "Validar máximo de paradas, peso, volumen y compatibilidad de franjas.",
+        "E17": "M03",
+        "F17": "5.3",
+        "G17": "Backoffice / API",
+        "H17": "Despachador",
+        "I17": "Obligatorio"
+      },
+      {
+        "A18": "CU-15",
+        "B18": "15",
+        "C18": "Evitar doble asignación",
+        "D18": "Impedir que dos despachadores asignen simultáneamente el mismo envío a rutas distintas.",
+        "E18": "M03",
+        "F18": "5.3",
+        "G18": "API / dominio",
+        "H18": "Despachador",
+        "I18": "Obligatorio"
+      },
+      {
+        "A19": "CU-16",
+        "B19": "16",
+        "C19": "Ordenar paradas",
+        "D19": "Ordenar paradas con criterio razonable y documentado; no se exige optimización.",
+        "E19": "M03",
+        "F19": "5.3",
+        "G19": "Backoffice / API",
+        "H19": "Despachador",
+        "I19": "Obligatorio"
+      },
+      {
+        "A20": "CU-17",
+        "B20": "17",
+        "C20": "Despachar ruta",
+        "D20": "Publicar la ruta despachada para la aplicación del repartidor.",
+        "E20": "M03",
+        "F20": "5.3",
+        "G20": "Backoffice / API",
+        "H20": "Despachador",
+        "I20": "Obligatorio"
+      },
+      {
+        "A21": "CU-18",
+        "B21": "18",
+        "C21": "Descargar ruta",
+        "D21": "Descargar hoja de ruta del día para uso sin conectividad.",
+        "E21": "M04",
+        "F21": "5.4",
+        "G21": "MAUI",
+        "H21": "Repartidor",
+        "I21": "Obligatorio"
+      },
+      {
+        "A22": "CU-19",
+        "B22": "19",
+        "C22": "Escanear carga",
+        "D22": "Escanear bultos al cargar y alertar faltantes o sobrantes.",
+        "E22": "M04",
+        "F22": "5.4",
+        "G22": "MAUI",
+        "H22": "Repartidor",
+        "I22": "Obligatorio"
+      },
+      {
+        "A23": "CU-20",
+        "B23": "20",
+        "C23": "Registrar entrega",
+        "D23": "Capturar prueba exigida (firma, foto, nombre y documento), hora y geolocalización del dispositivo.",
+        "E23": "M04",
+        "F23": "5.4",
+        "G23": "MAUI",
+        "H23": "Repartidor",
+        "I23": "Obligatorio"
+      },
+      {
+        "A24": "CU-21",
+        "B24": "21",
+        "C24": "Registrar intento fallido",
+        "D24": "Elegir motivo configurado y guardar evidencia.",
+        "E24": "M04",
+        "F24": "5.4",
+        "G24": "MAUI",
+        "H24": "Repartidor",
+        "I24": "Obligatorio"
+      },
+      {
+        "A25": "CU-22",
+        "B25": "22",
+        "C25": "Devolución y rendición",
+        "D25": "Gestionar devolución y rendición al regreso al depósito.",
+        "E25": "M04",
+        "F25": "5.4",
+        "G25": "MAUI / backoffice",
+        "H25": "Repartidor / depósito",
+        "I25": "Obligatorio"
+      },
+      {
+        "A26": "CU-23",
+        "B26": "23",
+        "C26": "Posición del vehículo",
+        "D26": "Seguir la ubicación del vehículo durante la jornada.",
+        "E26": "M04",
+        "F26": "5.4",
+        "G26": "MAUI / API",
+        "H26": "Repartidor / despachador",
+        "I26": "Obligatorio"
+      },
+      {
+        "A27": "CU-24",
+        "B27": "24",
+        "C27": "Sincronización diferida",
+        "D27": "Operar sin red y sincronizar con política explícita para estados incompatibles.",
+        "E27": "M04",
+        "F27": "5.4",
+        "G27": "MAUI / API",
+        "H27": "Repartidor / sistema",
+        "I27": "Obligatorio"
+      },
+      {
+        "A28": "CU-25",
+        "B28": "25",
+        "C28": "Seguimiento público",
+        "D28": "Consultar por enlace sin autenticación, sin datos personales de terceros ni IDs internos.",
+        "E28": "M05",
+        "F28": "5.5",
+        "G28": "Blazor público",
+        "H28": "Destinatario",
+        "I28": "Obligatorio"
+      },
+      {
+        "A29": "CU-26",
+        "B29": "26",
+        "C29": "Reprogramación",
+        "D29": "Solicitar reprogramación sujeta a las reglas del operador.",
+        "E29": "M05",
+        "F29": "5.5",
+        "G29": "Blazor público / API",
+        "H29": "Destinatario",
+        "I29": "Obligatorio"
+      },
+      {
+        "A30": "CU-27",
+        "B30": "27",
+        "C30": "Avisos al destinatario",
+        "D30": "Notificar automáticamente los cambios de estado relevantes.",
+        "E30": "M05",
+        "F30": "5.5",
+        "G30": "Worker",
+        "H30": "Sistema",
+        "I30": "Obligatorio"
+      },
+      {
+        "A31": "CU-28",
+        "B31": "28",
+        "C31": "Avisos a comercios",
+        "D31": "Enviar HTTP saliente ante cambios de estado, con garantías de entrega del apartado 6.9.",
+        "E31": "M05",
+        "F31": "5.5",
+        "G31": "Worker / portal",
+        "H31": "Sistema / comercio",
+        "I31": "Obligatorio"
+      },
+      {
+        "A32": "CU-29",
+        "B32": "29",
+        "C32": "Tablero en vivo",
+        "D32": "Mostrar flota y envíos en riesgo de incumplir su ventana.",
+        "E32": "M06",
+        "F32": "5.5",
+        "G32": "Backoffice / SignalR",
+        "H32": "Despachador",
+        "I32": "Obligatorio"
+      },
+      {
+        "A33": "CU-30",
+        "B33": "30",
+        "C33": "Reportes y liquidación",
+        "D33": "Reportar cumplimiento por zona, repartidor y comercio; motivos, volumen y liquidación.",
+        "E33": "M06",
+        "F33": "5.5",
+        "G33": "Backoffice",
+        "H33": "Operador / comercio",
+        "I33": "Obligatorio"
+      }
+    ],
+    "Alcance aplicaciones": [
+      {
+        "A1": "Fuente: Laboratorio__NET_2026.pdf, sección 4. Capacidades explícitas sin número propio en el listado mínimo de §5; no son opcionales."
+      },
+      {
+        "A3": "ID",
+        "B3": "Capacidad",
+        "C3": "Descripción",
+        "D3": "Módulo",
+        "E3": "Aplicación",
+        "F3": "Sección",
+        "G3": "Estado de definición"
+      },
+      {
+        "A4": "AP-01",
+        "B4": "Gestión de incidencias",
+        "C4": "Registrar y resolver incidencias desde el backoffice.",
+        "D4": "M06",
+        "E4": "Backoffice",
+        "F4": "4",
+        "G4": "Detalle funcional a diseñar"
+      },
+      {
+        "A5": "AP-02",
+        "B5": "Etiquetas",
+        "C5": "Imprimir etiquetas de envíos desde el portal del comercio.",
+        "D5": "M02",
+        "E5": "Portal Blazor",
+        "F5": "4",
+        "G5": "Detalle funcional a diseñar"
+      },
+      {
+        "A6": "AP-03",
+        "B6": "Consulta del comercio",
+        "C6": "El comercio consulta y sigue exclusivamente sus propios envíos.",
+        "D6": "M02",
+        "E6": "Portal Blazor",
+        "F6": "4",
+        "G6": "Detalle funcional a diseñar"
+      },
+      {
+        "A7": "AP-04",
+        "B7": "Devoluciones del comercio",
+        "C7": "El comercio consulta y gestiona devoluciones de sus envíos.",
+        "D7": "M02",
+        "E7": "Portal Blazor",
+        "F7": "4",
+        "G7": "Detalle funcional a diseñar"
+      },
+      {
+        "A8": "AP-05",
+        "B8": "Suscripción de avisos",
+        "C8": "El comercio configura los avisos automáticos a sus sistemas.",
+        "D8": "M05",
+        "E8": "Portal Blazor",
+        "F8": "4",
+        "G8": "Detalle funcional a diseñar"
+      },
+      {
+        "A9": "AP-06",
+        "B9": "Cuenta corriente",
+        "C9": "El comercio consulta cuenta corriente y liquidaciones.",
+        "D9": "M06",
+        "E9": "Portal Blazor",
+        "F9": "4",
+        "G9": "Detalle funcional a diseñar"
+      },
+      {
+        "A10": "AP-07",
+        "B10": "Ventana estimada",
+        "C10": "El destinatario ve la ventana horaria estimada en el seguimiento público.",
+        "D10": "M05",
+        "E10": "Blazor público",
+        "F10": "4",
+        "G10": "Detalle funcional a diseñar"
+      },
+      {
+        "A11": "AP-08",
+        "B11": "Navegación de ruta",
+        "C11": "El repartidor navega entre las paradas de la hoja de ruta.",
+        "D11": "M04",
+        "E11": ".NET MAUI",
+        "F11": "4",
+        "G11": "Detalle funcional a diseñar"
+      },
+      {
+        "A12": "AP-09",
+        "B12": "Cierre diario",
+        "C12": "El worker ejecuta el cierre diario de la operación.",
+        "D12": "M06",
+        "E12": "Worker",
+        "F12": "4",
+        "G12": "Detalle funcional a diseñar"
+      }
+    ],
+    "Dependencias": [
+      {
+        "A1": "Fuente: Laboratorio__NET_2026.pdf, secciones 4 a 8 (UTEC, edición 2026)."
+      },
+      {
+        "A3": "ID",
+        "B3": "Módulo consumidor",
+        "C3": "Módulo proveedor",
+        "D3": "CU consumidor",
+        "E3": "CU proveedor",
+        "F3": "Tipo",
+        "G3": "Motivo de dependencia",
+        "H3": "Contrato a acordar",
+        "I3": "Riesgo si falla"
+      },
+      {
+        "A4": "D01",
+        "B4": "M02",
+        "C4": "M01",
+        "D4": "CU-07",
+        "E4": "CU-01",
+        "F4": "Identidad y acceso",
+        "G4": "El alta identifica comercio y operador; el mismo comercio puede operar con varios operadores.",
+        "H4": "Contexto de operador + vínculo comercio-operador",
+        "I4": "Alta o consulta en tenant equivocado."
+      },
+      {
+        "A5": "D02",
+        "B5": "M02",
+        "C5": "M01",
+        "D5": "CU-09",
+        "E5": "CU-03",
+        "F5": "Regla / datos",
+        "G5": "El precio usa la versión tarifaria vigente al alta.",
+        "H5": "Servicio de cálculo + ID de versión de tarifa",
+        "I5": "Cambios retroactivos de precio."
+      },
+      {
+        "A6": "D03",
+        "B6": "M02",
+        "C6": "M01",
+        "D6": "CU-11",
+        "E6": "CU-04",
+        "F6": "Regla",
+        "G6": "Estados de intento, devolución y plazos aplican reglas del operador.",
+        "H6": "Versión de reglas asociada al envío",
+        "I6": "Transiciones distintas entre operadores."
+      },
+      {
+        "A7": "D04",
+        "B7": "M03",
+        "C7": "M01",
+        "D7": "CU-13",
+        "E7": "CU-02",
+        "F7": "Datos",
+        "G7": "La planificación necesita zona y ventana comprometida.",
+        "H7": "Zona y franja del envío",
+        "I7": "Ruta incompatible con promesa al destinatario."
+      },
+      {
+        "A8": "D05",
+        "B8": "M03",
+        "C8": "M02",
+        "D8": "CU-13",
+        "E8": "CU-11",
+        "F8": "Estado / datos",
+        "G8": "Solo envíos elegibles pueden asignarse a ruta.",
+        "H8": "Consulta de candidatos + comando de asignación",
+        "I8": "Doble asignación o estado inválido."
+      },
+      {
+        "A9": "D06",
+        "B9": "M03",
+        "C9": "M02",
+        "D9": "CU-14",
+        "E9": "CU-08",
+        "F9": "Datos",
+        "G9": "Capacidad y paradas dependen de peso, dimensiones y cantidad de bultos.",
+        "H9": "Datos de bultos y envío",
+        "I9": "Ruta que supera capacidad."
+      },
+      {
+        "A10": "D07",
+        "B10": "M03",
+        "C10": "M01",
+        "D10": "CU-14",
+        "E10": "CU-02",
+        "F10": "Regla / datos",
+        "G10": "Las restricciones de franja dependen de configuración por zona.",
+        "H10": "Calendario y ventanas configuradas",
+        "I10": "Compromisos incumplibles."
+      },
+      {
+        "A11": "D08",
+        "B11": "M04",
+        "C11": "M03",
+        "D11": "CU-18",
+        "E11": "CU-17",
+        "F11": "Contrato",
+        "G11": "La app descarga solo rutas despachadas para el repartidor.",
+        "H11": "Contrato versionado de hoja de ruta",
+        "I11": "App sin datos o con versión incompatible."
+      },
+      {
+        "A12": "D09",
+        "B12": "M04",
+        "C12": "M03",
+        "D12": "CU-19",
+        "E12": "CU-13",
+        "F12": "Datos",
+        "G12": "El escaneo compara carga física con bultos asignados.",
+        "H12": "Lista de bultos por ruta",
+        "I12": "Carga incompleta sin alerta."
+      },
+      {
+        "A13": "D10",
+        "B13": "M04",
+        "C13": "M01",
+        "D13": "CU-20",
+        "E13": "CU-04",
+        "F13": "Regla",
+        "G13": "La prueba de entrega requerida varía por operador.",
+        "H13": "Política de evidencia versionada",
+        "I13": "Pruebas insuficientes o innecesarias."
+      },
+      {
+        "A14": "D11",
+        "B14": "M04",
+        "C14": "M01",
+        "D14": "CU-21",
+        "E14": "CU-04",
+        "F14": "Regla",
+        "G14": "Los motivos válidos de no entrega provienen del catálogo del operador.",
+        "H14": "Catálogo de motivos versionado",
+        "I14": "Motivos inválidos sin conexión."
+      },
+      {
+        "A15": "D12",
+        "B15": "M04",
+        "C15": "M02",
+        "D15": "CU-24",
+        "E15": "CU-11",
+        "F15": "Estado / contrato",
+        "G15": "La sincronización debe validar transiciones y resolver conflicto con el servidor.",
+        "H15": "API de eventos idempotente + versión de estado",
+        "I15": "Pérdida o duplicación de eventos."
+      },
+      {
+        "A16": "D13",
+        "B16": "M04",
+        "C16": "M02",
+        "D16": "CU-22",
+        "E16": "CU-12",
+        "F16": "Evento",
+        "G16": "La rendición y devolución generan eventos de envío trazables.",
+        "H16": "Comandos y eventos de devolución",
+        "I16": "Devoluciones sin trazabilidad."
+      },
+      {
+        "A17": "D14",
+        "B17": "M05",
+        "C17": "M02",
+        "D17": "CU-25",
+        "E17": "CU-12",
+        "F17": "Evento / lectura",
+        "G17": "El seguimiento presenta estado e historial del envío.",
+        "H17": "Proyección pública por token opaco",
+        "I17": "Datos desactualizados o expuestos."
+      },
+      {
+        "A18": "D15",
+        "B18": "M05",
+        "C18": "M01",
+        "D18": "CU-25",
+        "E18": "CU-05",
+        "F18": "Datos",
+        "G18": "La consulta pública usa marca y contacto del operador.",
+        "H18": "Identidad visual por tenant",
+        "I18": "Marca incorrecta o filtración entre tenants."
+      },
+      {
+        "A19": "D16",
+        "B19": "M05",
+        "C19": "M01",
+        "D19": "CU-26",
+        "E19": "CU-04",
+        "F19": "Regla",
+        "G19": "La solicitud de reprogramación respeta intentos y plazos.",
+        "H19": "Validador de reprogramación",
+        "I19": "Reprogramaciones fuera de política."
+      },
+      {
+        "A20": "D17",
+        "B20": "M05",
+        "C20": "M02",
+        "D20": "CU-27",
+        "E20": "CU-12",
+        "F20": "Evento",
+        "G20": "Las notificaciones nacen de cambios de estado persistidos.",
+        "H20": "Evento de dominio mediante outbox",
+        "I20": "Aviso sin estado persistido o aviso perdido."
+      },
+      {
+        "A21": "D18",
+        "B21": "M05",
+        "C21": "M02",
+        "D21": "CU-28",
+        "E21": "CU-12",
+        "F21": "Evento",
+        "G21": "Los webhooks del comercio nacen de cambios de estado.",
+        "H21": "Evento de dominio mediante outbox",
+        "I21": "Avisos duplicados o ausentes."
+      },
+      {
+        "A22": "D19",
+        "B22": "M06",
+        "C22": "M04",
+        "D22": "CU-29",
+        "E22": "CU-23",
+        "F22": "Telemetría",
+        "G22": "La posición de la flota alimenta el tablero en vivo.",
+        "H22": "Evento de ubicación y canal SignalR",
+        "I22": "Mapa sin posición actual."
+      },
+      {
+        "A23": "D20",
+        "B23": "M06",
+        "C23": "M02",
+        "D23": "CU-29",
+        "E23": "CU-11",
+        "F23": "Estado",
+        "G23": "El tablero detecta envíos en riesgo según estado y compromiso.",
+        "H23": "Lectura de envíos y ventanas",
+        "I23": "Alertas de riesgo incorrectas."
+      },
+      {
+        "A24": "D21",
+        "B24": "M06",
+        "C24": "M03",
+        "D24": "CU-29",
+        "E24": "CU-13",
+        "F24": "Datos",
+        "G24": "El tablero relaciona envíos con rutas y repartidores.",
+        "H24": "Proyección de ruta y asignación",
+        "I24": "Visión operativa incompleta."
+      },
+      {
+        "A25": "D22",
+        "B25": "M06",
+        "C25": "M02",
+        "D25": "CU-30",
+        "E25": "CU-09",
+        "F25": "Datos",
+        "G25": "La liquidación usa cargos calculados al alta.",
+        "H25": "Tarifa aplicada e historial",
+        "I25": "Liquidación recalculada con reglas nuevas."
+      },
+      {
+        "A26": "D23",
+        "B26": "M06",
+        "C26": "M02",
+        "D26": "CU-30",
+        "E26": "CU-12",
+        "F26": "Evento / lectura",
+        "G26": "Los indicadores se agregan desde el historial de envíos.",
+        "H26": "Eventos inmutables / proyección analítica",
+        "I26": "Reportes inconsistentes."
+      },
+      {
+        "A27": "D24",
+        "B27": "M05",
+        "C27": "M04",
+        "D27": "CU-27",
+        "E27": "CU-24",
+        "F27": "Evento",
+        "G27": "Entregas offline notifican luego de sincronizarse y persistirse.",
+        "H27": "Evento confirmado por servidor",
+        "I27": "Aviso prematuro de entrega."
+      }
+    ],
+    "No funcionales": [
+      {
+        "A1": "Fuente: Laboratorio__NET_2026.pdf, secciones 4 a 8 (UTEC, edición 2026)."
+      },
+      {
+        "A3": "ID",
+        "B3": "Sección",
+        "C3": "Bloque",
+        "D3": "Módulo de referencia",
+        "E3": "Módulos afectados",
+        "F3": "Exigencia resumida"
+      },
+      {
+        "A4": "NFR-01",
+        "B4": "6.1",
+        "C4": "Plataforma y arquitectura",
+        "D4": "M01",
+        "E4": "Todos",
+        "F4": "NET 10; monolito modular API/web; worker separado por cola; dominio independiente; prueba de arquitectura; ADR; Docker Compose."
+      },
+      {
+        "A5": "NFR-02",
+        "B5": "6.2",
+        "C5": "Presentación web",
+        "D5": "M01",
+        "E5": "M01, M02, M05, M06",
+        "F5": "Backoffice Razor Pages; portal y público Blazor; ADR del modo de renderizado y su efecto operativo."
+      },
+      {
+        "A6": "NFR-03",
+        "B6": "6.3",
+        "C6": "Seguridad",
+        "D6": "M01",
+        "E6": "Todos",
+        "F6": "OIDC/OAuth 2.1 con PKCE o Identity; autorización API por rol/tenant/comercio; secretos, TLS, CORS, rate limit, cabeceras y cifrado móvil."
+      },
+      {
+        "A7": "NFR-04",
+        "B7": "6.4",
+        "C7": "Persistencia",
+        "D7": "M02",
+        "E7": "M02, M03, M04",
+        "F7": "Base principal con EF Core y migraciones; SQLite móvil; concurrencia optimista demostrada."
+      },
+      {
+        "A8": "NFR-05",
+        "B8": "6.5",
+        "C8": "Multitenancy",
+        "D8": "M01",
+        "E8": "Todos",
+        "F8": "Estrategia y resolución de tenant; aislamiento lectura/escritura y de comercios; tests, branding, migraciones y dos operadores."
+      },
+      {
+        "A9": "NFR-06",
+        "B9": "6.6",
+        "C9": "Configurabilidad",
+        "D9": "M01",
+        "E9": "M01, M02, M04, M05",
+        "F9": "Tarifas y reglas editables en caliente y versionadas; envíos previos conservan tratamiento."
+      },
+      {
+        "A10": "NFR-07",
+        "B10": "6.7",
+        "C10": "Caché distribuido",
+        "D10": "M05",
+        "E10": "M01, M05",
+        "F10": "Dos casos de uso con perfiles distintos, expiración e invalidación y métricas hit/miss."
+      },
+      {
+        "A11": "NFR-08",
+        "B11": "6.8",
+        "C11": "Mensajería y worker",
+        "D11": "M05",
+        "E11": "M02, M04, M05, M06",
+        "F11": "Outbox; consumidor idempotente; reintentos crecientes, cola de fallidos y panel de reintento."
+      },
+      {
+        "A12": "NFR-09",
+        "B12": "6.9",
+        "C12": "Avisos a comercios",
+        "D12": "M05",
+        "E12": "M02, M05",
+        "F12": "Suscripción por comercio y evento; firma, reintentos, fallidos, historial/reenvío y receptor de prueba."
+      },
+      {
+        "A13": "NFR-10",
+        "B13": "6.10",
+        "C13": "Tiempo real",
+        "D13": "M06",
+        "E13": "M04, M06",
+        "F13": "SignalR con autenticación, autorización, aislamiento tenant y varias instancias API."
+      },
+      {
+        "A14": "NFR-11",
+        "B14": "6.11",
+        "C14": "MAUI",
+        "D14": "M04",
+        "E14": "M04",
+        "F14": "MVVM, ubicación segundo plano, escaneo, evidencia, offline cifrado, biometría y avisos con app cerrada."
+      },
+      {
+        "A15": "NFR-12",
+        "B15": "6.12",
+        "C15": "Observabilidad",
+        "D15": "M06",
+        "E15": "Todos",
+        "F15": "Serilog, OpenTelemetry, correlación extremo a extremo y tablero con latencia, errores, cola, sync, fallidos y caché."
+      },
+      {
+        "A16": "NFR-13",
+        "B16": "6.13",
+        "C16": "Escalabilidad",
+        "D16": "M01",
+        "E16": "M01, M05, M06",
+        "F16": "Dos API balanceadas, continuidad, API sin estado, health/ready/live, cierre controlado, claves compartidas y jobs únicos."
+      },
+      {
+        "A17": "NFR-14",
+        "B17": "6.14",
+        "C17": "Nube e IaC",
+        "D17": "M01",
+        "E17": "Todos",
+        "F17": "Nube remota HTTPS; IaC reproducible, variables, secretos, CI/CD y evidencia de costo."
+      },
+      {
+        "A18": "NFR-15",
+        "B18": "6.15",
+        "C18": "Calidad",
+        "D18": "M02",
+        "E18": "Todos",
+        "F18": "Pruebas unitarias de dominio, integración crítica, arquitectura y aislamiento, todas en pipeline."
+      }
+    ],
+    "Opcionales": [
+      {
+        "A1": "Catálogo del enunciado §7. Ninguno está seleccionado. La relación con un módulo es orientativa y no implica compromiso. Mínimo para 4 integrantes: 12 puntos."
+      },
+      {
+        "A3": "ID",
+        "B3": "Sección",
+        "C3": "Requisito opcional",
+        "D3": "Puntos",
+        "E3": "Módulo relacionado",
+        "F3": "Decisión del equipo",
+        "G3": "Condición de cumplimiento resumida"
+      },
+      {
+        "A4": "OPT-01",
+        "B4": "7.1",
+        "C4": "Seguimiento público como servicio independiente",
+        "D4": "4",
+        "E4": "M05",
+        "F4": "Descartado",
+        "G4": "Base propia de solo lectura alimentada solo por cola; consistencia eventual medida y escalado independiente."
+      },
+      {
+        "A5": "OPT-02",
+        "B5": "7.1",
+        "C5": "gRPC para sincronización y telemetría móvil",
+        "D5": "4",
+        "E5": "M04",
+        "F5": "Descartado",
+        "G5": "Client streaming, protobuf y comparación medida con REST en red degradada."
+      },
+      {
+        "A6": "OPT-03",
+        "B6": "7.1",
+        "C6": "Kafka para eventos de flota",
+        "D6": "3",
+        "E6": "M04 / M06",
+        "F6": "Seleccionado",
+        "G6": "Más de un consumidor y reconstrucción por replay; justificar coexistencia con cola obligatoria."
+      },
+      {
+        "A7": "OPT-04",
+        "B7": "7.1",
+        "C7": "Autoescalado horizontal",
+        "D7": "3",
+        "E7": "M01",
+        "F7": "Descartado",
+        "G7": "Escalado automático por métricas con prueba de carga."
+      },
+      {
+        "A8": "OPT-05",
+        "B8": "7.2",
+        "C8": "NoSQL para historial y analítica",
+        "D8": "2",
+        "E8": "M02 / M06",
+        "F8": "Seleccionado",
+        "G8": "Base documental, índices, retención y API paginada y filtrable."
+      },
+      {
+        "A9": "OPT-06",
+        "B9": "7.2",
+        "C9": "Pruebas de carga automatizadas",
+        "D9": "2",
+        "E9": "M06",
+        "F9": "Seleccionado",
+        "G9": "Escenarios, objetivos previos y sincronización simultánea en ambiente remoto."
+      },
+      {
+        "A10": "OPT-07",
+        "B10": "7.2",
+        "C10": "Cobertura de pruebas",
+        "D10": "2",
+        "E10": "Transversal",
+        "F10": "Seleccionado",
+        "G10": "Más de 70 % de cobertura en dominio y aplicación, publicada por pipeline."
+      },
+      {
+        "A11": "OPT-08",
+        "B11": "7.2",
+        "C11": "Pruebas extremo a extremo",
+        "D11": "2",
+        "E11": "Transversal",
+        "F11": "Seleccionado",
+        "G11": "Playwright o equivalente para flujos críticos, integrado al pipeline."
+      },
+      {
+        "A12": "OPT-09",
+        "B12": "7.3",
+        "C12": "Notificaciones remotas en producción",
+        "D12": "3",
+        "E12": "M04",
+        "F12": "Seleccionado",
+        "G12": "Push real con app cerrada ante reasignación urgente y ciclo de vida de IDs de dispositivo."
+      },
+      {
+        "A13": "OPT-10",
+        "B13": "7.3",
+        "C13": "Geocercas",
+        "D13": "3",
+        "E13": "M04",
+        "F13": "Descartado",
+        "G13": "Llegada y salida automáticas de parada y análisis de batería."
+      },
+      {
+        "A14": "OPT-11",
+        "B14": "7.3",
+        "C14": "Impresión Bluetooth",
+        "D14": "2",
+        "E14": "M04",
+        "F14": "Descartado",
+        "G14": "Etiqueta o comprobante desde móvil a impresora térmica."
+      },
+      {
+        "A15": "OPT-12",
+        "B15": "7.3",
+        "C15": "Optimización del orden de paradas",
+        "D15": "2",
+        "E15": "M03",
+        "F15": "Descartado",
+        "G15": "Algoritmo o servicio, comparado con el criterio obligatorio del CU-16."
+      },
+      {
+        "A16": "OPT-13",
+        "B16": "7.4",
+        "C16": "API pública para comercios",
+        "D16": "3",
+        "E16": "M02",
+        "F16": "Descartado",
+        "G16": "API documentada/versionada con claves por comercio, sandbox y rate limit diferenciado."
+      },
+      {
+        "A17": "OPT-14",
+        "B17": "7.4",
+        "C17": "Banderas de funcionalidad",
+        "D17": "2",
+        "E17": "M01",
+        "F17": "Descartado",
+        "G17": "Activación por tenant en caliente, sin despliegue."
+      },
+      {
+        "A18": "OPT-15",
+        "B18": "7.4",
+        "C18": "Pruebas de resiliencia",
+        "D18": "2",
+        "E18": "Transversal",
+        "F18": "Descartado",
+        "G18": "Cortes deliberados de caché, cola, BD y servicio externo con comparación esperado/observado."
+      }
+    ]
+  },
+  "secondary_workbooks": {
+    "docs/alcance/Calcs/Estrategia Multitenancy.xlsx": {
+      "Estrategias": [
+        {
+          "A1": "Estrategias de multitenancy"
+        },
+        {
+          "A2": "Contexto: operador logístico = tenant; comercio = segundo nivel de aislamiento. Blazor y MAUI consumen la API, que aplica la autorización."
+        },
+        {
+          "A3": "Alternativas para discusión; el equipo aún no seleccionó una."
+        },
+        {
+          "A5": "Nombre de la estrategia",
+          "B5": "Breve resumen de cómo funciona"
+        },
+        {
+          "A6": "Base y esquema compartidos (por fila)",
+          "B6": "Todos los operadores usan las mismas tablas. Cada registro lleva OperadorId y, cuando corresponde, ComercioId. La API resuelve el operador autenticado y EF Core puede aplicar filtros globales; las escrituras y relaciones también deben validar ambos niveles."
+        },
+        {
+          "A7": "Por fila con seguridad en la base de datos (RLS)",
+          "B7": "Mantiene la base y las tablas compartidas, pero agrega políticas de seguridad por fila en la base de datos. La API establece el contexto del operador para cada acceso; la política restringe lecturas y escrituras. En SQL Server puede implementarse con Row-Level Security y complementa los controles de EF Core."
+        },
+        {
+          "A8": "Esquema por operador",
+          "B8": "Una sola base contiene un esquema de tablas por operador. La API elige el esquema según el operador y dentro de él separa los comercios por ComercioId. Requiere resolver manualmente modelos y migraciones por esquema: la guía oficial de EF Core no ofrece soporte directo para esta estrategia."
+        },
+        {
+          "A9": "Base de datos por operador",
+          "B9": "Cada operador tiene su propia base con el mismo modelo. La API resuelve el operador y selecciona su cadena de conexión; dentro de cada base restringe datos por comercio. Las migraciones y datos iniciales se aplican a cada base por separado."
+        },
+        {
+          "A10": "Modelo híbrido",
+          "B10": "Un directorio de operadores decide si cada uno usa la base compartida o una base dedicada. La API enruta las operaciones y mantiene el aislamiento de comercios dentro de cada operador. Permite mover operadores según necesidad, pero exige mantener ambos mecanismos y migrar datos con cuidado."
+        },
+        {
+          "A12": "Fuentes: Laboratorio__NET_2026.pdf, §§3.3 y 6.5."
+        },
+        {
+          "A13": "Microsoft Learn, EF Core Multi-tenancy: https://learn.microsoft.com/en-us/ef/core/miscellaneous/multitenancy"
+        },
+        {
+          "A14": "Microsoft Learn, SQL Server Row-Level Security: https://learn.microsoft.com/en-us/sql/relational-databases/security/row-level-security"
+        }
+      ]
+    },
+    "docs/alcance/Monitoreo_2026-10-08_CU.xlsx": {
+      "CU 08-10": [
+        {
+          "A2": "Monitoreo 08/10",
+          "B2": "CU necesarios"
+        },
+        {
+          "A3": "Objetivo verificable",
+          "C3": "El entorno arranca con docker compose up; un envío creado desde el portal se ve en backoffice; el pipeline de CI corre."
+        },
+        {
+          "A5": "CU requeridos"
+        },
+        {
+          "A6": "ID",
+          "B6": "Caso de uso",
+          "C6": "Recorte necesario para el 8/10",
+          "D6": "Comprobación en la demostración"
+        },
+        {
+          "A7": "CU-01",
+          "B7": "Comercios y usuarios",
+          "C7": "Contar con un operador, un comercio y un usuario de prueba vinculados para identificar a quién pertenece el envío. El ABM y los perfiles completos no son necesarios para este hito.",
+          "D7": "Entrar al portal con el comercio de prueba y confirmar que el alta queda asociada al operador y comercio previstos."
+        },
+        {
+          "A8": "CU-07",
+          "B8": "Alta de envíos",
+          "C8": "Implementar el alta individual desde el portal Blazor, pasando por la API y guardando el envío en PostgreSQL. El alta por archivo y por API de comercios, con su idempotencia masiva, queda fuera de este corte.",
+          "D8": "Crear un envío nuevo en el portal, anotar su identificador y encontrar ese mismo registro en el backoffice tras recargar."
+        },
+        {
+          "A9": "CU-08",
+          "B9": "Bultos",
+          "C9": "Registrar al menos un bulto del envío con identificación, peso y dimensiones, persistido junto con el alta. Es el dato mínimo para probar un envío real del dominio.",
+          "D9": "Comprobar que el envío recién creado conserva su bulto y sus datos al consultarlo desde el backoffice o la API."
+        },
+        {
+          "A11": "Condiciones técnicas"
+        },
+        {
+          "A12": "ID",
+          "B12": "Condición",
+          "C12": "Criterio de salida",
+          "D12": "Evidencia a mostrar"
+        },
+        {
+          "A13": "T-01",
+          "B13": "Entorno completo",
+          "C13": "docker compose up inicia web/API, worker, PostgreSQL, caché, cola y observabilidad.",
+          "D13": "Mostrar arranque y salud de contenedores; abrir portal y backoffice sin preparación manual adicional."
+        },
+        {
+          "A14": "T-02",
+          "B14": "Flujo entre aplicaciones",
+          "C14": "La vista del backoffice lee el envío persistido por el portal. Es una condición expresa del monitoreo y no un CU numerado independiente.",
+          "D14": "Alta en el portal y consulta del mismo identificador en el backoffice, sobre los servicios levantados con Compose."
+        },
+        {
+          "A15": "T-03",
+          "B15": "Integración continua",
+          "C15": "El pipeline del repositorio se ejecuta y termina correctamente con compilación y pruebas base disponibles.",
+          "D15": "Mostrar la ejecución de CI vinculada al código que se está demostrando y su resultado."
+        },
+        {
+          "A17": "Límite del hito"
+        },
+        {
+          "A18": "Alcance",
+          "C18": "Este es un corte demostrable, no el cierre total de esos CU. La máquina de estados completa, multitenancy con dos operadores y autorización por perfil corresponden al monitoreo del 15/10. El cálculo tarifario del CU-09 no es condición explícita del 8/10."
+        },
+        {
+          "A20": "Fuentes",
+          "C20": "Laboratorio__NET_2026.pdf, §§5 y 8.3; Casos de Uso - Responsables.xlsm, hojas CU obligatorios y Dependencias."
+        }
+      ]
+    }
+  },
+  "controllers": [
+    {
+      "file": "backend/src/NexoRuta.Api/Controllers/AuthController.cs",
+      "attributes": [
+        {
+          "line": 17,
+          "text": "[Route(\"api/auth\")]"
+        },
+        {
+          "line": 25,
+          "text": "[HttpPost(\"register\")]"
+        },
+        {
+          "line": 26,
+          "text": "[AllowAnonymous]"
+        },
+        {
+          "line": 27,
+          "text": "[EnableRateLimiting(\"auth-register\")]"
+        },
+        {
+          "line": 39,
+          "text": "[HttpPost(\"login\")]"
+        },
+        {
+          "line": 40,
+          "text": "[AllowAnonymous]"
+        },
+        {
+          "line": 41,
+          "text": "[EnableRateLimiting(\"auth-login\")]"
+        },
+        {
+          "line": 73,
+          "text": "[HttpPost(\"password-recovery/request\")]"
+        },
+        {
+          "line": 74,
+          "text": "[AllowAnonymous]"
+        },
+        {
+          "line": 75,
+          "text": "[EnableRateLimiting(\"auth-password-recovery\")]"
+        },
+        {
+          "line": 86,
+          "text": "[HttpPost(\"password-recovery/reset\")]"
+        },
+        {
+          "line": 87,
+          "text": "[AllowAnonymous]"
+        },
+        {
+          "line": 88,
+          "text": "[EnableRateLimiting(\"auth-password-recovery\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Controllers/UsuariosController.cs",
+      "attributes": [
+        {
+          "line": 12,
+          "text": "[Route(\"api/usuarios\")]"
+        },
+        {
+          "line": 13,
+          "text": "[Authorize(Policy = \"usuarios.gestionar\")]"
+        },
+        {
+          "line": 20,
+          "text": "[HttpGet]"
+        },
+        {
+          "line": 34,
+          "text": "[HttpPost]"
+        },
+        {
+          "line": 71,
+          "text": "[HttpPatch(\"{usuarioId:guid}/estado\")]"
+        },
+        {
+          "line": 108,
+          "text": "[HttpPatch(\"{usuarioId:guid}/email\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Autenticacion/Controllers/SesionesMovilesController.cs",
+      "attributes": [
+        {
+          "line": 13,
+          "text": "[AllowAnonymous]"
+        },
+        {
+          "line": 14,
+          "text": "[Route(\"api/auth/mobile\")]"
+        },
+        {
+          "line": 21,
+          "text": "[HttpPost(\"login\")]"
+        },
+        {
+          "line": 22,
+          "text": "[EnableRateLimiting(\"auth-login\")]"
+        },
+        {
+          "line": 35,
+          "text": "[HttpPost(\"refresh\")]"
+        },
+        {
+          "line": 36,
+          "text": "[EnableRateLimiting(\"auth-refresh\")]"
+        },
+        {
+          "line": 45,
+          "text": "[HttpPost(\"logout\")]"
+        },
+        {
+          "line": 46,
+          "text": "[EnableRateLimiting(\"auth-refresh\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Comercios/Controllers/OperadoresDisponiblesController.cs",
+      "attributes": [
+        {
+          "line": 13,
+          "text": "[Authorize(Policy = nameof(TipoAccesoUsuario.Comercio))]"
+        },
+        {
+          "line": 14,
+          "text": "[Route(\"api/operadores\")]"
+        },
+        {
+          "line": 18,
+          "text": "[HttpGet(\"alternativas-envio\")]"
+        },
+        {
+          "line": 19,
+          "text": "[Authorize(Policy = \"envios.crear\")]"
+        },
+        {
+          "line": 58,
+          "text": "[HttpGet]"
+        },
+        {
+          "line": 67,
+          "text": "[HttpGet(\"importacion-envios\")]"
+        },
+        {
+          "line": 68,
+          "text": "[Authorize(Policy = \"envios.crear\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Envios/Controllers/CancelacionesEnvioController.cs",
+      "attributes": [
+        {
+          "line": 14,
+          "text": "[HttpPost]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Envios/Controllers/DestinosEnvioController.cs",
+      "attributes": [
+        {
+          "line": 15,
+          "text": "[HttpGet, ProducesResponseType<DestinoEnvioDatos>(200), ProducesResponseType(403), ProducesResponseType(404)]"
+        },
+        {
+          "line": 22,
+          "text": "[HttpPost(\"propuestas\"), EnableRateLimiting(\"geocodificacion\")]"
+        },
+        {
+          "line": 32,
+          "text": "[HttpPost(\"busqueda\"), EnableRateLimiting(\"geocodificacion\")]"
+        },
+        {
+          "line": 43,
+          "text": "[HttpPost(\"/api/envios/destino/busqueda\"), EnableRateLimiting(\"geocodificacion\")]"
+        },
+        {
+          "line": 60,
+          "text": "[HttpPut, ProducesResponseType(204), ProducesResponseType(400), ProducesResponseType(403), ProducesResponseType(404), ProducesResponseType(409)]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Envios/Controllers/EnviosController.cs",
+      "attributes": [
+        {
+          "line": 19,
+          "text": "[Authorize]"
+        },
+        {
+          "line": 20,
+          "text": "[Route(\"api\")]"
+        },
+        {
+          "line": 28,
+          "text": "[HttpGet(\"operadores/{id:guid}/servicios-envio\")]"
+        },
+        {
+          "line": 29,
+          "text": "[Authorize(Policy = \"envios.crear\")]"
+        },
+        {
+          "line": 30,
+          "text": "[Authorize(Policy = nameof(TipoAccesoUsuario.Comercio))]"
+        },
+        {
+          "line": 48,
+          "text": "[HttpGet(\"operadores/{id:guid}/cobertura-envios\")]"
+        },
+        {
+          "line": 49,
+          "text": "[Authorize(Policy = \"envios.crear\")]"
+        },
+        {
+          "line": 50,
+          "text": "[Authorize(Policy = nameof(TipoAccesoUsuario.Comercio))]"
+        },
+        {
+          "line": 64,
+          "text": "[HttpPost(\"envios/cotizacion\")]"
+        },
+        {
+          "line": 65,
+          "text": "[Authorize(Policy = \"envios.crear\")]"
+        },
+        {
+          "line": 66,
+          "text": "[Authorize(Policy = nameof(TipoAccesoUsuario.Comercio))]"
+        },
+        {
+          "line": 90,
+          "text": "[HttpGet(\"envios/{id:guid}/tarifa\")]"
+        },
+        {
+          "line": 91,
+          "text": "[Authorize(Policy = \"envios.consultar\")]"
+        },
+        {
+          "line": 100,
+          "text": "[HttpGet(\"envios/{id:guid}/tarifa/historial\")]"
+        },
+        {
+          "line": 101,
+          "text": "[Authorize(Policy = \"envios.consultar\")]"
+        },
+        {
+          "line": 112,
+          "text": "[HttpPost(\"envios\")]"
+        },
+        {
+          "line": 113,
+          "text": "[Authorize(Policy = \"envios.crear\")]"
+        },
+        {
+          "line": 114,
+          "text": "[Authorize(Policy = nameof(TipoAccesoUsuario.Comercio))]"
+        },
+        {
+          "line": 161,
+          "text": "[HttpPost(\"envios/importaciones\")]"
+        },
+        {
+          "line": 166,
+          "text": "[Authorize(Policy = \"envios.crear\")]"
+        },
+        {
+          "line": 167,
+          "text": "[Authorize(Policy = nameof(TipoAccesoUsuario.Comercio))]"
+        },
+        {
+          "line": 219,
+          "text": "[HttpGet(\"envios/{id:guid}/etiquetas\")]"
+        },
+        {
+          "line": 220,
+          "text": "[Authorize(Policy = \"envios.consultar\")]"
+        },
+        {
+          "line": 238,
+          "text": "[HttpGet(\"envios\")]"
+        },
+        {
+          "line": 239,
+          "text": "[Authorize(Policy = \"envios.consultar\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/IdentidadVisual/Controllers/IdentidadVisualOperadorController.cs",
+      "attributes": [
+        {
+          "line": 15,
+          "text": "[Authorize(Policy = CatalogoPermisos.ConfiguracionGestionar)]"
+        },
+        {
+          "line": 16,
+          "text": "[Route(\"api/configuracion/identidad-visual\")]"
+        },
+        {
+          "line": 27,
+          "text": "[HttpGet]"
+        },
+        {
+          "line": 37,
+          "text": "[HttpGet(\"versiones\")]"
+        },
+        {
+          "line": 62,
+          "text": "[HttpPut]"
+        },
+        {
+          "line": 171,
+          "text": "[Authorize(Policy = nameof(TipoAccesoUsuario.Comercio))]"
+        },
+        {
+          "line": 172,
+          "text": "[Route(\"api/operadores/{operadorId:guid}/identidad-visual\")]"
+        },
+        {
+          "line": 177,
+          "text": "[HttpGet]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Notificaciones/Controllers/NotificacionesRepartoController.cs",
+      "attributes": [
+        {
+          "line": 11,
+          "text": "[HttpPut(\"instalaciones\"), Authorize(Policy = \"reparto.ejecutar\")]"
+        },
+        {
+          "line": 22,
+          "text": "[HttpDelete(\"instalaciones/{id:guid}\")]"
+        },
+        {
+          "line": 30,
+          "text": "[HttpGet(\"notificaciones\"), Authorize(Policy = \"reparto.ejecutar\")]"
+        },
+        {
+          "line": 37,
+          "text": "[HttpGet(\"notificaciones/{id:guid}\"), Authorize(Policy = \"reparto.ejecutar\")]"
+        },
+        {
+          "line": 44,
+          "text": "[HttpPost(\"notificaciones/{id:guid}/confirmaciones\"), Authorize(Policy = \"reparto.ejecutar\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Organizaciones/Controllers/OrganizacionPropiaController.cs",
+      "attributes": [
+        {
+          "line": 11,
+          "text": "[Authorize(Policy = \"organizacion\")]"
+        },
+        {
+          "line": 12,
+          "text": "[Route(\"api/organizacion/actual\")]"
+        },
+        {
+          "line": 20,
+          "text": "[HttpGet]"
+        },
+        {
+          "line": 35,
+          "text": "[HttpPut]"
+        },
+        {
+          "line": 61,
+          "text": "[HttpGet(\"solicitudes-baja\")]"
+        },
+        {
+          "line": 73,
+          "text": "[HttpPost(\"solicitudes-baja\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Organizaciones/Controllers/OrganizacionSuspendidaController.cs",
+      "attributes": [
+        {
+          "line": 12,
+          "text": "[Route(\"api/organizacion/suspendida\")]"
+        },
+        {
+          "line": 13,
+          "text": "[Authorize(Policy = \"organizacion-suspendida\")]"
+        },
+        {
+          "line": 17,
+          "text": "[HttpGet]"
+        },
+        {
+          "line": 31,
+          "text": "[HttpGet(\"solicitudes-reactivacion\")]"
+        },
+        {
+          "line": 42,
+          "text": "[HttpPost(\"solicitudes-reactivacion\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Plataforma/CambiarEstadoOrganizacionController.cs",
+      "attributes": [
+        {
+          "line": 12,
+          "text": "[Route(\"api/admin\")]"
+        },
+        {
+          "line": 13,
+          "text": "[Authorize(Policy = RolPlataforma.GestionarOrganizaciones)]"
+        },
+        {
+          "line": 18,
+          "text": "[HttpPut(\"{tipo}/{id:guid}/estado\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Plataforma/DatosDemoController.cs",
+      "attributes": [
+        {
+          "line": 11,
+          "text": "[Route(\"api/admin/demo-data\")]"
+        },
+        {
+          "line": 12,
+          "text": "[Authorize(Policy = RolPlataforma.GestionarOrganizaciones)]"
+        },
+        {
+          "line": 17,
+          "text": "[HttpGet]"
+        },
+        {
+          "line": 22,
+          "text": "[HttpPost]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Plataforma/OrganizacionesController.cs",
+      "attributes": [
+        {
+          "line": 11,
+          "text": "[Route(\"api/admin\")]"
+        },
+        {
+          "line": 12,
+          "text": "[Authorize(Policy = RolPlataforma.GestionarOrganizaciones)]"
+        },
+        {
+          "line": 17,
+          "text": "[HttpPost(\"operadores\")]"
+        },
+        {
+          "line": 24,
+          "text": "[HttpPost(\"comercios\")]"
+        },
+        {
+          "line": 31,
+          "text": "[HttpGet(\"operadores\")]"
+        },
+        {
+          "line": 37,
+          "text": "[HttpGet(\"comercios\")]"
+        },
+        {
+          "line": 43,
+          "text": "[HttpGet(\"operadores/{id:guid}\")]"
+        },
+        {
+          "line": 48,
+          "text": "[HttpGet(\"comercios/{id:guid}\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Plataforma/SolicitudesBajaController.cs",
+      "attributes": [
+        {
+          "line": 13,
+          "text": "[Route(\"api/admin/solicitudes-baja\")]"
+        },
+        {
+          "line": 14,
+          "text": "[Authorize(Policy = RolPlataforma.GestionarOrganizaciones)]"
+        },
+        {
+          "line": 19,
+          "text": "[HttpGet]"
+        },
+        {
+          "line": 39,
+          "text": "[HttpGet(\"{id:guid}\")]"
+        },
+        {
+          "line": 48,
+          "text": "[HttpPost(\"{id:guid}/resolver\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Plataforma/SolicitudesReactivacionController.cs",
+      "attributes": [
+        {
+          "line": 12,
+          "text": "[Route(\"api/admin/solicitudes-reactivacion\")]"
+        },
+        {
+          "line": 13,
+          "text": "[Authorize(Policy = RolPlataforma.GestionarOrganizaciones)]"
+        },
+        {
+          "line": 16,
+          "text": "[HttpGet]"
+        },
+        {
+          "line": 28,
+          "text": "[HttpGet(\"{id:guid}\")]"
+        },
+        {
+          "line": 36,
+          "text": "[HttpPost(\"{id:guid}/resolver\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/ReglasOperativas/Controllers/ReglasOperativasController.cs",
+      "attributes": [
+        {
+          "line": 14,
+          "text": "[Authorize(Policy = \"organizacion\")]"
+        },
+        {
+          "line": 15,
+          "text": "[Authorize(Policy = CatalogoPermisos.ConfiguracionGestionar)]"
+        },
+        {
+          "line": 16,
+          "text": "[Route(ReglasOperativasApiContract.BasePath)]"
+        },
+        {
+          "line": 26,
+          "text": "[HttpGet]"
+        },
+        {
+          "line": 34,
+          "text": "[HttpPost(\"borrador\")]"
+        },
+        {
+          "line": 44,
+          "text": "[HttpGet(\"borrador\")]"
+        },
+        {
+          "line": 55,
+          "text": "[HttpPut(\"borrador\")]"
+        },
+        {
+          "line": 69,
+          "text": "[HttpPost(\"borrador/publicar\")]"
+        },
+        {
+          "line": 81,
+          "text": "[HttpGet(\"publicaciones\")]"
+        },
+        {
+          "line": 94,
+          "text": "[HttpGet(\"publicaciones/{versionId:guid}\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Reparto/Controllers/BaseOperativaController.cs",
+      "attributes": [
+        {
+          "line": 12,
+          "text": "[HttpGet, ProducesResponseType<BaseOperativaResponse>(200), ProducesResponseType(403), ProducesResponseType(404)]"
+        },
+        {
+          "line": 15,
+          "text": "[HttpPut, ProducesResponseType<BaseOperativaResponse>(200), ProducesResponseType(400), ProducesResponseType(403), ProducesResponseType(409)]"
+        },
+        {
+          "line": 21,
+          "text": "[HttpPost(\"confirmacion\"), ProducesResponseType<BaseOperativaResponse>(200), ProducesResponseType(400), ProducesResponseType(403), ProducesResponseType(404), ProducesResponseType(409)]"
+        },
+        {
+          "line": 27,
+          "text": "[HttpPost(\"propuestas\"), EnableRateLimiting(\"geocodificacion\"), ProducesResponseType<PropuestasBaseResponse>(200), ProducesResponseType(403), ProducesResponseType(404), ProducesResponseType(429), ProducesResponseType(503)]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Reparto/Controllers/ConfiguracionRepartoController.cs",
+      "attributes": [
+        {
+          "line": 10,
+          "text": "[Authorize(Policy = \"configuracion.gestionar\")]"
+        },
+        {
+          "line": 11,
+          "text": "[Route(\"api/reparto\")]"
+        },
+        {
+          "line": 14,
+          "text": "[HttpGet(\"configuracion\")]"
+        },
+        {
+          "line": 27,
+          "text": "[HttpPut(\"configuracion\")]"
+        },
+        {
+          "line": 40,
+          "text": "[HttpGet(\"vehiculos\")]"
+        },
+        {
+          "line": 48,
+          "text": "[HttpPut(\"vehiculos\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Reparto/Controllers/EstimacionesController.cs",
+      "attributes": [
+        {
+          "line": 10,
+          "text": "[HttpGet(\"api/reparto/perfiles-viales\"),Authorize(Policy=\"configuracion.gestionar\"),ProducesResponseType<PerfilVialResponse[]>(200),ProducesResponseType(403)]"
+        },
+        {
+          "line": 13,
+          "text": "[HttpPut(\"api/reparto/perfiles-viales/{id:guid}\"),Authorize(Policy=\"configuracion.gestionar\"),ProducesResponseType<PerfilVialResponse>(200),ProducesResponseType(400),ProducesResponseType(403),ProducesResponseType(404),ProducesResponseType(409)]"
+        },
+        {
+          "line": 16,
+          "text": "[HttpPost(\"api/rutas/{id:guid}/estimaciones\"),Authorize(Policy=\"envios.gestionar\"),ProducesResponseType<EstimacionRutaResponse>(200),ProducesResponseType(400),ProducesResponseType(403),ProducesResponseType(404),ProducesResponseType(409)]"
+        },
+        {
+          "line": 19,
+          "text": "[HttpPost(\"api/rutas/{id:guid}/estimaciones/recorrido\"),Authorize(Policy=\"envios.gestionar\"),ProducesResponseType<EstimacionRutaResponse>(200),ProducesResponseType(400),ProducesResponseType(403),ProducesResponseType(404),ProducesResponseType(409)]"
+        },
+        {
+          "line": 23,
+          "text": "[HttpGet(\"api/rutas/{id:guid}/estimaciones\"),Authorize(Policy=\"envios.gestionar\"),ProducesResponseType<EstimacionRutaResponse[]>(200),ProducesResponseType(403),ProducesResponseType(404)]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Reparto/Controllers/FlotaController.cs",
+      "attributes": [
+        {
+          "line": 12,
+          "text": "[HttpGet, ProducesResponseType<VehiculoFlotaResponse[]>(200), ProducesResponseType(403)]"
+        },
+        {
+          "line": 18,
+          "text": "[HttpPost(\"{vehiculoId:guid}/{accion}\"), ProducesResponseType<ResultadoFlotaResponse>(200)]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Reparto/Controllers/OperacionesRepartoController.cs",
+      "attributes": [
+        {
+          "line": 11,
+          "text": "[HttpPost(\"operaciones\"), RequestSizeLimit(32768)]"
+        },
+        {
+          "line": 40,
+          "text": "[HttpPut(\"evidencias/{archivoId:guid}\"), RequestSizeLimit(3000000)]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Reparto/Controllers/RecepcionController.cs",
+      "attributes": [
+        {
+          "line": 10,
+          "text": "[HttpGet(\"consulta\")]"
+        },
+        {
+          "line": 20,
+          "text": "[HttpPost(\"bultos/{id:guid}/recepcion\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Reparto/Controllers/RepartidoresController.cs",
+      "attributes": [
+        {
+          "line": 10,
+          "text": "[Authorize]"
+        },
+        {
+          "line": 11,
+          "text": "[Route(\"api/repartidores\")]"
+        },
+        {
+          "line": 14,
+          "text": "[HttpGet]"
+        },
+        {
+          "line": 15,
+          "text": "[Authorize(Policy = \"usuarios.gestionar\")]"
+        },
+        {
+          "line": 24,
+          "text": "[HttpPut(\"{accesoId:guid}\")]"
+        },
+        {
+          "line": 25,
+          "text": "[Authorize(Policy = \"usuarios.gestionar\")]"
+        },
+        {
+          "line": 43,
+          "text": "[HttpGet(\"/api/mobile/perfil\")]"
+        },
+        {
+          "line": 44,
+          "text": "[Authorize(Policy = \"reparto.ejecutar\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Reparto/Controllers/RutasController.cs",
+      "attributes": [
+        {
+          "line": 13,
+          "text": "[HttpGet(\"recursos\"), Authorize(Policy = \"envios.gestionar\")]"
+        },
+        {
+          "line": 29,
+          "text": "[HttpGet, Authorize(Policy = \"envios.gestionar\")]"
+        },
+        {
+          "line": 36,
+          "text": "[HttpGet(\"/api/mobile/rutas\"), Authorize(Policy = \"reparto.ejecutar\")]"
+        },
+        {
+          "line": 43,
+          "text": "[HttpPost, Authorize(Policy = \"envios.gestionar\")]"
+        },
+        {
+          "line": 54,
+          "text": "[HttpGet(\"/api/mobile/rutas/{id:guid}\"), Authorize(Policy = \"reparto.ejecutar\")]"
+        },
+        {
+          "line": 62,
+          "text": "[HttpPost(\"/api/envios/{id:guid}/reasignacion\"), Authorize(Policy = \"envios.gestionar\")]"
+        },
+        {
+          "line": 77,
+          "text": "[HttpPost(\"/api/envios/{id:guid}/reprogramacion\"), Authorize(Policy = \"envios.gestionar\")]"
+        },
+        {
+          "line": 90,
+          "text": "[HttpPost(\"/api/envios/{id:guid}/iniciar-devolucion\"), Authorize(Policy = \"envios.gestionar\")]"
+        },
+        {
+          "line": 105,
+          "text": "[HttpPost(\"/api/envios/{id:guid}/confirmar-extravio\"), Authorize(Policy = \"envios.gestionar\")]"
+        },
+        {
+          "line": 120,
+          "text": "[HttpPost(\"{id:guid}/despacho\"), Authorize(Policy = \"envios.gestionar\")]"
+        },
+        {
+          "line": 129,
+          "text": "[HttpPost(\"{id:guid}/cancelacion\"), Authorize(Policy = \"envios.gestionar\")]"
+        },
+        {
+          "line": 142,
+          "text": "[HttpPost(\"/api/deposito/envios/{id:guid}/recepcion\"), Authorize(Policy = \"envios.gestionar\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Roles/Controllers/RolesController.cs",
+      "attributes": [
+        {
+          "line": 12,
+          "text": "[Authorize]"
+        },
+        {
+          "line": 13,
+          "text": "[Route(\"api/roles\")]"
+        },
+        {
+          "line": 16,
+          "text": "[HttpGet, Authorize(Policy = \"configuracion.gestionar\")]"
+        },
+        {
+          "line": 20,
+          "text": "[HttpGet(\"asignables\"), Authorize(Policy = \"usuarios.gestionar\")]"
+        },
+        {
+          "line": 24,
+          "text": "[HttpGet(\"permisos\"), Authorize(Policy = \"configuracion.gestionar\")]"
+        },
+        {
+          "line": 28,
+          "text": "[HttpPost, Authorize(Policy = \"configuracion.gestionar\")]"
+        },
+        {
+          "line": 39,
+          "text": "[HttpPut(\"{id:guid}\"), Authorize(Policy = \"configuracion.gestionar\")]"
+        },
+        {
+          "line": 47,
+          "text": "[HttpDelete(\"{id:guid}\"), Authorize(Policy = \"configuracion.gestionar\")]"
+        },
+        {
+          "line": 54,
+          "text": "[HttpPut(\"{id:guid}/permisos\"), Authorize(Policy = \"configuracion.gestionar\")]"
+        },
+        {
+          "line": 62,
+          "text": "[HttpPut(\"accesos/{accesoId:guid}\"), Authorize(Policy = \"usuarios.gestionar\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Seguimiento/Controllers/CancelacionPublicaController.cs",
+      "attributes": [
+        {
+          "line": 12,
+          "text": "[HttpPost(\"codigo\")]"
+        },
+        {
+          "line": 22,
+          "text": "[HttpPost]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Seguimiento/Controllers/EnlaceSeguimientoController.cs",
+      "attributes": [
+        {
+          "line": 10,
+          "text": "[Authorize(Policy = \"seguimiento-demo\")]"
+        },
+        {
+          "line": 11,
+          "text": "[Authorize(Policy = \"organizacion\")]"
+        },
+        {
+          "line": 12,
+          "text": "[Route(\"api/envios\")]"
+        },
+        {
+          "line": 15,
+          "text": "[HttpGet(\"{envioId:guid}/seguimiento\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Seguimiento/Controllers/SeguimientoPublicoController.cs",
+      "attributes": [
+        {
+          "line": 10,
+          "text": "[AllowAnonymous] // Permite acceder a este endpoint sin autenticación"
+        },
+        {
+          "line": 11,
+          "text": "[EnableRateLimiting(\"seguimiento-publico\")]"
+        },
+        {
+          "line": 12,
+          "text": "[Route(\"api/public/seguimiento\")]"
+        },
+        {
+          "line": 17,
+          "text": "[HttpGet(\"{token}\")] // => GET /api/public/seguimiento/{token}"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Tarifas/Controllers/TarifarioController.cs",
+      "attributes": [
+        {
+          "line": 13,
+          "text": "[Authorize(Policy = \"organizacion\")]"
+        },
+        {
+          "line": 14,
+          "text": "[Authorize(Policy = CatalogoPermisos.ConfiguracionGestionar)]"
+        },
+        {
+          "line": 15,
+          "text": "[Route(TarifarioApiContract.BasePath)]"
+        },
+        {
+          "line": 25,
+          "text": "[HttpGet]"
+        },
+        {
+          "line": 33,
+          "text": "[HttpGet(\"publicaciones\")]"
+        },
+        {
+          "line": 46,
+          "text": "[HttpGet(\"publicaciones/{versionId:guid}\")]"
+        },
+        {
+          "line": 56,
+          "text": "[HttpPost(\"borrador\")]"
+        },
+        {
+          "line": 66,
+          "text": "[HttpGet(\"borrador\")]"
+        },
+        {
+          "line": 77,
+          "text": "[HttpPut(\"borrador/tarifas\")]"
+        },
+        {
+          "line": 99,
+          "text": "[HttpPost(\"borrador/publicar\")]"
+        },
+        {
+          "line": 110,
+          "text": "[HttpPost(\"simulaciones\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Usuarios/Controllers/AltaPropiaController.cs",
+      "attributes": [
+        {
+          "line": 18,
+          "text": "[HttpPost(\"comercios\")]"
+        },
+        {
+          "line": 22,
+          "text": "[HttpPost(\"operadores\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/Usuarios/Controllers/UsuarioActualController.cs",
+      "attributes": [
+        {
+          "line": 14,
+          "text": "[Authorize]"
+        },
+        {
+          "line": 16,
+          "text": "[Route(\"api/usuarios/actual\")]"
+        },
+        {
+          "line": 22,
+          "text": "[HttpGet]"
+        },
+        {
+          "line": 45,
+          "text": "[HttpGet(\"permisos\")]"
+        }
+      ]
+    },
+    {
+      "file": "backend/src/NexoRuta.Api/Features/ZonasCobertura/Controllers/ZonasCoberturaController.cs",
+      "attributes": [
+        {
+          "line": 16,
+          "text": "[Authorize(Policy = \"organizacion\")]"
+        },
+        {
+          "line": 17,
+          "text": "[Authorize(Policy = \"configuracion.gestionar\")]"
+        },
+        {
+          "line": 18,
+          "text": "[Route(\"api/configuracion/zonas\")]"
+        },
+        {
+          "line": 28,
+          "text": "[HttpGet]"
+        },
+        {
+          "line": 42,
+          "text": "[HttpGet(\"{zonaId:guid}\")]"
+        },
+        {
+          "line": 51,
+          "text": "[HttpPost]"
+        },
+        {
+          "line": 74,
+          "text": "[HttpPut(\"{zonaId:guid}\")]"
+        },
+        {
+          "line": 87,
+          "text": "[HttpPut(\"{zonaId:guid}/estado\")]"
+        },
+        {
+          "line": 101,
+          "text": "[HttpGet(\"{zonaId:guid}/franjas\")]"
+        },
+        {
+          "line": 112,
+          "text": "[HttpPost(\"{zonaId:guid}/franjas\")]"
+        },
+        {
+          "line": 127,
+          "text": "[HttpPut(\"{zonaId:guid}/franjas/{franjaId:guid}\")]"
+        },
+        {
+          "line": 143,
+          "text": "[HttpGet(\"departamentos\")]"
+        },
+        {
+          "line": 152,
+          "text": "[HttpGet(\"departamentos/territorio\")]"
+        },
+        {
+          "line": 166,
+          "text": "[HttpGet(\"departamentos/{codigo}\")]"
+        },
+        {
+          "line": 179,
+          "text": "[HttpPost(\"cobertura\")]"
+        }
+      ]
+    }
+  ],
+  "limits": "Attribute inventory is a source index, not proof of route reachability or effective authorization. No macros/styles executed."
+}
