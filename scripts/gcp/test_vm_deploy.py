@@ -270,6 +270,7 @@ class VmDeploymentTests(unittest.TestCase):
             deployment = vm_deploy.Deploy(release, io.StringIO())
             services = vm_deploy.SHARED
             identifiers = [f"container-{index}" for index in range(len(services))]
+            events = []
             def execute(*args, **kwargs):
                 if args[:2] == ("docker", "run"):
                     return "hash"
@@ -277,9 +278,12 @@ class VmDeploymentTests(unittest.TestCase):
                     return "\n".join(identifiers)
                 if args[:2] == ("docker", "inspect"):
                     return services[identifiers.index(args[-1])]
+                if args[:3] == ("systemctl", "restart", "google-cloud-ops-agent"):
+                    self.assertEqual((root / "ops-agent.yaml").read_text(), "metrics: {}")
+                    events.append("restart_ops_agent")
                 return ""
             deployment.execute = Mock(side_effect=execute)
-            deployment.compose = Mock()
+            deployment.compose = Mock(side_effect=lambda *args, **kwargs: events.append(("compose", *args)))
             args = SimpleNamespace(node="a", release="release-" + "a" * 32, deadline=12345)
             response = Mock()
             response.__enter__ = Mock(return_value=SimpleNamespace(status=200))
@@ -300,6 +304,10 @@ class VmDeploymentTests(unittest.TestCase):
             self.assertEqual(set(started), retained)
             self.assertIn(("--profile", "shared", "up", "-d", "--no-deps", "--force-recreate",
                            "--wait", "--wait-timeout", "300", *vm_deploy.OBSERVABILITY_CORE), up_calls)
+            observability_reconcile = ("compose", "--profile", "shared", "up", "-d", "--no-deps",
+                                       "--force-recreate", "--wait", "--wait-timeout", "300",
+                                       *vm_deploy.OBSERVABILITY_CORE)
+            self.assertLess(events.index("restart_ops_agent"), events.index(observability_reconcile))
             request = urlopen.call_args.args[0]
             self.assertEqual(request.full_url, "http://10.0.0.1:18025/healthz")
             self.assertEqual(request.get_header("Host"), "mail.34-0-0-1.sslip.io")
