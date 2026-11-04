@@ -6,12 +6,15 @@ import os
 from pathlib import Path
 import re
 import signal
+import shutil
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+from supervision import MetricStream, Resources, classify
 
 
 PROFILES = {"smoke": ("2m", 1), "baseline": ("15m", 5), "sync": ("15m", 20),
@@ -83,6 +86,89 @@ def load_thresholds(profile_name, profile, defaults):
     return thresholds
 
 
+def run_process(args, env, output, result, lease, control_bucket, bucket, prom_origin):
+    stream = MetricStream(output / "metrics.pipe")
+    resources = Resources()
+    resources.sample()
+    args = [*args[:-1], "-o", f"json={output / 'metrics.pipe'}", args[-1]]
+    stream.start()
+    process = None
+    stop_reason = None
+    started = last_checkpoint = last_lease_check = last_prom_check = time.time()
+    checkpoint = 0
+    try:
+        with (output / "k6.log").open("w", encoding="utf-8") as log_file:
+            process = subprocess.Popen(args, env=env, stdout=log_file, stderr=subprocess.STDOUT)
+            while process.poll() is None:
+                now = time.time()
+                evidence = stream.evidence.snapshot()
+                resource_sample = resources.sample()
+                if EXIT_SIGNAL:
+                    stop_reason = "cloud_run_signal"
+                elif now >= lease.get("expires_at", 0):
+                    stop_reason = "lease_expired"
+                elif evidence["stream_error"]:
+                    stop_reason = "metric_stream_unavailable"
+                elif resource_sample.get("oom"):
+                    stop_reason = "generator_oom"
+                elif resource_sample.get("saturated"):
+                    stop_reason = "generator_saturated"
+                elif not resource_sample["available"] and now - started > 30:
+                    stop_reason = "generator_telemetry_unavailable"
+                elif (shutil.disk_usage(output).free < 64 * 1024 * 1024
+                      or (output / "k6.log").stat().st_size > 16 * 1024 * 1024):
+                    stop_reason = "local_storage_exhausted"
+                elif evidence["severe_errors"]:
+                    stop_reason = "sustained_http_errors"
+                elif evidence["last_measured_at"] and now - evidence["last_measured_at"] > 20:
+                    stop_reason = "metric_stream_unavailable"
+                if not stop_reason and now - last_lease_check >= 5:
+                    last_lease_check = now
+                    try:
+                        lease = read_json(control_bucket, "leases/load-test.json")
+                        if (lease.get("run_id") != result["run_id"]
+                                or lease.get("status") not in ("starting", "running")
+                                or lease.get("expires_at", 0) <= now):
+                            stop_reason = "lease_cancelled_or_expired"
+                    except (OSError, urllib.error.URLError, ValueError):
+                        stop_reason = "lease_unavailable"
+                if not stop_reason and now - last_prom_check >= 15:
+                    last_prom_check = now
+                    try:
+                        check_endpoint(prom_origin + "/-/ready", timeout=5)
+                    except (OSError, urllib.error.URLError, RuntimeError):
+                        stop_reason = "prometheus_unavailable"
+                if stop_reason:
+                    process.send_signal(signal.SIGINT)
+                    break
+                if now - last_checkpoint >= 30:
+                    checkpoint += 1
+                    progress = {**result, "checkpoint": checkpoint, "observed_at": now,
+                                "elapsed_seconds": round(now - started, 3),
+                                "evidence": evidence, "generator": resource_sample}
+                    try:
+                        upload(bucket, f"runs/{result['run_id']}/progress/{checkpoint:04d}.json",
+                               json.dumps(progress).encode())
+                    except (OSError, urllib.error.URLError):
+                        stop_reason = "report_export_unavailable"
+                        process.send_signal(signal.SIGINT)
+                        break
+                    last_checkpoint = now
+                time.sleep(1)
+            try:
+                exit_code = process.wait(timeout=7 if stop_reason or EXIT_SIGNAL else 15)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                exit_code = process.wait()
+    finally:
+        # Any unexpected control/export failure must also stop the traffic.
+        if process is not None and process.poll() is None:
+            process.kill()
+            process.wait(timeout=10)
+        stream.close()
+    return exit_code, stop_reason, stream.evidence.snapshot(), resources.latest
+
+
 def main():
     profile_name = os.environ.get("NEXORUTA_LOAD_PROFILE_NAME", "")
     run_id = os.environ.get("NEXORUTA_RUN_ID", "")
@@ -148,7 +234,6 @@ def main():
     output = Path("/tmp/nexoruta-load")
     output.mkdir(mode=0o700)
     report = output / "summary.json"
-    log = output / "k6.log"
     started = time.time()
     result = {"run_id": run_id, "profile": profile_name, "release": manifest["release"],
               "fixture_version": fixture_version, "suite_sha256": manifest["suite_sha256"],
@@ -168,57 +253,24 @@ def main():
             str(ROOT / "scenario.js")]
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
-    with log.open("w", encoding="utf-8") as log_file:
-        process = subprocess.Popen(args, env=env, stdout=log_file, stderr=subprocess.STDOUT)
-        last_checkpoint = started
-        checkpoint = 0
-        last_lease_check = started
-        last_prom_check = started
-        stop_reason = None
-        while process.poll() is None:
-            now = time.time()
-            if EXIT_SIGNAL:
-                stop_reason = "cloud_run_signal"
-            elif now >= lease.get("expires_at", 0):
-                stop_reason = "lease_expired"
-            elif now - last_lease_check >= 5:
-                last_lease_check = now
-                try:
-                    lease = read_json(control_bucket, "leases/load-test.json")
-                    if (lease.get("run_id") != run_id
-                            or lease.get("status") not in ("starting", "running")
-                            or lease.get("expires_at", 0) <= now):
-                        stop_reason = "lease_cancelled_or_expired"
-                except (OSError, urllib.error.URLError, ValueError):
-                    stop_reason = "lease_unavailable"
-            if not stop_reason and now - last_prom_check >= 15:
-                last_prom_check = now
-                try:
-                    check_endpoint(prom_origin + "/-/ready", timeout=5)
-                except (OSError, urllib.error.URLError, RuntimeError):
-                    stop_reason = "prometheus_unavailable"
-            if stop_reason:
-                process.send_signal(signal.SIGINT)
-                break
-            if now - last_checkpoint >= 30:
-                checkpoint += 1
-                progress = {**result, "checkpoint": checkpoint, "observed_at": now,
-                            "elapsed_seconds": round(now - started, 3)}
-                upload(bucket, f"runs/{run_id}/progress/{checkpoint:04d}.json", json.dumps(progress).encode())
-                last_checkpoint = now
-            time.sleep(1)
-        try:
-            exit_code = process.wait(timeout=7 if stop_reason or EXIT_SIGNAL else 15)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            exit_code = process.wait()
-
+    exit_code, stop_reason, evidence, generator = run_process(
+        args, env, output, result, lease, control_bucket, bucket, prom_origin)
+    if EXIT_SIGNAL and not stop_reason:
+        stop_reason = "cloud_run_signal"
     ended = time.time()
-    result.update(status="cancelled" if stop_reason or EXIT_SIGNAL else ("passed" if exit_code == 0 else "failed"),
+    data = None
+    if report.exists() and report.stat().st_size <= 4 * 1024 * 1024:
+        try:
+            candidate = json.loads(report.read_text(encoding="utf-8"))
+            if isinstance(candidate, dict) and isinstance(candidate.get("metrics"), dict) and candidate["metrics"]:
+                data = candidate
+        except (OSError, ValueError):
+            pass  # An invalid or incomplete summary is never passing evidence.
+    status, classification = classify(profile_name, exit_code, stop_reason, evidence, generator, data is not None)
+    result.update(status=status, classification=classification, evidence=evidence, generator=generator,
                   stop_reason=stop_reason, ended_at=ended,
                   duration_seconds=round(ended - started, 3), exit_code=exit_code)
-    if report.exists():
-        data = json.loads(report.read_text(encoding="utf-8"))
+    if data is not None:
         result["metrics"] = data.get("metrics", {})
         upload(bucket, f"runs/{run_id}/k6-summary.json", json.dumps(data).encode())
     upload(bucket, f"runs/{run_id}/summary.json", json.dumps(result).encode())
