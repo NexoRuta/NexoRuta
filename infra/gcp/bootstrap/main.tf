@@ -171,6 +171,7 @@ resource "google_service_account" "runtime" {
 
 resource "google_project_iam_member" "deployer" {
   for_each = toset([
+    "roles/owner",
     "roles/compute.instanceAdmin.v1",
     "roles/compute.networkAdmin",
     "roles/compute.securityAdmin",
