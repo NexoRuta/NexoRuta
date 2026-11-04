@@ -15,6 +15,7 @@ import urllib.parse
 import urllib.request
 
 from supervision import MetricStream, Resources, classify
+from sessions import SessionBroker, Sessions
 
 
 PROFILES = {"smoke": ("2m", 1), "baseline": ("15m", 5), "sync": ("15m", 20),
@@ -88,7 +89,16 @@ def load_thresholds(profile_name, profile, defaults):
     return thresholds
 
 
-def run_process(args, env, output, result, lease, control_bucket, bucket, prom_origin):
+def verify_suite(manifest, configuration):
+    digest = hashlib.sha256()
+    for name in ("Dockerfile", "profiles.json", "scenario.js", "runner.py", "supervision.py", "sessions.py"):
+        digest.update((ROOT / name).read_bytes())
+    if (manifest.get("suite_sha256") != digest.hexdigest()
+            or manifest.get("thresholds_version") != configuration["version"]):
+        raise ValueError("The running suite does not match the reserved manifest")
+
+
+def run_process(args, env, output, result, lease, control_bucket, bucket, prom_origin, authentication=None):
     stream = MetricStream(output / "metrics.pipe", json.loads(env.get("NEXORUTA_LOAD_PROFILE", "{}")),
                           json.loads(env.get("NEXORUTA_LOAD_THRESHOLDS", "{}")))
     resources = Resources()
@@ -110,6 +120,8 @@ def run_process(args, env, output, result, lease, control_bucket, bucket, prom_o
                     stop_reason = "cloud_run_signal"
                 elif now >= lease.get("expires_at", 0):
                     stop_reason = "lease_expired"
+                elif authentication is not None and authentication.snapshot()["fault"]:
+                    stop_reason = "authentication_unavailable"
                 elif evidence["stream_error"]:
                     stop_reason = "metric_stream_unavailable"
                 elif resource_sample.get("oom"):
@@ -148,7 +160,8 @@ def run_process(args, env, output, result, lease, control_bucket, bucket, prom_o
                     checkpoint += 1
                     progress = {**result, "checkpoint": checkpoint, "observed_at": now,
                                 "elapsed_seconds": round(now - started, 3),
-                                "evidence": evidence, "generator": resource_sample}
+                                "evidence": evidence, "generator": resource_sample,
+                                "authentication": authentication.snapshot() if authentication is not None else None}
                     try:
                         upload(bucket, f"runs/{result['run_id']}/progress/{checkpoint:04d}.json",
                                json.dumps(progress).encode())
@@ -206,6 +219,7 @@ def main():
                 or not re.fullmatch(r"[a-f0-9]{64}", operations_sha256)):
             raise ValueError("A pinned synthetic sync dataset is required for this profile")
     manifest = read_json(control_bucket, f"runs/{run_id}/manifest.json")
+    verify_suite(manifest, profile)
     lease = read_json(control_bucket, "leases/load-test.json")
     if (manifest.get("run_id") != run_id or manifest.get("profile") != profile_name
             or manifest.get("fixture_version") != fixture_version
@@ -226,7 +240,9 @@ def main():
     prom_write = os.environ.get("NEXORUTA_PROMETHEUS_WRITE_URL", "")
     if not re.fullmatch(r"http://10(?:\.\d{1,3}){3}:9091/api/v1/write", prom_write):
         raise ValueError("The private write-only Prometheus gateway is required")
-    os.environ["NEXORUTA_LOAD_FIXTURE"] = json.dumps(fixture_data)
+    authentication = Sessions(api_origin, fixture_data, selected["vus"])
+    os.environ["NEXORUTA_LOAD_FIXTURE"] = json.dumps(authentication.public_fixture)
+    fixture_data = authentication.public_fixture
     if operations_path:
         os.environ["NEXORUTA_LOAD_OPERATIONS_FILE"] = str(operations_path)
     # These are local, bounded probes from the isolated VPC before any user traffic.
@@ -240,6 +256,7 @@ def main():
     started = time.time()
     result = {"run_id": run_id, "profile": profile_name, "release": manifest["release"],
               "fixture_version": fixture_version, "suite_sha256": manifest["suite_sha256"],
+              "thresholds_version": profile["version"],
               "status": "running", "started_at": started}
     if operations_sha256:
         result["operations_sha256"] = operations_sha256
@@ -256,9 +273,20 @@ def main():
             str(ROOT / "scenario.js")]
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
-    exit_code, stop_reason, evidence, generator = run_process(
-        args, env, output, result, lease, control_bucket, bucket, prom_origin)
-    if EXIT_SIGNAL and not stop_reason:
+    broker = SessionBroker(authentication)
+    env.update(NEXORUTA_AUTH_BROKER_URL=broker.url, NEXORUTA_AUTH_BROKER_KEY=broker.capability)
+    try:
+        broker.start()
+        exit_code, stop_reason, evidence, generator = run_process(
+            args, env, output, result, lease, control_bucket, bucket, prom_origin, authentication)
+    finally:
+        # Cloud Run may allow only a short grace period after SIGTERM. Preserve
+        # the verdict/checkpoint instead of spending it on optional revocation.
+        cleanup = broker.close(budget=0 if EXIT_SIGNAL else 120)
+    authentication_result = authentication.snapshot()
+    if authentication_result["fault"] and not stop_reason:
+        stop_reason = "authentication_unavailable"
+    if EXIT_SIGNAL:
         stop_reason = "cloud_run_signal"
     ended = time.time()
     data = None
@@ -270,7 +298,10 @@ def main():
         except (OSError, ValueError):
             pass  # An invalid or incomplete summary is never passing evidence.
     status, classification = classify(profile_name, exit_code, stop_reason, evidence, generator, data is not None)
+    if status == "passed" and not cleanup["complete"]:
+        status, classification = "failed", "session_cleanup_incomplete"
     result.update(status=status, classification=classification, evidence=evidence, generator=generator,
+                  authentication=authentication_result, session_cleanup=cleanup,
                   stop_reason=stop_reason, ended_at=ended,
                   duration_seconds=round(ended - started, 3), exit_code=exit_code)
     if data is not None:

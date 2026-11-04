@@ -1,6 +1,7 @@
 ﻿"""Exercise rolling safety gates, cgroup evidence and fail-closed verdicts."""
 
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -20,7 +21,8 @@ def load_module(name, filename):
 
 
 supervision = load_module("load_supervision", "supervision.py")
-with patch.dict(sys.modules, {"supervision": supervision}):
+sessions = load_module("load_sessions", "sessions.py")
+with patch.dict(sys.modules, {"supervision": supervision, "sessions": sessions}):
     runner = load_module("load_runner", "runner.py")
 
 
@@ -128,6 +130,36 @@ class StageMeasurementTests(unittest.TestCase):
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_controller_hash_matches_the_actual_sources_copied_into_the_runner_image(self):
+        repository = Path(__file__).resolve().parents[2]
+        configuration = json.loads((repository / "tests/load/profiles.json").read_text())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for source in list((repository / "tests/load").iterdir()) + list((repository / "deploy/load").glob("*.py")):
+                if source.is_file():
+                    (root / source.name).write_bytes(source.read_bytes())
+            manifest = {"suite_sha256": load_test_control.suite_sha256(repository),
+                        "thresholds_version": configuration["version"]}
+            with patch.object(runner, "ROOT", root):
+                runner.verify_suite(manifest, configuration)
+
+    def test_runtime_source_hash_and_threshold_version_must_match_the_reservation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            digest = hashlib.sha256()
+            for name in ("Dockerfile", "profiles.json", "scenario.js", "runner.py", "supervision.py", "sessions.py"):
+                content = name.encode()
+                (root / name).write_bytes(content)
+                digest.update(content)
+            manifest = {"suite_sha256": digest.hexdigest(), "thresholds_version": 3}
+            with patch.object(runner, "ROOT", root):
+                runner.verify_suite(manifest, {"version": 3})
+                with self.assertRaises(ValueError):
+                    runner.verify_suite(manifest, {"version": 4})
+                (root / "scenario.js").write_bytes(b"changed after reservation")
+                with self.assertRaises(ValueError):
+                    runner.verify_suite(manifest, {"version": 3})
+
     def test_control_exception_kills_the_traffic_process(self):
         with tempfile.TemporaryDirectory() as directory:
             process = Mock()
@@ -232,10 +264,15 @@ class ResourceTests(unittest.TestCase):
 class ClassificationTests(unittest.TestCase):
     def test_controller_pass_requires_a_valid_complete_measurement(self):
         summary = {"run_id": "one", "status": "passed", "classification": "passed",
+                   "authentication": {"ready": True, "fault": None}, "session_cleanup": {"complete": True},
                    "evidence": {"measured_requests": 10,
                                 "measurement_report": {"valid": True, "complete": True}}}
         report = load_test_control.execution_report({"run_id": "one"}, "CONDITION_SUCCEEDED", summary)
         self.assertEqual(report["status"], "passed")
+        summary["session_cleanup"]["complete"] = False
+        report = load_test_control.execution_report({"run_id": "one"}, "CONDITION_SUCCEEDED", summary)
+        self.assertEqual(report["status"], "failed")
+        summary["session_cleanup"]["complete"] = True
         summary["evidence"]["measurement_report"]["complete"] = False
         report = load_test_control.execution_report({"run_id": "one"}, "CONDITION_SUCCEEDED", summary)
         self.assertEqual(report["status"], "failed")
@@ -265,6 +302,7 @@ class ClassificationTests(unittest.TestCase):
             ("stress", 99, None, {"available": True}, True, ("failed", "capacity_limit_found")),
             ("baseline", 105, "lease_expired", {}, False, ("cancelled", "cancelled")),
             ("baseline", 105, "prometheus_unavailable", {}, False, ("failed", "invalid_telemetry")),
+            ("baseline", 0, "authentication_unavailable", {}, True, ("failed", "invalid_authentication")),
             ("baseline", -9, None, {}, False, ("failed", "infrastructure_failed")),
             ("baseline", 0, None, {}, True, ("failed", "invalid_generator_telemetry")),
             ("baseline", 0, None, {"available": True}, False, ("failed", "incomplete_evidence")),

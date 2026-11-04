@@ -330,6 +330,8 @@ class Resources:
 def classify(profile, exit_code, stop_reason, evidence, resources, has_summary):
     if stop_reason in ("cloud_run_signal", "lease_expired", "lease_cancelled_or_expired"):
         return "cancelled", "cancelled"
+    if stop_reason == "authentication_unavailable":
+        return "failed", "invalid_authentication"
     if stop_reason in ("prometheus_unavailable", "metric_stream_unavailable") or evidence.get("stream_error"):
         return "failed", "invalid_telemetry"
     if stop_reason == "generator_telemetry_unavailable":

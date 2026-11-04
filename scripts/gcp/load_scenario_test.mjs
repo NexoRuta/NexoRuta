@@ -6,9 +6,9 @@ import { test } from 'node:test';
 const source = fs.readFileSync(new URL('../../tests/load/scenario.js', import.meta.url), 'utf8');
 const profiles = JSON.parse(fs.readFileSync(new URL('../../tests/load/profiles.json', import.meta.url)));
 
-async function harness({ count = 1, sync = false, warmupStatus = 200, rateProfile = false } = {}) {
+async function harness({ count = 1, sync = false, warmupStatus = 200, rateProfile = false,
+  readyPolls = 0, brokerStatus = 200 } = {}) {
   const accounts = Array.from({ length: count }, (_, index) => ({
-    email: `load-${index}@nexoruta.test`, password: 'controlled-fixture',
     jornadaId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
   }));
   const operations = Object.fromEntries(accounts.map(account => [account.jornadaId,
@@ -20,12 +20,13 @@ async function harness({ count = 1, sync = false, warmupStatus = 200, rateProfil
   ]));
   const requests = [];
   const metrics = [];
-  const execution = { scenario: { startTime: 0 } };
+  const execution = { scenario: { startTime: 0 }, test: { abort: message => { throw new Error(message); } } };
   let clock = 0;
   const context = vm.createContext({
-    Date: { now: () => clock }, __VU: 1, __ITER: 0,
+    Date: { now: () => clock, parse: Date.parse }, __VU: 1, __ITER: 0,
     open: () => JSON.stringify(operations),
     __ENV: { NEXORUTA_API_ORIGIN: 'https://controlled.invalid',
+      NEXORUTA_AUTH_BROKER_URL: 'http://127.0.0.1:12345', NEXORUTA_AUTH_BROKER_KEY: 'K'.repeat(43),
       NEXORUTA_LOAD_FIXTURE: JSON.stringify({ accounts, readPath: '/api/mobile/perfil' }),
       NEXORUTA_LOAD_PROFILE: JSON.stringify(rateProfile
         ? { ...profiles.profiles.stress, sync, vus: count }
@@ -40,6 +41,9 @@ async function harness({ count = 1, sync = false, warmupStatus = 200, rateProfil
     },
     get(url, options) {
       requests.push({ url, ...options });
+      if (url.endsWith('/ready')) return response(readyPolls-- > 0 ? 202 : brokerStatus, {});
+      if (url.includes('/sessions/')) return response(brokerStatus,
+        { accessToken: `synthetic-token-${clock}`, expiresAtUtc: new Date(clock + 900000).toISOString() });
       return response(options.tags.phase === 'warmup' ? warmupStatus : 200, {});
     },
   };
@@ -66,13 +70,15 @@ async function harness({ count = 1, sync = false, warmupStatus = 200, rateProfil
     elapsed: () => clock, advance: milliseconds => { clock += milliseconds; } };
 }
 
-test('login and warm-up precede measured traffic and never replay sync', async () => {
+test('private session readiness and warm-up precede measured traffic and never replay sync', async () => {
   const h = await harness({ sync: true });
   const data = h.scenario.setup();
-  assert.equal(h.requests.filter(r => r.tags.phase === 'setup').length, 1);
+  assert.equal(h.requests.filter(r => r.tags.name === 'load_auth_ready').length, 1);
   assert.equal(h.requests.filter(r => r.tags.phase === 'warmup').length, 30);
   assert(h.requests.every(r => r.tags.kind !== 'sync'));
-  assert(h.elapsed() >= 42100);
+  assert(h.elapsed() >= 30000);
+  assert(h.requests.every(r => !r.url.includes('/api/auth/mobile/')));
+  assert(data.sessions.every(s => !s.token && !s.accessToken && !s.refreshToken));
   h.execution.scenario.startTime = h.elapsed();
   h.scenario.default(data);
   assert.equal(h.requests.filter(r => r.tags.phase === 'measured' && r.tags.kind === 'sync').length, 50);
@@ -104,12 +110,37 @@ test('failed warm-up aborts setup before measured scenarios can start', async ()
   assert(h.requests.every(r => r.tags.phase !== 'measured'));
 });
 
-test('fifty paced logins fit the explicit setup timeout', async () => {
-  const h = await harness({ count: 50 });
+test('setup waits for the wrapper and retains a bounded authentication budget', async () => {
+  const h = await harness({ count: 50, readyPolls: 2 });
   h.scenario.setup();
-  assert.equal(h.requests.filter(r => r.tags.kind === 'setup').length, 50);
-  assert(h.elapsed() >= 635000);
-  assert(Number.parseInt(h.scenario.options.setupTimeout, 10) * 1000 > h.elapsed());
+  assert.equal(h.requests.filter(r => r.tags.name === 'load_auth_ready').length, 3);
+  assert(h.elapsed() >= 32000);
+  assert(Number.parseInt(h.scenario.options.setupTimeout, 10) > 50 * 12.1 + 30);
+});
+
+test('a VU fetches renewed access tokens without using a refresh token', async () => {
+  const h = await harness();
+  const data = h.scenario.setup();
+  h.scenario.default(data);
+  const firstToken = h.requests.filter(r => r.tags.phase === 'measured').at(-1).headers.Authorization;
+  h.advance(15 * 60 * 1000);
+  h.scenario.default(data);
+  const secondToken = h.requests.filter(r => r.tags.phase === 'measured').at(-1).headers.Authorization;
+  assert.notEqual(firstToken, secondToken);
+  assert(h.requests.every(r => !r.url.includes('/api/auth/mobile/refresh')));
+});
+
+test('an unavailable authentication broker stops the test before business traffic', async () => {
+  const h = await harness({ brokerStatus: 503 });
+  assert.throws(() => h.scenario.setup(), /Synthetic session preparation failed/);
+  assert(h.requests.every(r => r.tags.phase !== 'measured'));
+});
+
+test('an indefinitely pending broker cannot consume the measured or export budget', async () => {
+  const h = await harness({ readyPolls: 1000 });
+  assert.throws(() => h.scenario.setup(), /preparation exceeded its budget/);
+  assert(h.elapsed() < Number.parseInt(h.scenario.options.setupTimeout, 10) * 1000);
+  assert(h.requests.every(r => r.tags.phase === 'control'));
 });
 
 test('HTTP SLO thresholds select measured samples exclusively', async () => {

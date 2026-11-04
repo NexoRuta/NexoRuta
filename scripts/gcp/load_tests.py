@@ -249,17 +249,22 @@ def immutable_manifest(config, run_id, profile, session_expires_at, fixture_vers
     except urllib.error.URLError as error:
         raise RuntimeError("Public API readiness check failed") from error
     root = Path(__file__).resolve().parents[2]
-    suite_hash = hashlib.sha256()
-    for relative in ("tests/load/Dockerfile", "tests/load/profiles.json", "tests/load/scenario.js",
-                     "deploy/load/runner.py", "deploy/load/supervision.py"):
-        suite_hash.update((root / relative).read_bytes())
     return {
         "run_id": run_id, "profile": profile, "release": release,
         "image_digests": images, "integration_tag": manifest.get("integration_tag"),
         "source_shas": manifest.get("sources"), "fixture_version": fixture_version,
-        "suite_sha256": suite_hash.hexdigest(), "session_expires_at": session_expires_at,
+        "suite_sha256": suite_sha256(root), "session_expires_at": session_expires_at,
+        "thresholds_version": json.loads((root / "tests/load/profiles.json").read_text(encoding="utf-8"))["version"],
         "created_at": time.time(), "api_origin": origin,
     }
+
+
+def suite_sha256(root):
+    digest = hashlib.sha256()
+    for relative in ("tests/load/Dockerfile", "tests/load/profiles.json", "tests/load/scenario.js",
+                     "deploy/load/runner.py", "deploy/load/supervision.py", "deploy/load/sessions.py"):
+        digest.update((root / relative).read_bytes())
+    return digest.hexdigest()
 
 
 def application_origin(config):
@@ -456,7 +461,10 @@ def execution_report(active, cloud_state, summary):
     if summary.get("status") == "passed" and (summary.get("classification") != "passed"
             or not summary.get("evidence", {}).get("measured_requests")
             or not (summary.get("evidence", {}).get("measurement_report") or {}).get("valid")
-            or not (summary.get("evidence", {}).get("measurement_report") or {}).get("complete")):
+            or not (summary.get("evidence", {}).get("measurement_report") or {}).get("complete")
+            or not summary.get("authentication", {}).get("ready")
+            or summary.get("authentication", {}).get("fault")
+            or not summary.get("session_cleanup", {}).get("complete")):
         return {**summary, "status": "failed", "classification": "incomplete_evidence"}
     return summary
 

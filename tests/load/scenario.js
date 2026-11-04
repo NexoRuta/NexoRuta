@@ -18,15 +18,14 @@ const syncDrainDuration = new Trend('nexoruta_load_sync_drain_duration');
 if (!fixture.accounts || !Array.isArray(fixture.accounts) || !fixture.accounts.length) {
   throw new Error('A private per-run NEXORUTA_LOAD_FIXTURE with synthetic accounts is required.');
 }
-if (!fixture.accounts.every((account) => typeof account.email === 'string'
-    && account.email.endsWith('@nexoruta.test') && account.password && account.jornadaId)) {
-  throw new Error('Each synthetic account needs credentials and an isolated jornadaId.');
+if (!fixture.accounts.every((account) => typeof account.jornadaId === 'string'
+    && /^[0-9a-f-]{36}$/i.test(account.jornadaId))) {
+  throw new Error('Each synthetic account needs an isolated jornadaId.');
 }
 if (fixture.readPath !== '/api/mobile/perfil') {
   throw new Error('The load suite only permits the fixed mobile profile read route.');
 }
 if (fixture.accounts.length < profile.vus
-    || new Set(fixture.accounts.map((account) => account.email)).size !== fixture.accounts.length
     || new Set(fixture.accounts.map((account) => account.jornadaId)).size !== fixture.accounts.length) {
   throw new Error('Each active VU needs a distinct account and journey fixture.');
 }
@@ -48,8 +47,17 @@ if (profile.sync) {
 
 const base = (__ENV.NEXORUTA_API_ORIGIN || '').replace(/\/$/, '');
 if (!/^https:\/\/[a-z0-9.-]+$/.test(base)) throw new Error('A validated HTTPS API origin is required.');
+const broker = __ENV.NEXORUTA_AUTH_BROKER_URL || '';
+const brokerKey = __ENV.NEXORUTA_AUTH_BROKER_KEY || '';
+if (!/^http:\/\/127\.0\.0\.1:[0-9]{1,5}$/.test(broker)
+    || Number(broker.split(':').pop()) > 65535 || Number(broker.split(':').pop()) < 1
+    || !/^[A-Za-z0-9_-]{32,64}$/.test(brokerKey)) {
+  throw new Error('The private loopback session broker is required.');
+}
+let vuSession = null;
 
 export const options = {
+  maxRedirects: 0,
   // Login pacing and warm-up run before scenarios. Budget every identity at
   // the existing IP quota plus the bounded HTTP timeout.
   setupTimeout: `${Math.ceil(profile.vus * 22.1 + 40)}s`,
@@ -68,27 +76,30 @@ export const options = {
 };
 
 export function setup() {
-  // Existing login policy is five requests/minute per source IP. Pace logins
-  // sequentially instead of creating a burst that only measures rate limiting.
-  const sessions = fixture.accounts.slice(0, profile.vus).map((account) => {
-    const response = http.post(`${base}/api/auth/mobile/login`, JSON.stringify({
-      email: account.email, password: account.password,
-    }), { timeout: '10s', headers: { 'Content-Type': 'application/json' },
-      tags: { phase: 'setup', kind: 'setup', name: 'mobile_login' } });
-    if (response.status !== 200) throw new Error(`Synthetic account login failed with HTTP ${response.status}.`);
-    const body = response.json();
-    if (!body.accessToken) throw new Error('Login response did not contain an access token.');
-    sleep(12.1);
-    return { token: body.accessToken, jornadaId: account.jornadaId };
-  });
+  // The wrapper serializes login and renewal for all identities, including VUs
+  // not yet active. No password or refresh token enters the k6 process.
+  const preparationDeadline = Date.now() + Number.parseInt(options.setupTimeout, 10) * 1000 - 40000;
+  while (true) {
+    const response = localGet('/ready', 'load_auth_ready', '15s');
+    if (Date.now() >= preparationDeadline) execution.test.abort('Synthetic session preparation exceeded its budget.');
+    if (response.status === 200) break;
+    if (response.status !== 202) {
+      execution.test.abort('Synthetic session preparation failed.');
+    }
+    sleep(1);
+  }
+  const sessions = fixture.accounts.slice(0, profile.vus).map((account, index) => ({
+    jornadaId: account.jornadaId, index,
+  }));
   // Warm only the permitted read route. Replay belongs exclusively to the
   // measured phase, where each VU must still send its first batch exactly once.
   const warmupDeadline = Date.now() + 30000;
   let accountIndex = 0;
   while (Date.now() < warmupDeadline) {
     const identity = sessions[accountIndex % sessions.length];
+    const session = fetchSession(identity.index);
     const response = http.get(`${base}${fixture.readPath}`, {
-      timeout: '10s', headers: { Authorization: `Bearer ${identity.token}` },
+      timeout: '10s', headers: { Authorization: `Bearer ${session.accessToken}` },
       tags: { phase: 'warmup', kind: 'read', name: 'mobile_profile' },
     });
     if (response.status !== 200) throw new Error(`Warm-up failed with HTTP ${response.status}.`);
@@ -101,9 +112,8 @@ export function setup() {
 export default function (data) {
   if (__ITER === 0) windowStarted.add(execution.scenario.startTime, { phase: 'control' });
   const identity = data.sessions[(__VU - 1) % data.sessions.length];
-  const headers = { Authorization: `Bearer ${identity.token}` };
   const readTags = measurementTags();
-  const read = http.get(`${base}${fixture.readPath}`, { timeout: '10s', headers,
+  const read = http.get(`${base}${fixture.readPath}`, { timeout: '10s', headers: authorization(identity),
     tags: { ...readTags, kind: 'read', name: 'mobile_profile' } });
   unexpected.add(check(read, { 'profile response is 200': (r) => r.status === 200 }) ? 0 : 1,
     { ...readTags, kind: 'read' });
@@ -117,7 +127,7 @@ export default function (data) {
     for (let index = 0; index < operations.length; index += 1) {
       const operationTags = measurementTags();
       const response = http.post(`${base}/api/mobile/jornadas/${identity.jornadaId}/operaciones`,
-        JSON.stringify(operations[index]), { timeout: '10s', headers: { ...headers, 'Content-Type': 'application/json',
+        JSON.stringify(operations[index]), { timeout: '10s', headers: { ...authorization(identity), 'Content-Type': 'application/json',
           'X-NexoRuta-Pending-Sync': String(operations.length - index) },
         tags: { ...operationTags, kind: 'sync', name: 'mobile_sync_operation' } });
       let result = '';
@@ -136,6 +146,34 @@ export default function (data) {
     if (applied === operations.length) syncBatches.add(1, batchTags);
   }
   if (!profile.rate) sleep(1);
+}
+
+function localGet(path, name, timeout = '5s') {
+  return http.get(broker + path, { timeout, redirects: 0,
+    headers: { Authorization: `Bearer ${brokerKey}` },
+    tags: { phase: 'control', kind: 'authentication', name } });
+}
+
+function fetchSession(index) {
+  const response = localGet(`/sessions/${index}`, 'load_session');
+  if (response.status !== 200) execution.test.abort('Synthetic session is unavailable.');
+  let session;
+  try { session = response.json(); } catch (_) { execution.test.abort('Invalid synthetic session response.'); }
+  if (!session || typeof session !== 'object' || typeof session.accessToken !== 'string') {
+    execution.test.abort('Invalid synthetic session response.');
+  }
+  const expiresAt = Date.parse(session.expiresAtUtc);
+  if (!session.accessToken || !Number.isFinite(expiresAt) || expiresAt <= Date.now() + 30000) {
+    execution.test.abort('Synthetic session has no usable access token.');
+  }
+  return { ...session, expiresAt, index };
+}
+
+function authorization(identity) {
+  if (!vuSession || vuSession.index !== identity.index || vuSession.expiresAt <= Date.now() + 60000) {
+    vuSession = fetchSession(identity.index);
+  }
+  return { Authorization: `Bearer ${vuSession.accessToken}` };
 }
 
 function measurementTags() {
