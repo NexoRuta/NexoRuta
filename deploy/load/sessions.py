@@ -240,8 +240,9 @@ class Sessions:
 
 
 class SessionBroker:
-    def __init__(self, sessions):
+    def __init__(self, sessions, generator_metrics):
         self.sessions = sessions
+        self.generator_metrics = generator_metrics
         self.capability = secrets.token_urlsafe(32)
         broker = self
 
@@ -258,6 +259,25 @@ class SessionBroker:
                     sessions.prepared.wait(timeout=10)
                     state = sessions.snapshot()
                     self.respond(503 if state["fault"] or sessions.stopped.is_set() else (200 if state["ready"] else 202), {})
+                    return
+                if self.path == "/generator":
+                    sample = broker.generator_metrics()
+                    if not isinstance(sample, dict) or not sample.get("available"):
+                        self.respond(503, {})
+                        return
+                    cpu = sample.get("cpu_utilization")
+                    memory = sample.get("memory_bytes")
+                    memory_limit = sample.get("memory_limit_bytes")
+                    if cpu is None:
+                        self.respond(202, {})
+                        return
+                    if (not isinstance(cpu, (int, float)) or not 0 <= cpu <= 1.05
+                            or not isinstance(memory, int) or memory < 0
+                            or not isinstance(memory_limit, int) or memory_limit <= 0 or memory > memory_limit):
+                        self.respond(503, {})
+                        return
+                    self.respond(200, {"cpu_utilization": cpu,
+                        "memory_utilization": memory / memory_limit})
                     return
                 match = re.fullmatch(r"/sessions/([0-9]{1,2})", self.path)
                 if not match:

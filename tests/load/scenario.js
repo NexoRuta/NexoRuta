@@ -5,6 +5,10 @@ import { Counter, Gauge, Trend } from 'k6/metrics';
 
 const fixture = JSON.parse(__ENV.NEXORUTA_LOAD_FIXTURE || '{}');
 const profile = JSON.parse(__ENV.NEXORUTA_LOAD_PROFILE || '{}');
+const setupTimeoutSeconds = Math.ceil(profile.vus * 22.1 + 40);
+const scenarioDurationSeconds = profile.rate
+  ? profile.stages.reduce((total, stage) => total + durationSeconds(stage.duration), 0)
+  : durationSeconds(profile.ramp) + durationSeconds(profile.duration);
 const operationsByJourney = profile.sync
   ? JSON.parse(open(__ENV.NEXORUTA_LOAD_OPERATIONS_FILE || ''))
   : {};
@@ -13,7 +17,10 @@ const syncApplied = new Counter('nexoruta_load_sync_operations_applied');
 const syncBatches = new Counter('nexoruta_load_sync_batches_completed');
 const syncStarted = new Counter('nexoruta_load_sync_batches_started');
 const windowStarted = new Gauge('nexoruta_load_window_started');
+const windowFinished = new Gauge('nexoruta_load_window_finished');
 const syncDrainDuration = new Trend('nexoruta_load_sync_drain_duration');
+const generatorCpuUtilization = new Gauge('nexoruta_load_generator_cpu_utilization');
+const generatorMemoryUtilization = new Gauge('nexoruta_load_generator_memory_utilization');
 
 if (!fixture.accounts || !Array.isArray(fixture.accounts) || !fixture.accounts.length) {
   throw new Error('A private per-run NEXORUTA_LOAD_FIXTURE with synthetic accounts is required.');
@@ -60,7 +67,7 @@ export const options = {
   maxRedirects: 0,
   // Login pacing and warm-up run before scenarios. Budget every identity at
   // the existing IP quota plus the bounded HTTP timeout.
-  setupTimeout: `${Math.ceil(profile.vus * 22.1 + 40)}s`,
+  setupTimeout: `${setupTimeoutSeconds}s`,
   // Avoid per-journey URLs and detailed transport errors as Prometheus labels.
   systemTags: ['proto', 'status', 'method', 'name', 'group', 'check', 'error_code', 'tls_version', 'scenario', 'expected_response'],
   scenarios: {
@@ -70,6 +77,8 @@ export const options = {
       : { executor: 'ramping-vus', startVUs: 1, stages: [
           { target: profile.vus, duration: profile.ramp }, { target: profile.vus, duration: profile.duration },
         ] },
+    generator_monitor: { executor: 'constant-vus', vus: 1,
+      duration: `${scenarioDurationSeconds}s`, exec: 'generatorTelemetry' },
   },
   thresholds: JSON.parse(__ENV.NEXORUTA_LOAD_THRESHOLDS || '{}'),
   tags: { run_id: __ENV.NEXORUTA_RUN_ID || 'local', profile: __ENV.NEXORUTA_LOAD_PROFILE_NAME || 'smoke' },
@@ -78,7 +87,7 @@ export const options = {
 export function setup() {
   // The wrapper serializes login and renewal for all identities, including VUs
   // not yet active. No password or refresh token enters the k6 process.
-  const preparationDeadline = Date.now() + Number.parseInt(options.setupTimeout, 10) * 1000 - 40000;
+  const preparationDeadline = Date.now() + (setupTimeoutSeconds - 40) * 1000;
   while (true) {
     const response = localGet('/ready', 'load_auth_ready', '15s');
     if (Date.now() >= preparationDeadline) execution.test.abort('Synthetic session preparation exceeded its budget.');
@@ -107,6 +116,30 @@ export function setup() {
     sleep(1);
   }
   return { sessions };
+}
+
+export function generatorTelemetry() {
+  const response = localGet('/generator', 'generator_metrics', '10s');
+  if (response.status === 202) {
+    sleep(1);
+    return;
+  }
+  if (response.status !== 200) execution.test.abort('Generator resource telemetry is unavailable.');
+  let sample;
+  try { sample = response.json(); } catch (_) { execution.test.abort('Invalid generator resource telemetry.'); }
+  if (!sample || !Number.isFinite(sample.cpu_utilization) || sample.cpu_utilization < 0
+      || sample.cpu_utilization > 1.05 || !Number.isFinite(sample.memory_utilization)
+      || sample.memory_utilization < 0 || sample.memory_utilization > 1) {
+    execution.test.abort('Invalid generator resource telemetry.');
+  }
+  const tags = { phase: 'control', kind: 'generator', name: 'resource_usage' };
+  generatorCpuUtilization.add(sample.cpu_utilization, tags);
+  generatorMemoryUtilization.add(sample.memory_utilization, tags);
+  sleep(5);
+}
+
+export function teardown() {
+  windowFinished.add(Date.now(), { phase: 'control' });
 }
 
 export default function (data) {
@@ -186,4 +219,10 @@ function measurementTags() {
     if (elapsed < boundary) return { phase: 'measured', stage: String(index + 1) };
   }
   return { phase: 'measured', stage: String(profile.stages.length) };
+}
+
+function durationSeconds(value) {
+  const match = /^([1-9][0-9]*)([sm])$/.exec(value);
+  if (!match) throw new Error('A bounded load duration is required.');
+  return Number(match[1]) * (match[2] === 'm' ? 60 : 1);
 }

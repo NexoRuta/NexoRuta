@@ -246,7 +246,8 @@ class BrokerHttpTests(unittest.TestCase):
         transport = Transport(clock)
         manager = sessions.Sessions("https://controlled.invalid", fixture(1), 1,
             transport=transport, wall=clock.wall, monotonic=clock.monotonic)
-        broker = sessions.SessionBroker(manager)
+        broker = sessions.SessionBroker(manager, lambda: {"available": True,
+            "cpu_utilization": 0.25, "memory_bytes": 50, "memory_limit_bytes": 100})
         broker.start()
         try:
             self.assertTrue(manager.prepared.wait(timeout=2))
@@ -260,6 +261,14 @@ class BrokerHttpTests(unittest.TestCase):
                 value = json.load(response)
                 self.assertEqual(response.headers["Cache-Control"], "no-store")
             self.assertEqual(set(value), {"accessToken", "expiresAtUtc"})
+            with self.assertRaises(urllib.error.HTTPError) as denied_stats:
+                urllib.request.urlopen(broker.url + "/generator", timeout=2)
+            self.assertEqual(denied_stats.exception.code, 403)
+            stats = urllib.request.Request(broker.url + "/generator",
+                headers={"Authorization": "Bearer " + broker.capability})
+            with urllib.request.urlopen(stats, timeout=2) as response:
+                generator = json.load(response)
+            self.assertEqual(generator, {"cpu_utilization": 0.25, "memory_utilization": 0.5})
         finally:
             self.assertTrue(broker.close()["complete"])
 

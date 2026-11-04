@@ -177,6 +177,8 @@ class Evidence:
         self.errors = 0
         self.unexpected = 0
         self.dropped = 0
+        self.generator_cpu_samples = 0
+        self.generator_memory_samples = 0
         self.window = defaultdict(lambda: [0, 0])
         self.fault = None
         self.severe = False
@@ -192,6 +194,20 @@ class Evidence:
             raise ValueError("Invalid metric data")
         with self.lock:
             self.measurements.consume(metric, data)
+        if metric in ("nexoruta_load_generator_cpu_utilization", "nexoruta_load_generator_memory_utilization"):
+            tags = data.get("tags", {})
+            value = data.get("value")
+            upper = 1.05 if metric.endswith("cpu_utilization") else 1
+            if (tags.get("phase") != "control" or tags.get("kind") != "generator"
+                    or not isinstance(value, (int, float)) or not math.isfinite(value)
+                    or not 0 <= value <= upper):
+                raise ValueError("Invalid generator resource metric")
+            with self.lock:
+                if metric.endswith("cpu_utilization"):
+                    self.generator_cpu_samples += 1
+                else:
+                    self.generator_memory_samples += 1
+            return
         if metric == "dropped_iterations":
             value = data["value"]
             if not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
@@ -237,6 +253,8 @@ class Evidence:
         with self.lock:
             return {"measured_requests": self.requests, "measured_errors": self.errors,
                     "unexpected_results": self.unexpected, "dropped_iterations": self.dropped,
+                    "generator_cpu_samples": self.generator_cpu_samples,
+                    "generator_memory_samples": self.generator_memory_samples,
                     "first_measured_at": self.first_sample, "last_measured_at": self.last_sample,
                     "severe_errors": self.severe, "stream_error": self.fault,
                     "measurement_report": self.measurements.report(time.time()) if final else None}
@@ -335,6 +353,8 @@ def classify(profile, exit_code, stop_reason, evidence, resources, has_summary):
     if stop_reason in ("prometheus_unavailable", "metric_stream_unavailable") or evidence.get("stream_error"):
         return "failed", "invalid_telemetry"
     if stop_reason == "generator_telemetry_unavailable":
+        return "failed", "invalid_generator_telemetry"
+    if not evidence.get("generator_cpu_samples") or not evidence.get("generator_memory_samples"):
         return "failed", "invalid_generator_telemetry"
     if (stop_reason in ("generator_saturated", "generator_oom", "local_storage_exhausted")
             or resources.get("oom") or resources.get("saturated")):

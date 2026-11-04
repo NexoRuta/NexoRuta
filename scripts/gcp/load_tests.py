@@ -23,6 +23,8 @@ REGION = "southamerica-west1"
 JOB = "nexoruta-load-tests"
 LEASE_OBJECT = "leases/load-test.json"
 PROFILES = {"smoke": 300, "baseline": 1260, "sync": 1500, "stress": 2700, "soak": 5100}
+SUITE_SOURCES = ("tests/load/Dockerfile", "tests/load/profiles.json", "tests/load/scenario.js",
+                 "deploy/load/runner.py", "deploy/load/supervision.py", "deploy/load/sessions.py")
 
 
 def config():
@@ -261,8 +263,7 @@ def immutable_manifest(config, run_id, profile, session_expires_at, fixture_vers
 
 def suite_sha256(root):
     digest = hashlib.sha256()
-    for relative in ("tests/load/Dockerfile", "tests/load/profiles.json", "tests/load/scenario.js",
-                     "deploy/load/runner.py", "deploy/load/supervision.py", "deploy/load/sessions.py"):
+    for relative in SUITE_SOURCES:
         digest.update((root / relative).read_bytes())
     return digest.hexdigest()
 
@@ -462,6 +463,8 @@ def execution_report(active, cloud_state, summary):
             or not summary.get("evidence", {}).get("measured_requests")
             or not (summary.get("evidence", {}).get("measurement_report") or {}).get("valid")
             or not (summary.get("evidence", {}).get("measurement_report") or {}).get("complete")
+            or not summary.get("evidence", {}).get("generator_cpu_samples")
+            or not summary.get("evidence", {}).get("generator_memory_samples")
             or not summary.get("authentication", {}).get("ready")
             or summary.get("authentication", {}).get("fault")
             or not summary.get("session_cleanup", {}).get("complete")):

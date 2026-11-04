@@ -57,7 +57,8 @@ class StageMeasurementTests(unittest.TestCase):
         self.assertEqual(report["first_breached_stage"], "3")
         self.assertEqual(report["stages"][2]["latency"]["read"]["p95_ms"], 2000)
         verdict = supervision.classify("stress", 0, None,
-            {"measured_requests": 4, "measurement_report": report}, {"available": True}, True)
+            {"measured_requests": 4, "measurement_report": report,
+             "generator_cpu_samples": 1, "generator_memory_samples": 1}, {"available": True}, True)
         self.assertEqual(verdict, ("failed", "capacity_limit_found"))
 
     def test_percentiles_use_samples_not_averages_of_vu_percentiles(self):
@@ -110,7 +111,8 @@ class StageMeasurementTests(unittest.TestCase):
         self.sample(1, "1")
         report = self.measurements.report(2500)
         verdict = supervision.classify("stress", 99, None,
-            {"measured_requests": 1, "measurement_report": report}, {"available": True}, True)
+            {"measured_requests": 1, "measurement_report": report,
+             "generator_cpu_samples": 1, "generator_memory_samples": 1}, {"available": True}, True)
         self.assertEqual(verdict, ("failed", "slo_failed"))
 
     def test_nominal_sync_keeps_the_requirement_for_every_configured_vu(self):
@@ -130,6 +132,24 @@ class StageMeasurementTests(unittest.TestCase):
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_generator_resource_metrics_require_bounded_control_samples(self):
+        evidence = supervision.Evidence()
+        for metric, value in (("nexoruta_load_generator_cpu_utilization", 1.05),
+                              ("nexoruta_load_generator_memory_utilization", 1)):
+            evidence.consume({"type": "Point", "metric": metric,
+                "data": {"value": value, "tags": {"phase": "control", "kind": "generator"}}})
+        self.assertEqual(evidence.snapshot()["generator_cpu_samples"], 1)
+        self.assertEqual(evidence.snapshot()["generator_memory_samples"], 1)
+        invalid = (
+            ("nexoruta_load_generator_cpu_utilization", 1.06, {"phase": "control", "kind": "generator"}),
+            ("nexoruta_load_generator_memory_utilization", -0.1, {"phase": "control", "kind": "generator"}),
+            ("nexoruta_load_generator_cpu_utilization", 0.5, {"phase": "measured", "kind": "generator"}),
+        )
+        for metric, value, tags in invalid:
+            with self.subTest(metric=metric, value=value, tags=tags), self.assertRaises(ValueError):
+                supervision.Evidence().consume({"type": "Point", "metric": metric,
+                    "data": {"value": value, "tags": tags}})
+
     def test_controller_hash_matches_the_actual_sources_copied_into_the_runner_image(self):
         repository = Path(__file__).resolve().parents[2]
         configuration = json.loads((repository / "tests/load/profiles.json").read_text())
@@ -173,7 +193,8 @@ class EvidenceTests(unittest.TestCase):
                 resources.return_value.sample.return_value = {"available": True}
                 with self.assertRaises(OSError):
                     runner.run_process(["k6", "scenario.js"], {}, Path(directory),
-                        {"run_id": "controlled"}, {"expires_at": float("inf")}, "control", "results", "unused")
+                        {"run_id": "controlled"}, {"expires_at": float("inf")}, "control", "results", "unused",
+                        None, resources.return_value)
             process.kill.assert_called_once()
             stream.close.assert_called_once()
 
@@ -232,7 +253,8 @@ class EvidenceTests(unittest.TestCase):
                 resources.return_value.latest = {"available": True}
                 code, reason, evidence, _ = runner.run_process(
                     [sys.executable, str(child), "scenario.js"], dict(os.environ), output,
-                    {"run_id": "controlled"}, {"expires_at": float("inf")}, "control", "results", "http://unused")
+                    {"run_id": "controlled"}, {"expires_at": float("inf")}, "control", "results", "http://unused",
+                    None, resources.return_value)
             self.assertEqual(code, 0)
             self.assertIsNone(reason)
             self.assertEqual(evidence["measured_requests"], 1)
@@ -266,6 +288,7 @@ class ClassificationTests(unittest.TestCase):
         summary = {"run_id": "one", "status": "passed", "classification": "passed",
                    "authentication": {"ready": True, "fault": None}, "session_cleanup": {"complete": True},
                    "evidence": {"measured_requests": 10,
+                                "generator_cpu_samples": 1, "generator_memory_samples": 1,
                                 "measurement_report": {"valid": True, "complete": True}}}
         report = load_test_control.execution_report({"run_id": "one"}, "CONDITION_SUCCEEDED", summary)
         self.assertEqual(report["status"], "passed")
@@ -276,6 +299,10 @@ class ClassificationTests(unittest.TestCase):
         summary["evidence"]["measurement_report"]["complete"] = False
         report = load_test_control.execution_report({"run_id": "one"}, "CONDITION_SUCCEEDED", summary)
         self.assertEqual(report["status"], "failed")
+        summary["evidence"]["measurement_report"]["complete"] = True
+        summary["evidence"]["generator_memory_samples"] = 0
+        report = load_test_control.execution_report({"run_id": "one"}, "CONDITION_SUCCEEDED", summary)
+        self.assertEqual(report["classification"], "incomplete_evidence")
 
     def test_wait_persists_a_failure_report_when_cloud_succeeds_without_summary(self):
         active = {"run_id": "one", "profile": "baseline", "expires_at": 999,
@@ -295,7 +322,8 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(leases.write.call_args.args[2]["status"], "failed")
 
     def test_verdicts_do_not_confuse_cancellation_with_infrastructure_or_slos(self):
-        evidence = {"measured_requests": 10, "measurement_report": {"valid": True, "complete": True}}
+        evidence = {"measured_requests": 10, "measurement_report": {"valid": True, "complete": True},
+                    "generator_cpu_samples": 1, "generator_memory_samples": 1}
         for profile, code, reason, resources, has_summary, expected in (
             ("baseline", 0, None, {"available": True}, True, ("passed", "passed")),
             ("baseline", 99, None, {"available": True}, True, ("failed", "slo_failed")),
@@ -309,10 +337,15 @@ class ClassificationTests(unittest.TestCase):
         ):
             with self.subTest(expected=expected):
                 self.assertEqual(supervision.classify(profile, code, reason, evidence, resources, has_summary), expected)
+        missing_generator = {key: value for key, value in evidence.items()
+                             if key not in ("generator_cpu_samples", "generator_memory_samples")}
+        self.assertEqual(supervision.classify("baseline", 0, None, missing_generator,
+            {"available": True}, True), ("failed", "invalid_generator_telemetry"))
 
     def test_discarded_iterations_do_not_prove_an_application_capacity_limit(self):
         verdict = supervision.classify("stress", 99, None,
             {"measured_requests": 100, "dropped_iterations": 1,
+             "generator_cpu_samples": 1, "generator_memory_samples": 1,
              "measurement_report": {"valid": True, "complete": True}}, {"available": True}, True)
         self.assertEqual(verdict, ("failed", "slo_failed"))
 

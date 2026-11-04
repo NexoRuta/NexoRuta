@@ -98,10 +98,10 @@ def verify_suite(manifest, configuration):
         raise ValueError("The running suite does not match the reserved manifest")
 
 
-def run_process(args, env, output, result, lease, control_bucket, bucket, prom_origin, authentication=None):
+def run_process(args, env, output, result, lease, control_bucket, bucket, prom_origin,
+                authentication, resources):
     stream = MetricStream(output / "metrics.pipe", json.loads(env.get("NEXORUTA_LOAD_PROFILE", "{}")),
                           json.loads(env.get("NEXORUTA_LOAD_THRESHOLDS", "{}")))
-    resources = Resources()
     resources.sample()
     args = [*args[:-1], "-o", f"json={output / 'metrics.pipe'}", args[-1]]
     stream.start()
@@ -273,12 +273,14 @@ def main():
             str(ROOT / "scenario.js")]
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
-    broker = SessionBroker(authentication)
+    resources = Resources()
+    broker = SessionBroker(authentication, lambda: dict(resources.latest))
     env.update(NEXORUTA_AUTH_BROKER_URL=broker.url, NEXORUTA_AUTH_BROKER_KEY=broker.capability)
     try:
         broker.start()
         exit_code, stop_reason, evidence, generator = run_process(
-            args, env, output, result, lease, control_bucket, bucket, prom_origin, authentication)
+            args, env, output, result, lease, control_bucket, bucket, prom_origin,
+            authentication, resources)
     finally:
         # Cloud Run may allow only a short grace period after SIGTERM. Preserve
         # the verdict/checkpoint instead of spending it on optional revocation.

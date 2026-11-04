@@ -7,7 +7,7 @@ const source = fs.readFileSync(new URL('../../tests/load/scenario.js', import.me
 const profiles = JSON.parse(fs.readFileSync(new URL('../../tests/load/profiles.json', import.meta.url)));
 
 async function harness({ count = 1, sync = false, warmupStatus = 200, rateProfile = false,
-  readyPolls = 0, brokerStatus = 200 } = {}) {
+  readyPolls = 0, brokerStatus = 200, generatorReadyPolls = 0 } = {}) {
   const accounts = Array.from({ length: count }, (_, index) => ({
     jornadaId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
   }));
@@ -41,6 +41,8 @@ async function harness({ count = 1, sync = false, warmupStatus = 200, rateProfil
     },
     get(url, options) {
       requests.push({ url, ...options });
+      if (url.endsWith('/generator')) return response(generatorReadyPolls-- > 0 ? 202 : 200,
+        { cpu_utilization: 0.4, memory_utilization: 0.5 });
       if (url.endsWith('/ready')) return response(readyPolls-- > 0 ? 202 : brokerStatus, {});
       if (url.includes('/sessions/')) return response(brokerStatus,
         { accessToken: `synthetic-token-${clock}`, expiresAtUtc: new Date(clock + 900000).toISOString() });
@@ -101,6 +103,9 @@ test('stress labels stages from the actual scenario clock and does not add think
   assert.equal(h.elapsed() - h.execution.scenario.startTime, 960000);
   assert(h.metrics.filter(m => m.name === 'nexoruta_load_window_started')
     .every(m => m.value === h.execution.scenario.startTime));
+  h.scenario.teardown();
+  assert.deepEqual(JSON.parse(JSON.stringify(h.metrics.filter(m => m.name === 'nexoruta_load_window_finished')
+    .map(m => m.tags))), [{ phase: 'control' }]);
   assert.deepEqual(JSON.parse(JSON.stringify(h.scenario.options.scenarios.application.stages)), profiles.profiles.stress.stages);
 });
 
@@ -116,6 +121,38 @@ test('setup waits for the wrapper and retains a bounded authentication budget', 
   assert.equal(h.requests.filter(r => r.tags.name === 'load_auth_ready').length, 3);
   assert(h.elapsed() >= 32000);
   assert(Number.parseInt(h.scenario.options.setupTimeout, 10) > 50 * 12.1 + 30);
+});
+
+test('setup deadline survives k6 canonicalizing a seconds timeout into minutes', async () => {
+  const h = await harness();
+  h.scenario.options.setupTimeout = '1m3s';
+  h.scenario.setup();
+  assert.equal(h.requests.filter(r => r.tags.phase === 'warmup').length, 30);
+  assert(h.elapsed() >= 30000);
+});
+
+test('generator telemetry retries startup and exports bounded control gauges', async () => {
+  const h = await harness({ generatorReadyPolls: 1 });
+  h.scenario.generatorTelemetry();
+  assert.equal(h.requests.filter(r => r.url.endsWith('/generator')).length, 1);
+  assert.equal(h.metrics.length, 0);
+  h.scenario.generatorTelemetry();
+  assert.deepEqual(JSON.parse(JSON.stringify(h.metrics.map(metric => [metric.name, metric.value, metric.tags]))), [
+    ['nexoruta_load_generator_cpu_utilization', 0.4,
+      { phase: 'control', kind: 'generator', name: 'resource_usage' }],
+    ['nexoruta_load_generator_memory_utilization', 0.5,
+      { phase: 'control', kind: 'generator', name: 'resource_usage' }],
+  ]);
+  assert.equal(h.elapsed(), 6000);
+});
+
+test('generator monitor duration follows both nominal and staged stress traffic', async () => {
+  const nominal = await harness();
+  assert.equal(nominal.scenario.options.scenarios.generator_monitor.duration, '130s');
+  const stress = await harness({ rateProfile: true });
+  const expected = profiles.profiles.stress.stages
+    .reduce((total, stage) => total + Number.parseInt(stage.duration, 10) * 60, 0);
+  assert.equal(stress.scenario.options.scenarios.generator_monitor.duration, `${expected}s`);
 });
 
 test('a VU fetches renewed access tokens without using a refresh token', async () => {
