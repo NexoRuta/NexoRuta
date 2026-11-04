@@ -211,7 +211,6 @@ def main():
     thread.start()
     # Only binding the controlled peer's TLS port needs root. Run the actual
     # suite and its broker with the image's production uid/gid afterwards.
-    os.chown(OUTPUT, 10001, 10001)
     os.setgroups([])
     os.setgid(10001)
     os.setuid(10001)
@@ -287,6 +286,8 @@ def main():
         raise
     finally:
         (OUTPUT / "verification.json").write_text(json.dumps(evidence, indent=2))
+        for path in OUTPUT.rglob("*"):
+            path.chmod(0o777 if path.is_dir() else 0o666)
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)

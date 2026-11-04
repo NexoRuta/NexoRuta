@@ -102,7 +102,9 @@ def verify(evidence_path=None, root=ROOT):
         controlled.chmod(0o755)
         controlled_results = work / "controlled-results"
         controlled_results.mkdir(mode=0o755)
-        controlled_results.chmod(0o755)
+        # work is private to this process (mode 0700); allow the production
+        # runner uid to write evidence while preserving host cleanup access.
+        controlled_results.chmod(0o777)
         (controlled / "load_runtime.py").write_bytes((root / "scripts/gcp/fixtures/load_runtime.py").read_bytes())
         gateway_source = root / "deploy/gcp/monitoring/prometheus-write-gateway.py"
         config = work / "prometheus.yml"
@@ -149,7 +151,7 @@ def verify(evidence_path=None, root=ROOT):
             start(runner, image,
                 ("--network", network, "--ip", runner_ip,
                  "--add-host", "controlled.invalid:127.0.0.1", "--cpus=2", "--memory=2g",
-                 "--pids-limit=256", "--user", "0:0", "--cap-drop=ALL", "--cap-add=CHOWN",
+                 "--pids-limit=256", "--user", "0:0", "--cap-drop=ALL",
                  "--cap-add=SETGID", "--cap-add=SETUID", "--cap-add=NET_BIND_SERVICE",
                  "--cap-add=DAC_OVERRIDE",
                  "--read-only", "--tmpfs", "/tmp:rw,nosuid,nodev,size=128m",
