@@ -65,6 +65,10 @@ No habilitar el workflow hasta que las cuentas y jornadas existan en el entorno 
 
 ## Métricas e informes
 
+La preparación autentica las cuentas secuencialmente y luego calienta exclusivamente la lectura de perfil durante 30 segundos. Cada petición tiene un timeout de 10 segundos y el timeout total de setup contempla las identidades del perfil, la pausa de login y el warm-up. Un fallo de warm-up impide iniciar la carga. Las operaciones de replay se envían únicamente en la ventana medida.
+
+Las peticiones llevan `phase=setup`, `phase=warmup` o `phase=measured`; los thresholds HTTP de la versión 2 seleccionan solo `phase:measured`. Al comparar latencias en Prometheus, filtrar esa fase para excluir login y calentamiento. Las pruebas controladas de `scripts/gcp/load_scenario_test.mjs` ejecutan el scenario real con dobles de HTTP y reloj; no acreditan rendimiento remoto ni la ejecución del binario k6.
+
 k6 envía `run_id` y `profile` a un gateway privado de escritura limitada en A por Direct VPC. El gateway solo reenvía remote write y readiness; no permite consultas a Prometheus. El dashboard `nexoruta-load-tests` muestra solicitudes, p95/p99, errores, latencia server por nodo y CPU de las VMs. Cloud Storage conserva resumen privado por 30 días; Cloud Run y Cloud Logging retienen metadatos y logs del wrapper según las políticas de GCP. La salida cruda de k6 se retiene dentro del contenedor y no se publica.
 
 La prueba todavía requiere aceptación visual en Grafana con una corrida real. Si no hay muestras, el dashboard no debe interpretarlas como cero; el usuario puede distinguir ausencia de ingesta del resultado del Job mediante el resumen y los logs. El smoke de la feature reenvía operaciones ya aplicadas; no sustituye el aprovisionamiento y la conciliación inicial de datos ni demuestra flujos externos de notificación.

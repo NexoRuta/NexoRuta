@@ -47,6 +47,9 @@ const base = (__ENV.NEXORUTA_API_ORIGIN || '').replace(/\/$/, '');
 if (!/^https:\/\/[a-z0-9.-]+$/.test(base)) throw new Error('A validated HTTPS API origin is required.');
 
 export const options = {
+  // Login pacing and warm-up run before scenarios. Budget every identity at
+  // the existing IP quota plus the bounded HTTP timeout.
+  setupTimeout: `${Math.ceil(profile.vus * 22.1 + 40)}s`,
   // Avoid per-journey URLs and detailed transport errors as Prometheus labels.
   systemTags: ['proto', 'status', 'method', 'name', 'group', 'check', 'error_code', 'tls_version', 'scenario', 'expected_response'],
   scenarios: {
@@ -70,21 +73,38 @@ export function setup() {
   const sessions = fixture.accounts.slice(0, profile.vus).map((account) => {
     const response = http.post(`${base}/api/auth/mobile/login`, JSON.stringify({
       email: account.email, password: account.password,
-    }), { headers: { 'Content-Type': 'application/json' }, tags: { kind: 'setup' } });
+    }), { timeout: '10s', headers: { 'Content-Type': 'application/json' },
+      tags: { phase: 'setup', kind: 'setup', name: 'mobile_login' } });
     if (response.status !== 200) throw new Error(`Synthetic account login failed with HTTP ${response.status}.`);
     const body = response.json();
     if (!body.accessToken) throw new Error('Login response did not contain an access token.');
     sleep(12.1);
     return { token: body.accessToken, jornadaId: account.jornadaId };
   });
+  // Warm only the permitted read route. Replay belongs exclusively to the
+  // measured phase, where each VU must still send its first batch exactly once.
+  const warmupDeadline = Date.now() + 30000;
+  let accountIndex = 0;
+  while (Date.now() < warmupDeadline) {
+    const identity = sessions[accountIndex % sessions.length];
+    const response = http.get(`${base}${fixture.readPath}`, {
+      timeout: '10s', headers: { Authorization: `Bearer ${identity.token}` },
+      tags: { phase: 'warmup', kind: 'read', name: 'mobile_profile' },
+    });
+    if (response.status !== 200) throw new Error(`Warm-up failed with HTTP ${response.status}.`);
+    accountIndex += 1;
+    sleep(1);
+  }
   return { sessions };
 }
 
 export default function (data) {
   const identity = data.sessions[(__VU - 1) % data.sessions.length];
   const headers = { Authorization: `Bearer ${identity.token}` };
-  const read = http.get(`${base}${fixture.readPath}`, { headers, tags: { kind: 'read', name: 'mobile_profile' } });
-  if (!check(read, { 'profile response is 200': (r) => r.status === 200 })) unexpected.add(1, { kind: 'read' });
+  const read = http.get(`${base}${fixture.readPath}`, { timeout: '10s', headers,
+    tags: { phase: 'measured', kind: 'read', name: 'mobile_profile' } });
+  unexpected.add(check(read, { 'profile response is 200': (r) => r.status === 200 }) ? 0 : 1,
+    { phase: 'measured', kind: 'read' });
 
   if (profile.sync && __ITER === 0) {
     const drainStarted = Date.now();
@@ -92,14 +112,14 @@ export default function (data) {
     const operations = operationsByJourney[identity.jornadaId];
     for (let index = 0; index < operations.length; index += 1) {
       const response = http.post(`${base}/api/mobile/jornadas/${identity.jornadaId}/operaciones`,
-        JSON.stringify(operations[index]), { headers: { ...headers, 'Content-Type': 'application/json',
+        JSON.stringify(operations[index]), { timeout: '10s', headers: { ...headers, 'Content-Type': 'application/json',
           'X-NexoRuta-Pending-Sync': String(operations.length - index) },
-        tags: { kind: 'sync', name: 'mobile_sync_operation' } });
+        tags: { phase: 'measured', kind: 'sync', name: 'mobile_sync_operation' } });
       let result = '';
       try { result = response.json().resultado || ''; } catch (_) { /* counted as unexpected below */ }
       const valid = response.status === 200 && result === 'Aplicada';
       if (!valid) {
-        unexpected.add(1, { kind: 'sync', result: result || 'invalid_response' });
+        unexpected.add(1, { phase: 'measured', kind: 'sync' });
         check(response, { 'operation replay accepted and applied': () => valid });
         break;
       }
