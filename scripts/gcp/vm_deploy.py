@@ -471,6 +471,17 @@ def prepare(args, deployment, runtime, integrations, hosting, manifest, private_
             deployment.execute("docker", "logout", registry_host)
     deployment.measure("configure_validate_and_pull_images", configure_and_pull)
 
+    def install_host_monitoring_agent():
+        ops_agent_source = deployment.directory / "monitoring/ops-agent.yaml"
+        if not ops_agent_source.is_file():
+            raise FileNotFoundError("The release bundle is missing monitoring/ops-agent.yaml")
+        # Older releases configured the Ops Agent OTLP receiver on host port 4317.
+        # Apply the current host-metrics-only config before Tempo claims that port.
+        private_bytes(OPS_AGENT_CONFIG, ops_agent_source.read_bytes())
+        deployment.execute("systemctl", "restart", "google-cloud-ops-agent")
+        deployment.execute("systemctl", "is-active", "--quiet", "google-cloud-ops-agent")
+    deployment.measure("install_host_monitoring_agent", install_host_monitoring_agent)
+
     def start_sql_and_shared_services():
         deployment.compose("up", "-d", "--wait", "--wait-timeout", "300", "sql-proxy")
         if args.node == "a":
@@ -515,12 +526,6 @@ def prepare(args, deployment, runtime, integrations, hosting, manifest, private_
                      "services_host": services_ip, "private_ip": private_ip,
                      "redis_host": runtime["redis"]["host"], "redis_port": runtime["redis"]["port"],
                      "expires_at": args.deadline}))
-        ops_agent_source = deployment.directory / "monitoring/ops-agent.yaml"
-        if not ops_agent_source.is_file():
-            raise FileNotFoundError("The release bundle is missing monitoring/ops-agent.yaml")
-        private_bytes(OPS_AGENT_CONFIG, ops_agent_source.read_bytes())
-        deployment.execute("systemctl", "restart", "google-cloud-ops-agent")
-        deployment.execute("systemctl", "is-active", "--quiet", "google-cloud-ops-agent")
         deployment.execute("systemctl", "restart", "nexoruta-monitor.service")
         private_file(deployment.directory / "prepared.json", json.dumps({"node": args.node, "deadline": args.deadline}))
     deployment.measure("install_monitoring_and_mark_prepared", install_monitoring_configuration)
