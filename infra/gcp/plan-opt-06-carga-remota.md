@@ -1,8 +1,8 @@
 # OPT-06 — Plan de implementación de pruebas de carga remotas
 
-Fecha: 03/11/2026. Estado: implementación local en código; pendiente de aplicar y aceptar en GCP.
+Revisión: 04/11/2026. Estado: implementación de código integrada en `main` por el PR #54 y CI verde; falta aplicar la infraestructura y completar la aceptación remota.
 
-Card: [OPT-06 — Pruebas de carga automatizadas en ambiente remoto](https://www.notion.so/40a032f1caff81eaa439c8f4503613e0). Se implementaron en el checkout la orquestación, suite inicial, recursos, controles y dashboard. El bootstrap y la demo no se aplicaron; no se generó carga ni se revisó Grafana en navegador. La card permanece abierta hasta completar la aceptación remota.
+Card: [OPT-06 — Pruebas de carga automatizadas en ambiente remoto](https://www.notion.so/40a032f1caff81eaa439c8f4503613e0). La orquestación, suite, recursos, controles y dashboard están en `main`; el PR #54 y su CI integrado terminaron correctamente. El bootstrap y la demo siguen sin aplicar; no se generó carga ni se revisó Grafana en navegador. La card permanece abierta hasta completar la aceptación remota.
 
 ### Alcance entregado y límites
 
@@ -10,7 +10,7 @@ Card: [OPT-06 — Pruebas de carga automatizadas en ambiente remoto](https://www
 - El Job publica métricas k6 por remote write a un receptor interno de escritura limitada y usa HTTPS público para medir el balanceador. Grafana comparte dashboard JSON entre local y GCP.
 - El runner no siembra ni limpia datos de negocio: usa cuentas sintéticas preparadas manualmente y revoca al terminar las sesiones móviles creadas por su autenticación. `baseline` solo lee. Los perfiles `smoke`, `sync`, `stress` y `soak` repiten hasta 50 eventos `Posicion` ya aplicados por jornada para medir reconexión e idempotencia. Esto no mide escrituras nuevas, colisiones, aislamiento entre tenants ni conciliación de datos nuevos.
 - Las fixtures separan credenciales en Secret Manager (máximo 64 KiB) de los eventos en un objeto privado, con hash SHA-256 verificado y límite de 4 MiB. No se enviarán datos reales ni credenciales al repositorio.
-- Aplicar OpenTofu, crear fixtures, habilitar APIs, arrancar VMs, probar HTTP remoto, comprobar reglas de red y revisar Grafana visualmente quedan pendientes de la sesión operativa de aceptación. No reportar los SLO como medidos.
+- Aplicar OpenTofu, crear fixtures, habilitar APIs, arrancar VMs, probar HTTP remoto, comprobar reglas de red y revisar Grafana visualmente quedan pendientes de la sesión operativa de aceptación. El plan actualizado de `demo` crea Memorystore Basic de 1 GiB, que factura mientras exista aunque las VMs estén apagadas. No reportar los SLO como medidos.
 
 ## 1. Decisión de arquitectura
 
@@ -34,19 +34,22 @@ La ejecución en Santiago mide el despliegue y sus dependencias con red cercana.
 
 Fuentes: `infra/gcp/{bootstrap,demo}`, `scripts/gcp`, `.github/workflows`, `deploy/gcp`, `deploy/observability`, controladores de reparto, rate limiting e instrumentación del backend, y `frontend/DESIGN.md`.
 
-Se hicieron consultas **de solo lectura** mediante gcloud y GitHub CLI el 03/11/2026 al proyecto `nexoruta-demo-20261022`. No se arrancaron VMs, habilitaron APIs, aplicaron planes ni enviaron carga.
+Se hicieron consultas **de solo lectura** mediante gcloud y GitHub CLI el 03/11/2026 y se repitieron el 04/11/2026 en `nexoruta-demo-20261022`. No se arrancaron VMs, habilitaron APIs, aplicaron planes ni enviaron carga.
 
 | Elemento | Evidencia y consecuencia |
 | --- | --- |
-| Aplicación | Dos VMs `nexoruta-demo` y `nexoruta-demo-b`, zonas Santiago a/b, `n4-custom-6-16384`; ambas estaban `TERMINATED`. No hay evidencia de funcionamiento actual del runtime. |
-| Entrada | IP global `34.49.146.66`, balanceador con grupos A/B configurados para API. `get-health` no devolvió instancias sanas mientras estaban apagadas. Usar los orígenes del manifiesto efectivo, no hardcodear esa IP. |
-| Red | VPC `nexoruta-demo`, subred `10.42.0.0/24`, Private Google Access habilitado. Proponer otra subred para el Job, sin modificar esta ni el rango de Private Service Access de SQL. |
+| Aplicación | Dos VMs `nexoruta-demo` y `nexoruta-demo-b`, zonas Santiago a/b, `n4-custom-6-16384`; ambas continúan `TERMINATED` y conservan el límite de cuatro horas. No hay evidencia de runtime activo. |
+| Entrada | IP global `34.49.146.66`, balanceadores y grupos A/B existentes. `get-health` no informa backends sanos con las VMs apagadas y el GET público a `/health/ready` devolvió HTTP 503. Usar los orígenes del manifiesto efectivo, no hardcodear esa IP. |
+| Red | VPC `nexoruta-demo`, subred `10.42.0.0/24`, Private Google Access habilitado. La subred `10.42.1.0/26` del Job aún no existe en estado ni en GCP; el plan la agrega sin modificar la subred de aplicación ni el rango privado de SQL. |
 | SQL | PostgreSQL 18, `db-g1-small`, estado `RUNNABLE`, política `ALWAYS`; backups y PITR deshabilitados. Es un cuello de botella posible y exige fixtures acotadas y limpieza segura. |
-| Redis | El checkout define Memorystore Basic 1 GiB con AUTH/TLS, pero la consulta remota devolvió `SERVICE_DISABLED` para `redis.googleapis.com`. No dar por provisionado ni operativo el caché. Resolver la diferencia con el despliegue objetivo antes de medirlo. |
-| Cloud Run | `run.googleapis.com` está deshabilitada. No fue posible inventariar Jobs con esa API; habilitarla declarativamente será parte de implementar, no de este análisis. |
+| Redis | `redis.googleapis.com` sigue deshabilitada y `google_redis_instance.cache` no está en el estado de OpenTofu. El plan actual de `demo` propone crear Memorystore Basic 1 GiB con AUTH/TLS. No se considera aprovisionado ni operativo antes del apply. |
+| Cloud Run | `run.googleapis.com` sigue deshabilitada y el estado de `demo` no contiene el Job. El plan agrega `nexoruta-load-tests`; primero debe habilitarse declarativamente el API desde `bootstrap`. |
+| Recursos OPT-06 | Buckets, secreto de fixtures, identidades controller/runner, subred, reglas y Job no aparecen en el estado remoto. El bucket de resultados no existe. La variable de GitHub `GCP_LOAD_SERVICE_ACCOUNT` aún no está configurada. |
 | Observabilidad | El código centraliza Prometheus/Loki/Tempo en A, Grafana en A/B, Collector/Alloy por nodo, Cloud Monitoring vía collector cada 60 s y métricas de aplicación vía OTLP. Esto no acredita esa configuración en ejecución. |
 | Diferencia de firewall | La regla remota `nexoruta-demo-shared-services` permite 5672/19092/27017/1025/15692 desde `10.42.0.0/24`. El checkout añade 9090/3100/3200/4317; OPT-06 agrega una subred aparte y una regla limitada a 9091. Conciliar estado, release y reglas antes de afirmar que B exporta telemetría correctamente. |
-| Operación | `vm-controls.yml` ofrece start/update/stop, restringido a main y environment `nexoruta-demo`, con WIF. Últimos start/stop consultados: 30–31/10, SHA `b0b6252b8d7d628e1be1d45872c34bd18ac10e3d`; no prueban el checkout actual. |
+| Operación | `vm-controls.yml` ofrece start/update/stop, restringido a main y environment `nexoruta-demo`, con WIF. La política del environment permite `main`; el workflow de carga ya está publicado, pero falta su variable `GCP_LOAD_SERVICE_ACCOUNT`. |
+
+El primer plan de bootstrap contra el estado actual reveló un `for_each` con una clave de rol custom aún desconocida; se corrigió con claves estables. El plan de solo lectura posterior calcula 17 creaciones, 3 actualizaciones y 2 cambios IAM; uno reemplaza el permiso del guard por una condición limitada a los objetos de control. El plan de `demo` con `running=false` calcula 28 creaciones, 2 actualizaciones y una nueva versión del secreto runtime con política `ABANDON`; incluye Memorystore y el Job, y no propone borrar VMs, discos, SQL ni balanceador. Ninguno de los planes se aplicó.
 
 La revisión local partió del root `fabc324a3ee27ca919764c403dfc136c0351fbe6`, backend `48e947b156cb0116743a77b2d7ed2ccec77cd8c6`, frontend `e584c8033faa9d93debbc2248231b8a07c4077eb` y mobile `d570ddb7c482c56070140e25fafb5a18e51cdbfa`. `scripts/cloud/checkpoint.json` registra otros SHAs para backend/frontend: distinguir ese checkpoint de continuidad de una release desplegada. No actualizar gitlinks para resolver esta feature.
 
@@ -169,23 +172,23 @@ La pila depende de A: si A cae, no hay vista en vivo; el runner aborta cuando el
 
 | Fase | Implementación | Condición de salida |
 | --- | --- | --- |
-| 0. Ambiente | Inventario GCP de solo lectura previo a implementar. | Repetir contra el proyecto actual al preparar la aceptación; VMs, Cloud Run y Redis no estaban disponibles en la consulta anterior. |
+| 0. Ambiente | Inventario GCP de solo lectura repetido el 04/11/2026. | Confirmado: VMs apagadas, SQL activo, Run/Redis API deshabilitadas, recursos OPT-06 ausentes y health público 503. |
 | 1. Suite | Implementados `tests/load/`, `deploy/load/`, perfiles, login controlado, replay sync, thresholds, hash/sanitización y checkpoints. | Requiere lint/compilación estática local y luego smoke remoto. No crea ni limpia fixtures. |
-| 2. Infraestructura | Implementados APIs/WIF/controlador separado en `bootstrap/`; Job, tres buckets, subred, reglas/IAM en `demo/load-tests.tf`; dashboard incluido en delivery. | Requiere `tofu validate/plan` y revisión de cambios antes de apply. El Job usa una imagen inocua al crearse; cada corrida debe actualizarla a la imagen k6 fijada por digest antes de ejecutar. |
+| 2. Infraestructura | APIs/WIF/controller en `bootstrap/`; Job, tres buckets, subred, reglas/IAM en `demo/load-tests.tf`; dashboard incluido en delivery. El `for_each` del controller usa claves estables y el plan real de bootstrap ahora se resuelve en una pasada. | `tofu validate/plan` pasan; falta revisar y aplicar bootstrap y luego `demo` con VMs apagadas. El Job usa una imagen inocua al crearse; cada corrida debe actualizarla a la imagen k6 fijada por digest antes de ejecutar. |
 | 3. Control | Implementados workflow manual, leases por generación, reserva, reconciliación de arranque, cancelación, guard y exclusión con start/update/stop. | Requiere aplicar IAM/WIF y ensayar carrera/cancelación contra GCP antes de uso operativo. |
 | 4. Fixtures y telemetría | Implementados buckets separados de control, resultados y fixtures, controles de límite/hash, dashboard común y métricas cliente/API. | Crear cuentas/jornadas y cargar dataset sintético; comprobar remote-write, nombres/unidades y lectura de ambos nodos en Grafana. |
 | 5. Aceptación remota | Pendiente: smoke → baseline → sync → stress acotado → soak, con repetición y comparación. | Evidencia de SLO y límites reales; esta fase no se sustituye con pruebas locales. |
-| 6. Operación y cierre | Guía en `infra/gcp/README.md`, `infra/gcp/github-environment.md` y `tests/load/README.md`. | Presupuestar, aplicar recursos, completar revisión visual, adjuntar evidencia en la card y resolver límites de datos indicados en §5. |
+| 6. Operación y cierre | Guía en `infra/gcp/README.md`, `infra/gcp/github-environment.md` y `tests/load/README.md`. | Presupuestar Memorystore persistente y demás recursos, aplicar, completar revisión visual, adjuntar evidencia en la card y resolver límites de datos indicados en §5. |
 
 Cambios backend/frontend necesarios se publican en sus repositorios y luego se fijan mediante gitlinks exactos del root. Suite y aplicación evolucionan juntas; no mantener aliases ni adaptadores para contratos antiguos. Registrar por separado defectos previos y no relajar aserciones para aprobar la carga.
 
 ## 9. Verificación obligatoria contra GCP
 
-**Estático/compilación:** pasan AST de Python, `node --check` del scenario, parseo JSON, `yamldecode` de workflow/Compose GCP/guard y OpenTofu fmt/validate. No hay actionlint. La imagen Docker y el ejecutor k6 requieren Docker/k6 disponibles; si no se compilan localmente, demostrar en Cloud Build antes del smoke. El plan remoto requiere identidad de controller y revisión manual para asegurar que no reemplace VM, discos, SQL ni load balancer. Las rutas nuevas están en el root: el selector actual de CI las trata como cambios de pipeline y fuerza validación completa, así que no se requiere optimizar `ci_plan.py` para habilitar el camino.
+**Estático/compilación:** pasan AST de Python, `node --check` del scenario, parseo JSON, `yamldecode` de workflow/Compose GCP/guard y OpenTofu fmt/validate. `actionlint` pasa localmente. El plan de bootstrap contra GCP detectó una clave `for_each` desconocida y se corrigió; el plan actualizado se resuelve sin borrar VMs, discos, SQL ni balanceador. No se aplicó. Las rutas nuevas están en el root: el selector actual de CI las trata como cambios de pipeline y fuerza validación completa, así que no se requiere optimizar `ci_plan.py` para habilitar el camino.
 
-**Automatización controlada:** 78 pruebas unitarias locales pasan (1 omitida), incluyendo los módulos de sesión, leases, despliegue y validación de variables. Los tests del controlador cubren lease pre-lanzamiento expirada, recuperación del start por `run_id`, duplicados ambiguos y bloqueo con execution activa. Cancelación completa, guard, deadlines y carreras con start/update/stop requieren ensayo en GCP. El scenario k6 y el acceso del runner a Secret Manager/GCS/gateway aún deben probarse mediante un smoke. No consumir proveedores cartográficos/FCM/SMTP reales.
+**Automatización controlada:** la suite Python local anterior obtuvo 168 aprobadas y 7 omitidas; después del último ajuste, las 31 pruebas enfocadas de despliegue pasan, incluyendo la comprobación de que el bundle GCP contiene el dashboard OPT-06. El scenario JS obtuvo 11/11. El smoke WSL con Docker/k6 pasó con servicios controlados e incluyó autenticación, 50 replays, telemetría y limpieza. CI #54 pasó todos los jobs y el smoke de k6 en su runner. Cancelación completa, guard, deadlines y carreras con start/update/stop siguen requiriendo ensayo GCP. No consumir proveedores cartográficos/FCM/SMTP reales.
 
-**HTTP y runtime reales en GCP (pendiente):** aplicar bootstrap y demo con VMs apagadas después de revisar `tofu plan`; verificar cuotas, subredes reales, APIs, reglas efectivas, release, DNS/certificados, SQL y estado de Redis. Iniciar por el workflow de VM y comprobar readiness/login/API. Desde Cloud Run verificar gateway privado permitido, consultas al puerto 9090 y destinos RFC1918 restantes denegados, y HTTPS público hacia el LB permitido. Correr smoke y comprobar k6 + A/B en Grafana antes de subir carga.
+**HTTP y runtime reales en GCP (pendiente):** el GET de health público actual devuelve 503 porque ambas VMs siguen detenidas. Aplicar bootstrap y demo con VMs apagadas después de revisar costos/planes; verificar cuota, subred, APIs, reglas efectivas, release, DNS/certificados, SQL y Redis. Iniciar por el workflow de VM y comprobar readiness/login/API. Desde Cloud Run verificar gateway privado permitido, consultas al puerto 9090 y destinos RFC1918 restantes denegados, y HTTPS público hacia el LB permitido. Correr smoke y comprobar k6 + A/B en Grafana antes de subir carga.
 
 **Revisión visual en navegador (pendiente):** abrir el dashboard durante una corrida, comprobar filtro `run_id`, datos en movimiento de k6 y ambos nodos, unidades p95/p99, errores y sync. Revisar ancho, teclado/foco, contraste, zoom y estados loading/error/no data; comprobar el enlace desde el summary Actions. No presentar una respuesta HTTP como revisión visual.
 
@@ -197,7 +200,7 @@ Cada reporte separará evidencia de **estático/compilación, automatización, H
 
 ## 10. Costos, reporte final y cierre
 
-Presupuestar antes del primer apply: Cloud Run CPU/memoria por tarea y tiempo total, transferencia vía LB/VPC, peticiones al LB, imágenes/builds, GCS/operaciones/retención y volumen de logs/métricas. Ejemplo de dimensionamiento, no tarifa: una tarea de 2 vCPU/2 GiB por 40 minutos consume 4.800 vCPU-segundos y 4.800 GiB-segundos. No asumir cobertura gratuita; Santiago usa tarifas regionales y la cuota Run se verifica por separado de Compute. [Precios oficiales](https://cloud.google.com/run/pricing).
+Presupuestar antes del primer apply: Cloud Run CPU/memoria por tarea y tiempo total, transferencia vía LB/VPC, peticiones al LB, imágenes/builds, GCS/operaciones/retención y volumen de logs/métricas. Ejemplo de dimensionamiento, no tarifa: una tarea de 2 vCPU/2 GiB por 40 minutos consume 4.800 vCPU-segundos y 4.800 GiB-segundos. No asumir cobertura gratuita; Santiago usa tarifas regionales y la cuota Run se verifica por separado de Compute. Memorystore Basic M1 figura a USD 0,049/GiB-h como precio de referencia: 1 GiB encendido todo un mes de 730 horas equivale a unos USD 35,77, sujeto a la tarifa regional de Santiago. Memorystore factura desde que se crea, incluso si queda inactivo. [Precios de Cloud Run](https://cloud.google.com/run/pricing), [precios de Memorystore](https://cloud.google.com/memorystore/docs/redis/pricing).
 
 Una sola corrida simultánea, retries 0, límites por perfil y deadline absoluto acotan el consumo; el presupuesto de GCP es una alerta, no un corte. Job, bucket e imágenes persisten; CPU del Job se consume al ejecutar. SQL/Redis/discos/LB mantienen los costos ya propios de la demo aunque termine la prueba o se apaguen las VMs. Verificar disponibilidad de cuota Cloud Run y no cambiar de región silenciosamente.
 
@@ -205,11 +208,13 @@ Artefactos implementados por `run_id`: manifiesto inmutable sin credenciales, `p
 
 OPT-06 queda lista para cerrar cuando una persona puede iniciar y cancelar desde Actions, la carga se ejecuta fuera de A/B, Grafana permite correlacionarla con la aplicación mientras corre, los SLO y la sincronización se evalúan con integridad, el guard detiene corridas huérfanas y existen resultados reproducibles contra el ambiente remoto. Un límite de capacidad hallado debe quedar explicado y asociado a la topología medida. Anexar las evidencias a la card al completar la implementación; conservar pendientes operativos previos como pendientes.
 
-## 11. Evidencia de esta tarea de planificación
+## 11. Evidencia de implementación y aceptación pendiente
 
-- Realizado: lectura de la card, revisión de código/configuración y consultas GCP de solo lectura al inventario, salud, SQL, subred, firewall, APIs y workflows; documentación oficial de Google/Grafana.
-- Estático/compilación local: `tofu fmt -check` y `tofu validate` pasan en bootstrap y demo; AST de Python, parseo de JSON, `node --check` del scenario y `yamldecode` de workflow/Compose GCP/guard pasan. No hay actionlint. No se construyó la imagen ni se ejecutó k6: Docker/k6 no están disponibles.
-- Automatización de la feature: 78 pruebas unitarias locales pasan (1 omitida); incluyen despliegue, recuperación de leases/ejecuciones ambiguas, validador de variables y un servidor local que comprueba que el gateway permite solo remote write/readiness y bloquea consultas. No equivalen a una ejecución de carga.
-- HTTP real contra aplicación, smoke/baseline/sync/stress/soak y aceptación del workflow/GCP: pendientes de entorno remoto aplicado y sesión operativa.
+- CI del PR #54: todos los checks pasaron en `8ed058a18a2f6cea692f94d440b014e73f129a01`; el smoke usó Docker/k6 y servicios controlados, no GCP ni las VMs de la demo.
+- Inventario GCP del 04/11: consultas de solo lectura confirmaron A/B `TERMINATED`, SQL `RUNNABLE`, Run/Redis API deshabilitadas, recursos OPT-06 ausentes del estado y health público HTTP 503. No se inició la aplicación ni se enviaron muestras.
+- OpenTofu local contra el estado remoto: `fmt` y `validate` pasan en bootstrap/demo. El plan corregido de bootstrap calcula 17 altas, 3 cambios y 2 cambios IAM. El plan `demo` con `running=false` calcula 28 altas, 2 cambios y una nueva versión `ABANDON` del secreto runtime; incluye Memorystore y el Job. Ambos planes se revisaron y ninguno se aplicó.
+- Automatización local anterior: 168 pruebas Python aprobadas y 7 omitidas; las 31 pruebas de `test_delivery.py` pasan después del cambio y verifican el dashboard incluido en el bundle; scenario JS 11/11. El smoke WSL de k6/Docker comprobó autenticación, 50 replays, telemetría y limpieza.
+- Cancelación completa, guard, deadlines y carreras con start/update/stop requieren ensayo remoto. No consumir proveedores cartográficos/FCM/SMTP reales.
+- HTTP real contra aplicación, perfiles smoke/baseline/sync/stress/soak y aceptación de workflow/GCP: pendientes de infraestructura aplicada, fixture sintética y sesión operativa.
 - Revisión visual en navegador: pendiente de una corrida real y Grafana disponible.
 - Esta evidencia no acredita capacidad, SLO, Redis operativo ni telemetría remota funcional hasta completar la aceptación contra el ambiente remoto.

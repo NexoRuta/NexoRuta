@@ -151,15 +151,15 @@ resource "google_project_iam_custom_role" "load_execution" {
 }
 
 resource "google_project_iam_member" "load_controller" {
-  for_each = toset([
-    "roles/compute.viewer",
-    "roles/cloudsql.viewer",
-    "roles/cloudbuild.builds.editor",
-    "roles/serviceusage.serviceUsageConsumer",
-    google_project_iam_custom_role.load_execution.name,
-  ])
+  for_each = {
+    compute_viewer         = "roles/compute.viewer"
+    cloudsql_viewer        = "roles/cloudsql.viewer"
+    cloudbuild_editor      = "roles/cloudbuild.builds.editor"
+    service_usage_consumer = "roles/serviceusage.serviceUsageConsumer"
+    load_execution         = google_project_iam_custom_role.load_execution.name
+  }
   project = var.project_id
-  role    = each.key
+  role    = each.value
   member  = "serviceAccount:${google_service_account.load_controller.email}"
 }
 
