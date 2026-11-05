@@ -21,13 +21,16 @@ def load():
     s = json.loads((STATE / "private.json").read_text())
     if s.get("purpose") != "nexoruta-disposable-cloud" or not s["database"].startswith("nexoruta_cloud_"):
         raise RuntimeError("Not an owned disposable database; no operation permitted")
+    if "evidences" not in s:
+        s["evidences"] = base64.b64encode(secrets.token_bytes(32)).decode()
+        (STATE / "private.json").write_text(json.dumps(s)); (STATE / "private.json").chmod(0o600)
     return s
 
 def env(s, role="api"):
     conn = f"Host=127.0.0.1;Port={s['pgPort']};Database={s['database']};Username={s[role+'User']};Password={s[role+'Password']}"
     return dict(os.environ, ASPNETCORE_ENVIRONMENT="Development", DOTNET_ENVIRONMENT="Development",
         ConnectionStrings__Postgres=conn, ConnectionStrings__RateLimits=conn,
-        Jwt__SigningKeyBase64=s["jwt"], Seguimiento__EncryptionKey=s["tracking"],
+        Jwt__SigningKeyBase64=s["jwt"], Seguimiento__EncryptionKey=s["tracking"], Reparto__EvidenciasEncryptionKey=s["evidences"],
         DatabaseInitialization__ApplyMigrations="false", DatabaseInitialization__SeedData="false",
         PlatformInitialization__Enabled="false", OpenTelemetry__Enabled="false",
         DataProtection__KeysDirectory=str(STATE / "keys"),
@@ -54,7 +57,7 @@ def provision_limits(s):
     psql(s,"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='nexoruta_hosting_owner') THEN CREATE ROLE nexoruta_hosting_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; END IF; END $$;"+rate)
 
 def build():
-    for project in ["backend/src/NexoRuta.Api", "frontend/src/NexoRuta.Backoffice", "frontend/src/NexoRuta.Commerce"]:
+    for project in ["backend/src/NexoRuta.Api", "frontend/src/NexoRuta.Backoffice", "frontend/src/NexoRuta.Commerce", "frontend/src/NexoRuta.Tracking"]:
         run(["dotnet", "build", ROOT / project, "--artifacts-path", STATE / "artifacts", "--nologo"], cwd=ROOT)
 
 def launch(s, name, project, port):
@@ -81,7 +84,7 @@ def start():
     if fresh:
         s = dict(purpose="nexoruta-disposable-cloud", database="nexoruta_cloud_"+secrets.token_hex(5), pgPort=15432,
             ownerUser="cloud_owner", apiUser="nexoruta_api_runtime", workerUser="nexoruta_worker_runtime", bootstrapUser="nexoruta_bootstrap_runtime",
-            jwt=base64.b64encode(secrets.token_bytes(32)).decode(), tracking=base64.b64encode(secrets.token_bytes(32)).decode(),
+            evidences=base64.b64encode(secrets.token_bytes(32)).decode(), jwt=base64.b64encode(secrets.token_bytes(32)).decode(), tracking=base64.b64encode(secrets.token_bytes(32)).decode(),
             operatorId=str(uuid.uuid4()), commerceId=str(uuid.uuid4()), operatorEmail="operator@cloud.example.test", commerceEmail="commerce@cloud.example.test", adminEmail="admin@cloud.example.test")
         for r in ["owner", "api", "worker", "bootstrap", "operator", "commerce", "admin"]: s[r+"Password"] = secrets.token_hex(24)
         with socket.socket() as probe: probe.bind(("127.0.0.1", s["pgPort"]))
@@ -147,18 +150,18 @@ def start():
             Bootstrap__Roles__0__Codigo="administrador_operador", Bootstrap__Roles__0__Nombre="Cloud operator administrator", Bootstrap__Roles__0__OperadorId=s["operatorId"],
             Bootstrap__Roles__1__Codigo="propietario_comercio", Bootstrap__Roles__1__Nombre="Cloud commerce owner", Bootstrap__Roles__1__ComercioId=s["commerceId"])
         run(["dotnet", dll, "local-bootstrap"], cwd=ROOT / "backend/src/NexoRuta.Api", env=e); seeded.touch()
-    for name,project,port in [("api","NexoRuta.Api",5000),("backoffice","NexoRuta.Backoffice",5101),("commerce","NexoRuta.Commerce",5102)]: launch(s,name,project,port)
-    for port in [5000,5101,5102]:
+    for name,project,port in [("api","NexoRuta.Api",5000),("backoffice","NexoRuta.Backoffice",5101),("commerce","NexoRuta.Commerce",5102),("tracking","NexoRuta.Tracking",5103)]: launch(s,name,project,port)
+    for port in [5000,5101,5102,5103]:
         for _ in range(90):
             try:
                 LOCAL_HTTP.open(f"http://127.0.0.1:{port}/health/ready",timeout=2);break
             except Exception: time.sleep(1)
         else: raise RuntimeError(f"Service {port} failed; inspect private logs in {STATE}")
-    print("Synthetic Cloud runtime ready: API5000 Backoffice5101 Commerce5102. Run verify next.")
+    print("Synthetic Cloud runtime ready: API5000 Backoffice5101 Commerce5102 Tracking5103. Run verify next.")
 
 def stop():
     s=load()
-    for name in ["commerce","backoffice","api"]:
+    for name in ["tracking","commerce","backoffice","api"]:
         p=STATE/(name+".pid")
         if not p.exists(): continue
         pid=int(p.read_text())

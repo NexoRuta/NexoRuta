@@ -368,6 +368,9 @@ services:
         --topic nexoruta.envios.creados.v1 --partitions 3 --replication-factor 1
         --config min.insync.replicas=1 --config retention.ms=604800000
         && kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists
+        --topic nexoruta.comercios.v2 --partitions 3 --replication-factor 1
+        --config min.insync.replicas=1 --config retention.ms=604800000
+        && kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists
         --topic nexoruta.password-recovery.requested.v1 --partitions 1 --replication-factor 1
         --config min.insync.replicas=1 --config retention.ms=2592000000
 

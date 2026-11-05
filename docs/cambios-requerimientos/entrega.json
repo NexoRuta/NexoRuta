@@ -1,0 +1,59 @@
+{
+  "branch": "develop",
+  "baseRoot": "f58290fd5dd1d50800343240758cc2bfd6e01b26",
+  "components": {
+    "backend": {
+      "baseDevelop": "71b85bf3b3e1a271543930ce0404410111eebe56",
+      "commit": "09538d989399b511473ad5af063754ea76d554a6"
+    },
+    "frontend": {
+      "baseDevelop": "b3a61482c210eceda672c65a77211da857a9ee79",
+      "commit": "d328e98c27db7c5cef018ab3492c54fc563eed49"
+    },
+    "mobile": {
+      "baseDevelop": "8a71b3f9d89f2e33a9dd4d6b078b514b29b01262",
+      "commit": "683766d6d8cd6c1bd9ce45bb12f6581ddb19b98c"
+    }
+  },
+  "revisionH1H6": {
+    "startRoot": "325be2c3889c1a61f11e1ba747b8ac9fc92b4ac0",
+    "startGitlinks": {
+      "backend": "7e52bdb61f0e2eb4112c92c377dfb8f600ec2a54",
+      "frontend": "e60d7119e03feba321eab2ed60e1179c8a6c0fe4",
+      "mobile": "0af7a70e6c05d16aea0675924630af9a9f25f6f4"
+    },
+    "rootCommit": "HEAD of the commit containing this manifest; use git rev-parse HEAD",
+    "migration": "20261105180000_IndependentParcelProofDeadlines",
+    "nativeAndroid": "pending: NETSDK1147, no maui-android workload or adb/emulator",
+    "validation": "VALIDACION.md (continuity H1-H6 section)",
+    "verifiedIntegratedRoot": "380236678794e4fb275c82a3c86b610832741f04",
+    "cleanCheckout": {
+      "builds": [
+        "API",
+        "Worker",
+        "Frontend solution",
+        "portable Mobile demonstration"
+      ],
+      "deadlineAndConcurrencyTests": 4,
+      "pickupTests": 5,
+      "portableApplicationTests": 92,
+      "workingTrees": "clean"
+    }
+  },
+  "integrationDevelop": {
+    "baseRoot": "871626c14d2c4ef899e818b56d1cd5b5a2be4236",
+    "featureRoot": "d0917509990d3c39a88e986ccc36842615e26806",
+    "preservedFrontendGitlink": "ce86c68de07ef3160fe63d2472bb5f08f039da16",
+    "components": {
+      "backend": "09538d989399b511473ad5af063754ea76d554a6",
+      "frontend": "d328e98c27db7c5cef018ab3492c54fc563eed49",
+      "mobile": "683766d6d8cd6c1bd9ce45bb12f6581ddb19b98c"
+    },
+    "rootCommit": "HEAD of the integrated develop checkout; use git rev-parse HEAD",
+    "validation": "INTEGRACION-DEVELOP.md",
+    "nonBlockingPending": [
+      "Native Android validation",
+      "1500/2000 parcel Mobile envelope/receipt size observation"
+    ]
+  }
+}
