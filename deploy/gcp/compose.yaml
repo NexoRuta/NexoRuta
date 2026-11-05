@@ -551,7 +551,7 @@ services:
     - --storage.tsdb.retention.size=4GB
     - --web.enable-remote-write-receiver
     restart: unless-stopped
-    mem_limit: 384m
+    mem_limit: 2g
     ports:
     - ${NODE_PRIVATE_IP:?}:9090:9090
     volumes:
