@@ -9,11 +9,11 @@
     "docs/alcance/ADR-MT-001-PostgreSQL-RLS.md"
   ],
   "source_inventory": {
-    "root": "4e5c233dc751736ed59cc234582f157f5c9c278a",
+    "root": "5f79e1fbd16fb90b177dae1ac23188741ff0787",
     "backend": "09538d989399b511473ad5af063754ea76d554a6",
     "frontend": "d328e98c27db7c5cef018ab3492c54fc563eed49",
     "mobile": "683766d6d8cd6c1bd9ce45bb12f6581ddb19b98c",
-    "note": "SHAs fijados en el root del despliegue remoto develop release-dfc484da5b8541e6aa226bab8a3a21dc; no representan una ejecucion E2E aprobada."
+    "note": "SHAs fijados en el root develop desplegado en release-c5904be94e0e41f6b5ff20fc21dd1bb4 (Actions run 42104311807); no representan una ejecucion E2E aprobada."
   },
   "inputs": {
     "run_id": "Alfanumérico nuevo de hasta24 caracteres",
