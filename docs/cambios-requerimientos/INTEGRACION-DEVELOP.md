@@ -76,3 +76,19 @@ Se liberaron únicamente bin/obj regenerables del clon de validación anterior, 
 - Sobres/acuses Mobile con 1500/2000 bultos: observación secundaria; no se abrió otra ronda de correcciones ni se usó como impedimento del merge.
 - Para el recorrido manual Android: descargar una ruta sintética con dos o tres bultos; declarar entrega parcial en modo avión; completar evidencia y reabrir la app; sincronizar y ejecutar la segunda visita solo con pendientes. Repetir retiro con foto/firma, conflicto y resolución explícita, rendición, recepción en depósito y entrega al comercio.
 - Estas comprobaciones no constituyen aceptación de todos los Casos de Uso ni despliegue a main.
+
+## Publicación y verificación desde checkout limpio
+
+El merge del principal se publicó en develop como `4ec8ecf8ba1531c97fd1dfe76065974b5561b1fb`, con los tres commits de componentes de la tabla anterior ya publicados. Se clonó desde GitHub con `git clone --depth 1 --branch develop --recurse-submodules --shallow-submodules`. Git descargó exactamente esos tres SHA y `python3 scripts/cloud/verify-gitlinks.py` confirmó su coincidencia.
+
+No se copiaron binarios, obj, estado privado, configuración de conexión ni bases desde el checkout de trabajo; únicamente se reutilizaron SDK y cachés de paquetes del entorno. En el clon nuevo se ejecutaron:
+
+- Build API, Worker, solución Frontend y demo portable: **cero errores**, con advertencias existentes.
+- H1H2/PostgreSQL: **3 aprobadas**, incluyendo actualización de las migraciones, entrega parcial, segunda visita y plazos independientes.
+- C37/PostgreSQL con un bulto: **2 aprobadas**, retiro exitoso hasta comercio y fallido/reprogramación.
+- Mobile portable focalizado: **6 aprobadas**, evidencia offline, reinicio, conflicto y resolución.
+- OpenAPI servido por la API integrada: coincidencia exacta de **121 rutas y esquemas**, excluyendo únicamente la URL de servidor variable por entorno; **55 pruebas de contrato aprobadas** con `NEXORUTA_OPENAPI_URL` apuntando a esa API aislada.
+
+Al finalizar, el principal y los tres submódulos estaban limpios. Se volvieron a verificar los gitlinks. Este registro documental posterior conserva los mismos componentes y no cambia código funcional. El SHA final del principal es HEAD del commit que contiene el cierre; el informe final proporciona ese SHA completo y su enlace canónico.
+
+**Resultado:** entrega parcial y retiro en domicilio incorporados en develop, con la historia y los avances previos preservados y el checkout integrado comprobado. La prueba manual Android y la observación secundaria sobre sobres/acuses de grandes cantidades permanecen pendientes no bloqueantes, conforme a la autorización del usuario. No se avanzó a main ni se declaran aceptados los demás Casos de Uso.

@@ -54,6 +54,21 @@
     "nonBlockingPending": [
       "Native Android validation",
       "1500/2000 parcel Mobile envelope/receipt size observation"
-    ]
+    ],
+    "verifiedRoot": "4ec8ecf8ba1531c97fd1dfe76065974b5561b1fb",
+    "cleanCheckout": {
+      "builds": [
+        "API",
+        "Worker",
+        "Frontend solution",
+        "portable Mobile demonstration"
+      ],
+      "deadlineAndRevisitTests": 3,
+      "singleParcelPickupTests": 2,
+      "portableMobileTests": 6,
+      "liveOpenApiPaths": 121,
+      "openApiContractTests": 55,
+      "workingTrees": "clean"
+    }
   }
 }
