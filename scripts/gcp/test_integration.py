@@ -101,6 +101,41 @@ class IntegrationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             integration.verify_checkout(tag, self.base)
 
+    def test_develop_checkout_verifies_the_selected_root_and_exact_gitlinks(self):
+        real_git = integration.git
+        pinned = integration.pinned_sources(self.base)
+
+        def query(*args, **kwargs):
+            if args[0] == "-C":
+                return pinned[Path(args[1]).name]
+            return real_git(*args, **kwargs)
+
+        with (patch.dict("os.environ", {"GITHUB_REF": "refs/heads/develop", "GITHUB_SHA": self.base}),
+              patch.object(integration, "git", side_effect=query)):
+            snapshot = integration.verify_develop_checkout(self.base)
+        self.assertEqual(snapshot, {"root_sha": self.base, "sources": pinned,
+                                    "source_ref": "refs/heads/develop"})
+        with patch.dict("os.environ", {"GITHUB_REF": "refs/heads/main"}):
+            with self.assertRaisesRegex(ValueError, "develop branch"):
+                integration.verify_develop_checkout(self.base)
+
+
+class PublicationTests(unittest.TestCase):
+    def test_develop_publication_advances_only_the_develop_pointer(self):
+        release = "release-" + "a" * 32
+        pointer = {"channel": "develop", "release": release, "publication_order": [12, 1]}
+        previous = {"channel": "develop", "release": "release-" + "b" * 32,
+                    "publication_order": [11, 1]}
+        with patch.object(publication, "request", side_effect=[{"generation": "8"}, previous, {}]) as request:
+            self.assertTrue(publication.promote("demo-delivery", pointer))
+        upload = request.call_args_list[-1].args[0]
+        self.assertIn("channels%2Fdevelop.json", upload)
+        self.assertEqual(request.call_args_list[-1].args[1], pointer)
+
+    def test_unknown_publication_channel_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "channel"):
+            publication.promote("demo-delivery", {"channel": "staging", "publication_order": [1, 1]})
+
 
 class GitHubReleaseTests(unittest.TestCase):
     def setUp(self):

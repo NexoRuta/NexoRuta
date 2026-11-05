@@ -1,8 +1,8 @@
 # OPT-06 — Plan de implementación de pruebas de carga remotas
 
-Revisión: 04/11/2026. La suite, el workflow, los controles y el dashboard están integrados en `main` desde el PR #54. Bootstrap y demo ya se aplicaron al proyecto `nexoruta-demo-20261022`; la aceptación remota sigue pendiente porque las VMs están apagadas, no hay fixture sintética y todavía no se ejecutó ningún Cloud Run test.
+Revision: 04/11/2026. La aceptacion remota sigue pendiente. El smoke #41949780377 fallo durante la reserva, antes de crear una execution de Cloud Run, porque `otel-collector` no estaba sano. A y B figuran `RUNNING` en la ultima consulta; el runtime de telemetria corregido aun no se desplego.
 
-Card: [OPT-06 — Pruebas de carga automatizadas en ambiente remoto](https://www.notion.so/40a032f1caff81eaa439c8f4503613e0). El PR #54 y su CI integrado terminaron correctamente. La infraestructura OPT-06 está creada y el Job está listo, pero conserva la imagen inocua inicial. No hay versión de fixture ni executions; no se generó carga ni se revisó Grafana en navegador. La card permanece abierta hasta completar la aceptación remota.
+Card: [OPT-06 - Pruebas de carga automatizadas en ambiente remoto](https://www.notion.so/40a032f1caff81eaa439c8f4503613e). La infraestructura y el harness estan integrados; no hubo trafico k6 ni inspeccion visual de Grafana. La card permanece abierta hasta completar la aceptacion remota.
 
 ### Alcance entregado y límites
 
@@ -234,3 +234,11 @@ OPT-06 queda lista para cerrar cuando una persona puede iniciar y cancelar desde
 - HTTP real, perfiles smoke/baseline/sync/stress/soak, Grafana visual y aceptación de workflow/GCP siguen pendientes de desplegar una release saludable y de preparar fixture sintética independiente.
 - Revisión visual en navegador: pendiente de una corrida real y Grafana disponible.
 - Esta evidencia no acredita capacidad, SLO, Redis operativo ni telemetría remota funcional hasta completar la aceptación contra el ambiente remoto.
+
+## Seguimiento remoto 04/11/2026
+
+La repeticion del smoke (#41949780377) fallo durante la reserva, antes de iniciar una execution de Cloud Run: faltaba el servicio `otel-collector` en la VM A. La inspeccion IAP encontro OOMKilled (codigo 137) en A y B, con limite de 256 MiB. Prometheus rechazaba muestras antiguas del WAL remoto por out-of-order/out-of-bounds; el volumen persistente se conserva.
+
+El cambio local sube el limite del colector a 512 MiB, a?ade `memory_limiter`/`GOMEMLIMIT`, limita los reintentos a 5 minutos y acepta muestras atrasadas hasta 6 horas con la sintaxis `storage.tsdb` de Prometheus 3.15.1. El validador de OpenTelemetry 0.164.0 y `promtool` 3.15.1 pasaron en una VM, con archivos temporales eliminados. Todavia no se desplego la correccion; no hubo trafico de carga ni datos persistentes borrados.
+
+Para evitar Integrated CI al validar en GCP, `vm-controls.yml` ejecutado desde `develop` ahora construye los seis contenedores desde el commit raiz y los gitlinks exactos, publica `channels/develop.json` y luego despliega. `load-tests.yml` acepta esa rama. Este canal comparte las VMs y Cloud SQL con `main`. El environment GitHub y el provider OIDC del proyecto `nexoruta-demo-20261022` ya permiten solo los workflows definidos en `main`/`develop`; la carga real y la revision visual de Grafana siguen pendientes.

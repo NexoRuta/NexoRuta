@@ -97,6 +97,20 @@ def verify_checkout(tag, expected_commit=None):
     return {"integration_tag": tag, "root_sha": commit, "sources": sources}
 
 
+def verify_develop_checkout(expected_commit=None):
+    """Verify the immutable root commit and its exact gitlinks for a direct develop build."""
+    if os.environ.get("GITHUB_REF") != "refs/heads/develop":
+        raise ValueError("Direct GCP builds must run from the develop branch")
+    commit = git("rev-parse", "HEAD")
+    if expected_commit and commit != expected_commit:
+        raise ValueError("Checkout does not match the requested develop commit")
+    sources = pinned_sources(commit)
+    for name, sha in sources.items():
+        if git("-C", str(ROOT / name), "rev-parse", "HEAD") != sha:
+            raise ValueError(f"Checkout does not match the pinned {name} SHA")
+    return {"root_sha": commit, "sources": sources, "source_ref": "refs/heads/develop"}
+
+
 def github(path, payload=None):
     repository = os.environ["GITHUB_REPOSITORY"]
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):

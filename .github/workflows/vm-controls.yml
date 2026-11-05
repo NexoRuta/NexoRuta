@@ -1,11 +1,11 @@
 name: NexoRuta - manual VM controls
-run-name: NexoRuta VM / ${{ inputs.operation }}
+run-name: NexoRuta VM / ${{ inputs.operation }} / ${{ github.ref_name }}
 
 on:
   workflow_dispatch:
     inputs:
       operation:
-        description: 'start: start VMs with latest published images / update: deploy latest images to active VMs / stop: VM and SQL'
+        description: 'On main, start/update use the main channel; on develop they build and deploy the pinned develop source set. Stop powers down the demo.'
         required: true
         default: start
         type: choice
@@ -19,10 +19,86 @@ concurrency:
   queue: max
 
 jobs:
+  publish_develop:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/develop' &&
+      (inputs.operation == 'start' || inputs.operation == 'update')
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    environment: nexoruta-demo
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GCP_ZONE: ${{ vars.GCP_ZONE }}
+      GCP_STATE_BUCKET: ${{ vars.GCP_STATE_BUCKET }}
+      GCP_DELIVERY_BUCKET: ${{ vars.GCP_DELIVERY_BUCKET }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      DEMO_OPERATION: ${{ inputs.operation }}
+      RELEASE_CHANNEL: develop
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          submodules: recursive
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+          persist-credentials: false
+      - name: Validate deployment and publication configuration
+        run: |
+          python3 scripts/gcp/github_environment.py validate deploy
+          python3 scripts/gcp/github_environment.py validate publish
+          python3 scripts/gcp/demo_session.py check
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        id: auth
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          version: "590.0.0"
+      - name: Publish the pinned develop source set to its isolated channel
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          NEXORUTA_CLOUD_BUILD_ID_FILE: ${{ runner.temp }}/nexoruta-cloud-build-id
+        run: python3 scripts/gcp/delivery.py build
+      - name: Ensure the submitted Cloud Build is not left running
+        if: always()
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION }}
+        run: |
+          build_id_file="$RUNNER_TEMP/nexoruta-cloud-build-id"
+          [[ -s "$build_id_file" ]] || exit 0
+          build_id="$(< "$build_id_file")"
+          status="$(gcloud builds describe "$build_id" --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --format='value(status)')"
+          case "$status" in
+            QUEUED|PENDING|WORKING)
+              gcloud builds cancel "$build_id" --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --quiet
+              echo "Cancelled Cloud Build $build_id after workflow cancellation." >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            CANCELLING|CANCELLED|SUCCESS|FAILURE|INTERNAL_ERROR|TIMEOUT|EXPIRED)
+              echo "Cloud Build $build_id already finished with status $status." >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "Cloud Build $build_id has unrecognized status '$status'; inspect or cancel it manually." >&2
+              exit 1
+              ;;
+          esac
+
   deploy:
     if: >-
       always() && github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/main'
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
+      (github.ref == 'refs/heads/main' || inputs.operation == 'stop' || needs.publish_develop.result == 'success')
+    needs: [publish_develop]
     runs-on: ubuntu-latest
     timeout-minutes: 55
     environment: nexoruta-demo
@@ -46,12 +122,13 @@ jobs:
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
       DEMO_OPERATION: ${{ inputs.operation }}
+      RELEASE_CHANNEL: ${{ github.ref == 'refs/heads/develop' && 'develop' || 'main' }}
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          # VM controls use the checked-out main scripts and latest complete published image manifest.
+          # The selected branch controls both the scripts and its isolated release channel.
           ref: ${{ github.sha }}
       - name: Validate deployment configuration
         run: |

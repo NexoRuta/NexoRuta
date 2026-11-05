@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   load:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     timeout-minutes: 105
     environment: nexoruta-demo

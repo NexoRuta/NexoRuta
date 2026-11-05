@@ -88,3 +88,7 @@ go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.ym
 Las pruebas de integración Git crean remotos bare temporales; las peticiones a
 GitHub, Cloud Storage y Cloud Build están simuladas. No publican tags reales,
 no suben imágenes y no operan la VM.
+
+## Despliegue directo de develop
+
+Para pruebas remotas sin esperar el Integrated CI, ejecutar manualmente `vm-controls.yml` desde `develop`. El job verifica el commit del evento y los tres gitlinks exactos, construye una release completa y avanza solamente `channels/develop.json`. No crea el tag `integration-*` ni una GitHub prerelease que implique que CI paso. El manifiesto conserva los SHAs de root y componentes. Las VMs y Cloud SQL son compartidos con `main`; aplicar migraciones puede afectar la siguiente version desplegada.

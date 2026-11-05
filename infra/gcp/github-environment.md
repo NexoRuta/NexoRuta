@@ -3,7 +3,7 @@
 En el repo madre `NexoRuta/NexoRuta`, abrir **Settings → Environments → New
 environment**, crear **`nexoruta-demo`** y agregar los siguientes valores en
 **Environment variables** y **Environment secrets**. Permitir despliegues desde
-`main`. Los jobs de publicación, operación de VM y Android declaran ese environment.
+`main` y `develop`. Los jobs de publicación, operación de VM y Android declaran ese environment.
 
 No hace falta duplicar `GCP_PROJECT_ID` ni otras variables a nivel del repositorio.
 Los workflows validan la configuración dentro del runner, después de cargar el
@@ -125,5 +125,9 @@ gh secret set SMTP_USERNAME --repo NexoRuta/NexoRuta --env nexoruta-demo
 gh secret set SMTP_PASSWORD --repo NexoRuta/NexoRuta --env nexoruta-demo
 ```
 
-La configuración no cambia los disparadores: push a `main` prueba y publica;
-`start`, `update` y `stop` se eligen manualmente en **Run workflow**.
+Un push a `main` prueba y publica el canal `main`. Ejecutar manualmente
+`vm-controls.yml` desde `develop` construye el commit seleccionado junto con sus
+gitlinks exactos y publica el canal aislado `develop` antes de iniciar o actualizar
+las VMs, sin ejecutar el Integrated CI. `load-tests.yml` también se puede iniciar
+desde `develop`; queda restringido al proyecto y las cuentas autorizadas.
+`start`, `update` y `stop` siguen requiriendo **Run workflow**.

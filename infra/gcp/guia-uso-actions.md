@@ -17,3 +17,7 @@ con el manifiesto de commits e imágenes. Un tag sin prerelease puede indicar un
 Para empezar: integrá los cambios en las ramas `main` de los repos, esperá la publicación y ejecutá `start`. En el resumen de esa ejecución están los endpoints y la release seleccionada. `monitor` muestra CPU, RAM, disco, latencia, errores y procesos; requiere una de las cuentas Google configuradas en el environment `nexoruta-demo`. El endpoint `mail` pide contraseña. Para cambios posteriores, esperá la publicación y ejecutá `update`. Al finalizar, ejecutá `stop`.
 
 La identidad de GitHub Actions accede a GCP con OIDC; no configures claves JSON de GCP en GitHub. La configuración necesaria ya está en el environment `nexoruta-demo`.
+
+## Probar develop en GCP
+
+En **Run workflow**, seleccione la rama `develop`. `start` o `update` construye y despliega los commits fijados en el root y sus gitlinks en el canal privado `develop`; no ejecuta el Integrated CI. Despues, inicie `NexoRuta - pruebas de carga` desde `develop`. Para el camino publicado y probado, seleccione `main`. Ambos canales comparten VMs y Cloud SQL, por lo que las migraciones de `develop` quedan en la base compartida.

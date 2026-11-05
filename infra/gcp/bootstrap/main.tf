@@ -229,9 +229,9 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "assertion.repository_id == '${var.github_repository_id}'",
     "assertion.repository_owner_id == '${var.github_owner_id}'",
     "assertion.repository == '${var.github_repository}'",
-    "assertion.ref == 'refs/heads/main'",
+    "assertion.ref in ['refs/heads/main', 'refs/heads/develop']",
     "assertion.sub in ['repo:${var.github_repository}:environment:nexoruta-demo', 'repo:${split("/", var.github_repository)[0]}@${var.github_owner_id}/${split("/", var.github_repository)[1]}@${var.github_repository_id}:environment:nexoruta-demo']",
-    "assertion.workflow_ref in ['${var.github_repository}/.github/workflows/publish.yml@refs/heads/main', '${var.github_repository}/.github/workflows/vm-controls.yml@refs/heads/main', '${var.github_repository}/.github/workflows/load-tests.yml@refs/heads/main']",
+    "assertion.workflow_ref in ['${var.github_repository}/.github/workflows/publish.yml@refs/heads/main', '${var.github_repository}/.github/workflows/vm-controls.yml@refs/heads/main', '${var.github_repository}/.github/workflows/vm-controls.yml@refs/heads/develop', '${var.github_repository}/.github/workflows/load-tests.yml@refs/heads/main', '${var.github_repository}/.github/workflows/load-tests.yml@refs/heads/develop']",
     "assertion.event_name in ['workflow_dispatch', 'push']",
   ])
   oidc {

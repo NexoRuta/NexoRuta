@@ -188,10 +188,16 @@ def create_bundle(destination):
 
 def build():
     config = session.configuration()
-    if os.environ.get("RELEASE_CHANNEL") != "main":
-        raise ValueError("Builds must explicitly target RELEASE_CHANNEL=main after CI tests main commits")
-    # Publication uses the already-tested tag, never resolves component branches again.
-    snapshot = integration.verify_checkout(os.environ["INTEGRATION_TAG"], os.environ.get("INTEGRATION_COMMIT"))
+    channel = os.environ.get("RELEASE_CHANNEL", "")
+    if channel not in ("main", "develop"):
+        raise ValueError("Builds must explicitly target RELEASE_CHANNEL=main or develop")
+    if channel == "main":
+        # Main publication uses the already-tested tag and its exact submodule gitlinks.
+        snapshot = integration.verify_checkout(os.environ["INTEGRATION_TAG"], os.environ.get("INTEGRATION_COMMIT"))
+    else:
+        if os.environ.get("TESTED_CI_PLAN"):
+            raise ValueError("Develop builds use a complete release and do not consume the main CI plan")
+        snapshot = integration.verify_develop_checkout(os.environ.get("GITHUB_SHA"))
     if os.environ.get("TESTED_CI_PLAN"):
         plan = json.loads(os.environ["TESTED_CI_PLAN"])
         if plan.get("current", {}).get("sources") != snapshot["sources"] or not plan.get("publish_required"):
@@ -213,7 +219,7 @@ def build():
     try:
         previous = latest_manifest(config)
     except RuntimeError as error:
-        if "No published main release is available" not in str(error):
+        if f"No published {channel} release is available" not in str(error):
             raise
     if set(build_services) != set(SERVICES) and previous is None:
         raise RuntimeError("A complete prior manifest is required before reusing images")
@@ -317,7 +323,7 @@ def build():
         manifest = {
             "release": release, "build_id": build_id, "images": images,
             "image_sources": image_sources, "reused_images": reused,
-            "channel": "main",
+            "channel": channel,
             **snapshot,
             "ci_plan": plan_summary,
             "android_input_sha256": plan.get("android_input_sha256"),
@@ -332,9 +338,11 @@ def build():
             session.command("gcloud", "storage", "cp", str(path), f"gs://{bucket}/releases/{release}/{path.name}", "--if-generation-match=0", "--quiet")
         # Advance only after all immutable assets exist. CAS prevents lost updates,
         # and execution ordering prevents an old, slow build replacing a newer one.
-        publication.promote(bucket, {"channel": "main", "release": release,
-                                    "integration_tag": snapshot["integration_tag"],
-                                    "publication_order": manifest["publication_order"]})
+        pointer = {"channel": channel, "release": release,
+                   "publication_order": manifest["publication_order"]}
+        if snapshot.get("integration_tag"):
+            pointer["integration_tag"] = snapshot["integration_tag"]
+        publication.promote(bucket, pointer)
         (ROOT / "release.json").write_text(json.dumps(manifest), encoding="utf-8")
         if os.environ.get("GITHUB_OUTPUT"):
             with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
@@ -344,28 +352,39 @@ def build():
 
 
 def latest_manifest(config):
+    channel = os.environ.get("RELEASE_CHANNEL", "main")
+    if channel not in ("main", "develop"):
+        raise ValueError("RELEASE_CHANNEL must be main or develop")
     project = config["GCP_PROJECT_ID"]
     bucket = os.environ.get("GCP_DELIVERY_BUCKET", f"{project}-nexoruta-delivery")
     if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]", bucket):
         raise ValueError("Invalid delivery bucket")
     try:
         pointer = json.loads(session.command("gcloud", "storage", "cat",
-                            f"gs://{bucket}/channels/main.json", capture=True))
+                            f"gs://{bucket}/channels/{channel}.json", capture=True))
     except subprocess.CalledProcessError as error:
-        raise RuntimeError("No published main release is available. Push main or run start before updating.") from error
+        raise RuntimeError(f"No published {channel} release is available. Publish that channel before updating.") from error
     release = pointer.get("release", "")
-    if pointer.get("channel") != "main" or not re.fullmatch(r"release-[a-f0-9]{32}", release):
-        raise ValueError("Invalid published main release pointer")
+    if pointer.get("channel") != channel or not re.fullmatch(r"release-[a-f0-9]{32}", release):
+        raise ValueError(f"Invalid published {channel} release pointer")
     manifest = json.loads(session.command("gcloud", "storage", "cat",
                          f"gs://{bucket}/releases/{release}/manifest.json", capture=True))
-    if manifest.get("release") != release or manifest.get("channel") != "main":
-        raise ValueError("Published main manifest does not match its pointer")
-    if "integration_tag" in pointer:
+    if manifest.get("release") != release or manifest.get("channel") != channel:
+        raise ValueError(f"Published {channel} manifest does not match its pointer")
+    if channel == "main":
+        if "integration_tag" not in pointer:
+            raise ValueError("Published main channel is missing its tested integration identity")
         if (not re.fullmatch(integration.TAG, pointer["integration_tag"])
                 or manifest.get("integration_tag") != pointer["integration_tag"]
                 or manifest.get("publication_order") != pointer.get("publication_order")
                 or not re.fullmatch(integration.SHA, manifest.get("root_sha", ""))):
             raise ValueError("Published integration snapshot does not match its channel")
+        integration.validate_sources(manifest.get("sources", {}))
+    else:
+        if (manifest.get("source_ref") != "refs/heads/develop"
+                or not re.fullmatch(integration.SHA, manifest.get("root_sha", ""))
+                or manifest.get("publication_order") != pointer.get("publication_order")):
+            raise ValueError("Published develop snapshot does not match its channel")
         integration.validate_sources(manifest.get("sources", {}))
     images = manifest.get("images", {})
     registry = f"{session.REGION}-docker.pkg.dev/{project}/nexoruta"
@@ -379,7 +398,7 @@ def latest_manifest(config):
 
 def latest_release(config):
     manifest = latest_manifest(config)
-    print(f"Selected latest published main release: {manifest['release']}")
+    print(f"Selected latest published {manifest['channel']} release: {manifest['release']}")
     return manifest["release"]
 
 

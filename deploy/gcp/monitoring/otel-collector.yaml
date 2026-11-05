@@ -7,6 +7,10 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 384
+    spike_limit_mib: 64
   resource/node:
     attributes:
       - key: node
@@ -25,7 +29,7 @@ exporters:
     wal:
       directory: /var/lib/otelcol/prometheusremotewrite
     retry_on_failure:
-      max_elapsed_time: 0
+      max_elapsed_time: 5m
   otlp/tempo:
     endpoint: ${env:SERVICES_HOST}:4317
     tls:
@@ -35,7 +39,7 @@ service:
   pipelines:
     metrics:
       receivers: [otlp]
-      processors: [resource/node, batch]
+      processors: [memory_limiter, resource/node, batch]
       exporters: [prometheus_remote_write]
     traces:
       receivers: [otlp]

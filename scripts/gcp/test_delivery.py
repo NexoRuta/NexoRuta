@@ -80,6 +80,20 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn("deleteDatasources:", datasource_config)
         self.assertIn("name: Google Cloud Monitoring", datasource_config)
 
+    def test_remote_telemetry_bounds_backlog_memory_and_retry_time(self):
+        root = Path(__file__).parents[2]
+        prometheus = (root / "deploy/gcp/monitoring/prometheus.yaml").read_text(encoding="utf-8")
+        collector = (root / "deploy/gcp/monitoring/otel-collector.yaml").read_text(encoding="utf-8")
+        compose = (root / "deploy/gcp/compose.yaml").read_text(encoding="utf-8")
+        self.assertIn("storage:\n  tsdb:\n    out_of_order_time_window: 6h", prometheus)
+        self.assertIn("max_elapsed_time: 5m", collector)
+        self.assertIn("processors: [memory_limiter, resource/node, batch]", collector)
+        self.assertIn("limit_mib: 384", collector)
+        self.assertIn("spike_limit_mib: 64", collector)
+        self.assertIn("GOMEMLIMIT: 300MiB", compose)
+        self.assertRegex(compose, r"otel-collector:\n(?:[^\n]*\n){0,5}\s+mem_limit: 512m")
+        self.assertIn("- otelcol:/var/lib/otelcol", compose)
+
     def test_load_test_dashboard_is_in_the_gcp_delivery_bundle(self):
         root = Path(__file__).parents[2]
         canonical_alerts = root / "deploy/observability/prometheus/alerts.yaml"
@@ -425,6 +439,46 @@ class DeliveryTests(unittest.TestCase):
                 self.assertEqual(build_id_file.read_text().strip(), "build-123")
                 self.assertIn("Cloud Build submitted: `build-123`", step_summary.read_text())
 
+    def test_develop_build_publishes_a_full_unverified_release_to_its_own_channel(self):
+        snapshot = {"root_sha": "a" * 40,
+                    "sources": {name: "b" * 40 for name in integration.COMPONENTS},
+                    "source_ref": "refs/heads/develop"}
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            bundle = root / "bundle.tar.gz"
+            bundle.write_bytes(b"develop bundle")
+
+            def command(*args, **kwargs):
+                if args[1:3] == ("builds", "submit"):
+                    config_path = next(arg.split("=", 1)[1] for arg in args if arg.startswith("--config="))
+                    self.images = json.loads(Path(config_path).read_text())["images"]
+                    return json.dumps({"id": "develop-build"})
+                if args[1:3] == ("builds", "describe"):
+                    return json.dumps({"status": "SUCCESS", "results": {"images": [
+                        {"name": image, "digest": "sha256:" + "c" * 64} for image in self.images]}})
+                return ""
+
+            with (patch.object(session, "configuration", return_value={"GCP_PROJECT_ID": "demo-project"}),
+                  patch.object(delivery, "ROOT", root), patch.object(delivery, "stage_sources"),
+                  patch.object(delivery, "create_bundle", return_value=bundle),
+                  patch.object(delivery, "latest_manifest", return_value=None),
+                  patch.object(integration, "verify_develop_checkout", return_value=snapshot) as verify,
+                  patch.object(session, "command", side_effect=command),
+                  patch.object(delivery.publication, "promote", return_value=True) as promote,
+                  patch.dict("os.environ", {"RELEASE_CHANNEL": "develop", "GITHUB_REF": "refs/heads/develop",
+                                            "GITHUB_SHA": snapshot["root_sha"], "GITHUB_RUN_NUMBER": "30",
+                                            "GITHUB_RUN_ATTEMPT": "1"})):
+                delivery.build()
+
+            manifest = json.loads((root / "release.json").read_text())
+            self.assertEqual(verify.call_args.args, (snapshot["root_sha"],))
+            self.assertEqual(len(self.images), len(delivery.SERVICES))
+            self.assertEqual(manifest["channel"], "develop")
+            self.assertEqual(manifest["source_ref"], "refs/heads/develop")
+            self.assertNotIn("integration_tag", manifest)
+            self.assertEqual(promote.call_args.args[1]["channel"], "develop")
+            self.assertNotIn("integration_tag", promote.call_args.args[1])
+
     def test_cloud_build_cancellation_uses_the_tracked_project_and_region(self):
         with patch.object(session, "command") as command:
             delivery.cancel_cloud_build("build-to-cancel", "demo-project")
@@ -500,12 +554,28 @@ class DeliveryTests(unittest.TestCase):
 
     def test_update_resolves_one_complete_main_release_without_building(self):
         manifest = self.release_manifest()
+        manifest.update(integration_tag="integration-20-1", root_sha="c" * 40,
+                        sources={name: "d" * 40 for name in integration.COMPONENTS},
+                        publication_order=[20, 1])
+        pointer = {"channel": "main", "release": manifest["release"],
+                   "integration_tag": manifest["integration_tag"], "publication_order": [20, 1]}
         with patch.dict("os.environ", {"GCP_DELIVERY_BUCKET": "demo-delivery"}), patch.object(
-            session, "command", side_effect=[json.dumps({"channel": "main", "release": manifest["release"]}), json.dumps(manifest)],
+            session, "command", side_effect=[json.dumps(pointer), json.dumps(manifest)],
         ) as command:
             self.assertEqual(delivery.latest_release({"GCP_PROJECT_ID": "demo-project"}), manifest["release"])
             self.assertEqual(command.call_count, 2)
             self.assertTrue(all(call.args[:3] == ("gcloud", "storage", "cat") for call in command.call_args_list))
+
+    def test_update_resolves_the_isolated_develop_release_channel(self):
+        manifest = self.release_manifest()
+        manifest.update(channel="develop", source_ref="refs/heads/develop", root_sha="c" * 40,
+                        sources={name: "d" * 40 for name in integration.COMPONENTS},
+                        publication_order=[21, 1])
+        pointer = {"channel": "develop", "release": manifest["release"], "publication_order": [21, 1]}
+        with (patch.dict("os.environ", {"RELEASE_CHANNEL": "develop", "GCP_DELIVERY_BUCKET": "demo-delivery"}),
+              patch.object(session, "command", side_effect=[json.dumps(pointer), json.dumps(manifest)]) as command):
+            self.assertEqual(delivery.latest_release({"GCP_PROJECT_ID": "demo-project"}), manifest["release"])
+        self.assertIn("channels/develop.json", command.call_args_list[0].args[3])
 
     def test_update_rejects_partial_or_mixed_registry_releases(self):
         for fault in ("missing_image", "foreign_registry", "mutable_tag", "different_release", "different_channel"):

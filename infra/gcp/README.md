@@ -415,3 +415,9 @@ Referencias: [regiones](https://docs.cloud.google.com/compute/docs/regions-zones
 [límite nativo](https://docs.cloud.google.com/compute/docs/instances/limit-vm-runtime),
 [restricciones de Cloud SQL](https://docs.cloud.google.com/sql/docs/postgres/users),
 [WIF](https://github.com/google-github-actions/auth).
+
+## Deploy directo desde develop para pruebas en GCP
+
+Desde **Actions -> NexoRuta - manual VM controls**, seleccione la rama `develop`. `start` o `update` construye el commit ra?z elegido y los tres SHAs fijados por sus gitlinks, publica seis im?genes completas en el canal `develop` y luego despliega esa version. Esta ruta no ejecuta el Integrated CI; el manifiesto registra `root_sha`, `sources` y `source_ref`, y no la presenta como una integraci?n probada. Inicie despu?s `load-tests.yml` tambi?n desde `develop`.
+
+Los canales `main` y `develop` est?n separados, pero comparten las mismas VMs y Cloud SQL en el proyecto demo. Las migraciones de `develop` cambian el esquema compartido y pueden impedir volver a ejecutar una version anterior de `main`. Para habilitar el bot?n, aplique primero el cambio de WIF en `infra/gcp/bootstrap` y permita la rama `develop` en el environment GitHub `nexoruta-demo`.

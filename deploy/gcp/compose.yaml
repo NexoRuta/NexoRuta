@@ -622,8 +622,9 @@ services:
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     restart: unless-stopped
     user: "0:0"
-    mem_limit: 256m
+    mem_limit: 512m
     environment:
+      GOMEMLIMIT: 300MiB
       NODE_NAME: ${NODE_NAME:?}
       SERVICES_HOST: ${SERVICES_HOST:?}
     volumes:

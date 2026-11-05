@@ -23,10 +23,13 @@ def order(pointer):
 
 
 def promote(bucket, pointer):
+    channel = pointer.get("channel")
+    if channel not in ("main", "develop"):
+        raise ValueError("Publication channel must be main or develop")
     if "publication_order" not in pointer:
         raise ValueError("New publications must include their Actions execution order")
     candidate = order(pointer)
-    name = "channels/main.json"
+    name = f"channels/{channel}.json"
     base = "https://storage.googleapis.com/storage/v1/b/" + urllib.parse.quote(bucket, safe="") + "/o/" + urllib.parse.quote(name, safe="")
     for _ in range(8):
         try:
@@ -36,7 +39,7 @@ def promote(bucket, pointer):
             if error.code != 404:
                 raise
             generation, previous = "0", {}
-        if previous and (previous.get("channel") != "main" or not previous.get("release")):
+        if previous and (previous.get("channel") != channel or not previous.get("release")):
             raise ValueError("Invalid existing publication channel")
         previous_order = order(previous) if previous else (0, 0)
         if previous_order > candidate:
