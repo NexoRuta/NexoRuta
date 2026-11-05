@@ -10,8 +10,6 @@ Se requieren Docker con acceso al daemon y red para descargar dependencias. Rese
 git clone --branch feature/cambiosrequerimientos --recurse-submodules https://github.com/NexoRuta/NexoRuta.git
 cd NexoRuta
 python3 scripts/cloud/verify-gitlinks.py
-bash scripts/cloud/environment-install.sh
-source scripts/cloud/env-agent.sh
 ```
 
 En un sandbox que solo permita escribir en `/workspace` y `/tmp`, configurar cachés escribibles antes de instalar/restaurar:
@@ -23,6 +21,13 @@ export DOTNET_CLI_HOME=/workspace/.dotnet-home
 export npm_config_cache=/workspace/.npm
 export PLAYWRIGHT_BROWSERS_PATH=/workspace/.cache/ms-playwright
 export DOTNET_PROCESSOR_COUNT=1
+```
+
+Instalar dependencias y cargar el entorno:
+
+```bash
+bash scripts/cloud/environment-install.sh
+source scripts/cloud/env-agent.sh
 ```
 
 Arrancar una única base sintética propia. `env-agent.sh` selecciona PostgreSQL Docker. Si hay otro checkout con su contenedor, detener sus procesos y elegir un nombre distinto con `NEXORUTA_CLOUD_CONTAINER`; nunca copiar su `private.json`.

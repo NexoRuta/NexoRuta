@@ -34,7 +34,7 @@ for file in ['demo-kafka-worker.pid','demo-rabbit-worker.pid']:
   if command.exists() and command.read_bytes():raise RuntimeError('Stop this demo worker before rebuilding it')
 worker_artifacts=dev.STATE/'demo-worker-artifacts'
 run(['dotnet','build',str(ROOT/'backend/src/NexoRuta.Worker'),'--artifacts-path',str(worker_artifacts),'--nologo'],cwd=ROOT)
-worker_dll=worker_artifacts/'bin/NexoRuta.Worker/debug/NexoRuta.Worker.dll' 
+worker_dll=worker_artifacts/'bin/NexoRuta.Worker/debug/NexoRuta.Worker.dll'
 container('nexoruta-demo-kafka-3141','confluentinc/cp-kafka:7.9.10',[
  '-p','127.0.0.1:19092:9094',
  '-e','CLUSTER_ID=TkVYT1JVVEFfTE9DQUxfMQ','-e','KAFKA_NODE_ID=1','-e','KAFKA_PROCESS_ROLES=broker,controller',
