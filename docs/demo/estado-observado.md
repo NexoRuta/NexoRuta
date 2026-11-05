@@ -2,18 +2,18 @@
 
 Fecha5/11/2026. Este documento registra comprobaciones de preparación, no una ejecución del recorrido de demo ni aceptación de los CU.
 
-## Revisiones fijadas por el despliegue remoto
+## Revisiones fijadas por el último despliegue develop
 
-El start/develop que quedó operativo desplegó `release-dfc484da5b8541e6aa226bab8a3a21dc` con estas revisiones del root y sus gitlinks:
+Actions run [42104311807](https://github.com/NexoRuta/NexoRuta/actions/runs/42104311807) terminó correctamente el 2026-11-05 a las 20:41:41 UTC. Desplegó `release-c5904be94e0e41f6b5ff20fc21dd1bb4` con el root y los gitlinks siguientes:
 
 | Repo | SHA desplegado |
 |---|---|
-| Root | `4e5c233dc751736ed59cc234582f157f5c9c278a` |
+| Root | `5f79e1fbd16fb90b177dae1ac23188741ff0787` |
 | Backend | `09538d989399b511473ad5af063754ea76d554a6` |
 | Frontend | `d328e98c27db7c5cef018ab3492c54fc563eed49` |
 | Mobile | `683766d6d8cd6c1bd9ce45bb12f6581ddb19b98c` |
 
-El checkout local principal continúa en `develop` en `871626c`; no se adelantó porque contiene cambios locales y una edición del usuario en `infra/gcp/plan-opt-06-carga-remota.md`. La especificación de demo toma los SHAs desplegados, no los del checkout antiguo. No se actualizaron los gitlinks.
+El checkout principal del usuario sigue en `develop` en `871626c` y contiene cambios locales, incluida la edición protegida de `infra/gcp/plan-opt-06-carga-remota.md`. Esta actualización documental se preparó en un worktree limpio basado en el develop integrado; no se alteraron esos cambios ni se actualizaron los gitlinks.
 
 La guía prioriza el código actual ante README históricos: hoy `HojaRutaViewModel` permite salida sin mapa offline preparado.
 
@@ -94,6 +94,24 @@ BrowserAct conserva el navegador Chrome `nexoruta-demo-chrome` y la sesion `nexo
 
 El workflow de demo pasó el validador local: 41 escenas, 30 CU, 9 AP, 15 NFR y 15 opcionales inventariados. En Integrated CI del PR #68 fallaron los tres shards backend. El run 42098298395 terminó con 25 fallos, 679 aprobadas y 5 omitidas. Los tres shards fallaron; el test de seguimiento devolvió campos adicionales al contrato esperado y el test de flota encontró `EntregadoEnUtc` ausente en su esquema. Ver E2E-DMO-07/09 y E2E-DMO-08. El PR #68 se integró a develop a las 20:19 UTC (merge `5ddb9da`). El primer `update/develop`, run 42102394156, se detuvo en `tofu init` por la sintaxis del archivo generado, antes de leer/aplicar estado remoto o desplegar. No se cambió GCP y el health/portal smoke de las 20:20 UTC siguió en 200; E2E-DMO-10 registra la corrección en curso.
 
-## Validación del correctivo de bootstrap -- 2026-11-05
+## Bootstrap automático y primer deploy corregido -- 2026-11-05
 
-En el worktree `fix/bootstrap-hcl` la corrección escribe el bloque backend de GCS en formato multilínea y añade una prueba de regresión. `python -m unittest discover -s scripts/gcp -p 'test_*.py'` aprobó 213 tests con 7 omitidos; `tofu fmt -check` aprobó el archivo HCL generado y `python scripts/demo/workflow.py validar` aprobó las 41 escenas. El cambio todavía no está desplegado en GCP.
+PR #68 integró el bootstrap previo a start/update en develop. El primer `update/develop`, run 42102394156, reveló HCL inválido antes de leer el estado remoto; PR #69 corrigió el formato multilínea y añadió una prueba de regresión. Las 213 pruebas de scripts/gcp aprobaron con 7 omitidas; `tofu fmt -check` y el validador del workflow también pasaron.
+
+El run [42104311807](https://github.com/NexoRuta/NexoRuta/actions/runs/42104311807) ejecutó el paso automático de bootstrap y aplicó un plan de 0 altas, 1 cambio y 0 eliminaciones. El despliegue y los smoke checks terminaron correctamente. Los siguientes start/update en develop repetirán el bootstrap desde el workflow.
+
+## Recorrido web con BrowserAct -- 2026-11-05 21:18 UTC
+
+Se reinició Chrome por la ruta integrada `chrome://restart` después del error de conexión 210101; BrowserAct volvió a controlar el Chrome del usuario en pestañas de Commerce, Backoffice, Admin y Tracking. Se autenticaron cuentas sintéticas `@nexoruta.test` usando referencias privadas de Secret Manager. No se escribieron credenciales en este documento.
+
+El sondeo HTTPS, con validación TLS normal, devolvió 200 en API live/ready y en Backoffice, Commerce, Tracking, Admin y Monitor. Mail devolvió 401, esperado por autenticación.
+
+Commerce abre Mis envíos con un registro sintético. Al intentar “Ver seguimiento”, mostró “No pudimos abrir el seguimiento. Intentá nuevamente más tarde.” El portal anónimo de Tracking muestra que la consulta debe abrirse desde un enlace compartido. En Crear envío, el selector permite elegir Operador Demo Uruguay, pero para el punto sintético (-34.9, -56.2) la búsqueda de servicio informó que no hay cobertura ni tarifa; aparecen alternativas del juego compartido. No se confirmó el precio ni se envió el formulario. La pantalla advierte que Mapbox no está configurado y mantiene dirección/coordenadas manuales.
+
+En Backoffice, Depósito no tiene recepciones pendientes; Rutas para 2026-11-05 muestra cero rutas y el planificador cero candidatos; no se creó una ruta vacía. Flota muestra “Disponibilidad desconocida” y HTTP 403 al llamar GET `/api/reparto/flota` para la cuenta `Propietario Operador`. Usuarios y accesos confirma que esa cuenta es propietaria y no hay Dispatcher activo.
+
+Zonas muestra cero activas e inactivas; Tarifas indica “Sin publicación”. En `/zonas/crear` el mensaje “Cargando límites departamentales oficiales…” persiste después de recargar. El GeoJSON devuelve HTTP 200 y 16.944.285 bytes, pero el selector oficial sigue deshabilitado; el dibujo también requiere un token público de Mapbox. No se escribió una zona por fuera de la interfaz.
+
+El registro precargado `GCP-S21-2026-10-28` aparece “Entregado” en ambas listas, pero Backoffice indica 0/1 bultos entregados, Resultado “Pendiente” y Custodia “Destinatario”. Su endpoint de etiquetas respondió HTTP 200 con MIME application/pdf. No se modificó ese registro.
+
+La cuenta Comercio tuvo que volver a iniciar sesión tras un intervalo sin actividad. Esto se anotó como observación de sesión, no como defecto confirmado. El recorrido manual llegó a consulta y preparación de formulario; no se creó un tenant/run exclusivo ni se generaron nuevos envíos por los bloqueos documentados en E2E-DMO-11/12. La revisión visual de escritorio confirmó jerarquía, etiquetas y estados visibles de los formularios consultados; no se completaron teclado, zoom 200 %, reflujo a 320 px ni escaneo WCAG. Ver [issues E2E](issues-e2e-20261105.md).
