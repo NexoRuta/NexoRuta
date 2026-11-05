@@ -1,9 +1,19 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 import bootstrap
 
 
 class BootstrapTests(unittest.TestCase):
+    def test_generated_gcs_backend_uses_valid_nested_block_layout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = bootstrap.write_backend_file(Path(directory))
+            self.assertEqual(
+                'terraform {\n  backend "gcs" {}\n}\n',
+                path.read_text(encoding="utf-8"),
+            )
+
     def test_existing_optional_budget_is_preserved(self):
         env = dict(GCP_PROJECT_ID="demo-project", GCP_REGION="southamerica-west1",
                    GITHUB_REPOSITORY="NexoRuta/NexoRuta", BOOTSTRAP_REPOSITORY_ID="123",
