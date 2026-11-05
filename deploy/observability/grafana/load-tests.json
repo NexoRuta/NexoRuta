@@ -6,7 +6,7 @@
   "schemaVersion": 41,
   "version": 1,
   "editable": false,
-  "refresh": "10s",
+  "refresh": "30s",
   "time": { "from": "now-2h", "to": "now" },
   "tags": ["nexoruta", "carga"],
   "links": [{ "title": "Métricas generales de la aplicación", "url": "/d/nexoruta", "type": "link", "targetBlank": false }],
