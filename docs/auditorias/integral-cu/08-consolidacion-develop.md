@@ -39,7 +39,7 @@ H03–H06 are not feature work in this task. H03–H05 remain functional gaps. H
 
 ## Verification and runtime
 
-**Partial engineering result; not ready for publication or human acceptance.** Backups, credentials, logs, TRX and captures remain private.
+**Historical verification chronology.** The final publication/runtime status below supersedes intermediate blockers, not their evidence. Engineering verification never approves human acceptance. Backups, credentials, logs, TRX and captures remain private.
 
 | Check | Observed result |
 |---|---|
@@ -76,6 +76,44 @@ Docker Desktop reports cgroup v1/cgroupfs. Its containers and Ubuntu expose v1 c
 The controlled harness used only its own internal network, three containers and synthetic dependencies; no actual API, database or GCP access occurred. Its containers/network/image were removed. One anonymous Prometheus volume was proven to belong exclusively to this run and removed by exact ID after verifying zero references; habitual volumes were not touched.
 
 No remote infrastructure/load/deployment or published Cloud configuration was changed. Full pipeline PASS, remote publication, clean remote clone and habitual develop rollout remain pending. Human acceptance remains pending for every CU.
+
+## Final publication and proof
+
+The unchanged application candidate `2ec6ad7184daed805963e6cd8cf062765c1d69fd` passed [Integrated CI, run 41947213257](https://github.com/NexoRuta/NexoRuta/actions/runs/41947213257): 12/12 jobs successful. Backend integration: 691 passed / five existing opt-in skips; frontend: 491 passed / five existing opt-in skips. These skips are not hidden: the requested optional browser cases were executed separately in the local evidence above. Unit 328, architecture four and portable Mobile 217 passed. Do not add overlapping runs together.
+
+The genuine cgroup-v2 CI controlled-load proof passed with 50 synthetic replays, actual bounded Prometheus series, HTTP p95 0.0507126063 seconds and synchronization drain 2051 ms. This resolves the local cgroup-v1 proof limitation; it is not a production/GCP capacity claim or deployment. Artifact digest: `58498b207c1d7b2c9ec082b9a8c802a4cb350524bf8f7ddda3a9265f646aa93b`.
+
+The initial 44 failures are classified by matching exact case names, not inferred from the green CI:
+
+| Initial symptoms (disjoint) | Count | Subsequent observation |
+|---|---:|---|
+| Npgsql timeouts | 20 | 19 HTTP cases and the session browser; original timeouts did not persist |
+| Unauthorized/401 mismatch | 17 | Passed unchanged in fresh stable-clock fixtures |
+| Missing TRX error message, fixture stack retained | 3 | Two road-estimate HTTP cases and receiving browser passed unchanged |
+| Admission waiting for map control | 1 | Screenshot showed expired-session login; fresh real-browser case passed |
+| Provider-state mismatch | 1 | Passed unchanged |
+| Tracking consumer completion assertion | 1 | Passed unchanged |
+| Mobile inverted absolute-expiration time range | 1 | Passed unchanged |
+
+Of the 44 case names, 43 passed without a source change after environment repair. The remaining session case no longer timed out: it exposed a distinct control-file FileNotFound race, reproduced before narrow correction `71b85bf`, then passed independently. The original timeout does not prove that race caused the initial failure. Clock causality is established for the observed backward jump followed by JWT `token_not_yet_valid`, not for every timeout or assertion. No initial failing case remains without subsequent passing evidence. The earlier positive-PNG fixture correction predates these 44 and is not counted as their resolution.
+
+Clock monitoring finished normally after 169 samples / 5116.36 seconds, zero bad samples, maximum realtime/host-PTP difference 5.455725 ms. The prior statement that monitoring remains active is historical; it is no longer running.
+
+Native review is **not approved**. Backend START refused before authority with `lens_context_budget_exceeded`; the user's exact candidate-scoped decline was validated. A consented sanitized occurrence comment on canonical Gentle-AI #4790 was rejected with 403; no retry followed. Principal STATUS then stopped with non-retryable `operation_timeout`, without authority. The user explicitly authorized temporarily disabling only the integration principal clone to continue ordinary delivery; global and other repository review settings were preserved.
+
+Application commits were published to child develop branches first, then principal develop: backend `71b85bf3b3e1a271543930ce0404410111eebe56`, frontend `b3a61482c210eceda672c65a77211da857a9ee79`, Mobile `8a71b3f9d89f2e33a9dd4d6b078b514b29b01262`, principal application candidate `2ec6ad7184daed805963e6cd8cf062765c1d69fd`. Subsequent documentation-only commits do not alter these application bytes or gitlinks. All 30 CU and D-P01/D-P02 remain pending human validation; H03-H05 are not implemented by this consolidation and H06 requires separate NFR acceptance of the retained implementation.
+
+### Habitual Windows runtime after integration
+
+The habitual root and all three children now run on develop, preserving the original uncommitted workbook (hash checked before/after switching). An independent full remote clone downloaded all four develop objects with exact gitlinks, clean status, no alternates/shallow shortcuts and successful `git fsck`; backend/frontend solutions and all four portable Mobile targets restored successfully with `--locked-mode` and an isolated fresh package cache on SDK 10.0.401. Linux CI evidence is separate; Linux restores were not independently repeated in that Windows clone.
+
+Before migration, a fresh private custom-format PostgreSQL dump was generated and fully parsed with `pg_restore` (not a restore rehearsal). SHA256: `d3548f55c956df3b4a04a3fb1be3db43ffe90c63b3fafd9b7914d6fa1c2b8c14`; local locator `.local/consolidacion-private-path.txt`, filename `habitual-before-migrate-final.dump`. Exact pending-list gate immediately before migration allowed only `20261103000000_AddDepotParcelReceipts`; history advanced 73 to 74. Schema-only checks confirm the new table has enabled/forced RLS and both policies. No existing business rows were changed by this additive migration.
+
+The existing five-file Windows Compose chain rebuilt API, Worker and migrator. Only API and both workers were recreated; Postgres, Redis and other infrastructure were retained. Frontend watches were stopped before checkout/build and restarted in their original containers, keeping Linux output under `/tmp/nexoruta-artifacts`. All four original frontend DataProtection key sets were backed up and remain byte-identical. API uses its existing DataProtection volume. No secrets, providers, tariffs, published Cloud settings or Mapbox permanence were changed.
+
+HTTP checks against habitual services: API `http://localhost:5000/health/ready` 200; Backoffice `http://localhost:5101/` 200 after authentication redirect; Commerce `http://localhost:5102/` 200; Admin 5104 and Tracking 5103 return 200. API and both workers are healthy. Live API has 115 OpenAPI paths. `https://localhost:5843/health/ready` and its 115-path OpenAPI return 200 using the existing CA and standard hostname/TLS validation. These unauthenticated reads do not establish actor-specific CU acceptance. No habitual business-list query or physical operation was used for verification.
+
+`gentle-ai review mode enable --scope clone --cwd <integration-principal>` restored the exact prior setting: effective ON, global ON, clone-local UNSET. Backend remains ON/global; frontend remains OFF/clone-local as before. No native approval is claimed. Emulator-5554 is absent; installed version could not be inspected and Mobile was not reinstalled or started. Reconnection when the human resumes: `mobile/tools/local/reconectar-emulador.ps1 -Serial emulator-5554`; do not clear session/queue. Manual login and all CU acceptance remain pending.
 
 ## First manual step
 
