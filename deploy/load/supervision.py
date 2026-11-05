@@ -308,7 +308,7 @@ class MetricStream:
 
 
 class Resources:
-    """Read the Job's cgroup v2 allocation without inspecting application VMs."""
+    """Read the Job's cgroup allocation without inspecting application VMs."""
 
     def __init__(self, root=Path("/sys/fs/cgroup")):
         self.root = root
@@ -320,16 +320,37 @@ class Resources:
     def sample(self, now=None):
         now = time.monotonic() if now is None else now
         try:
-            cpu = dict(line.split() for line in (self.root / "cpu.stat").read_text().splitlines())
-            quota, period = (self.root / "cpu.max").read_text().split()
-            limit = int(quota) / int(period)
-            memory = int((self.root / "memory.current").read_text())
-            memory_limit = int((self.root / "memory.max").read_text())
-            events = dict(line.split() for line in (self.root / "memory.events").read_text().splitlines())
-            oom = int(events["oom_kill"])
+            values = None
+            for root in (self.root, self.root / "unified"):
+                try:
+                    cpu = dict(line.split() for line in (root / "cpu.stat").read_text().splitlines())
+                    quota, period = (root / "cpu.max").read_text().split()
+                    if quota == "max":
+                        raise ValueError("The cgroup v2 CPU quota is unlimited")
+                    limit = int(quota) / int(period)
+                    memory = int((root / "memory.current").read_text())
+                    memory_limit = int((root / "memory.max").read_text())
+                    events = dict(line.split() for line in (root / "memory.events").read_text().splitlines())
+                    values = (int(cpu["usage_usec"]) / 1_000_000, limit, memory,
+                              memory_limit, int(events["oom_kill"]))
+                    break
+                except (OSError, KeyError, ValueError, ZeroDivisionError):
+                    continue
+            if values is None:
+                cpu_root = self.root / "cpu,cpuacct"
+                memory_root = self.root / "memory"
+                cpu_usage = int((cpu_root / "cpuacct.usage").read_text()) / 1_000_000_000
+                quota = int((cpu_root / "cpu.cfs_quota_us").read_text())
+                period = int((cpu_root / "cpu.cfs_period_us").read_text())
+                memory = int((memory_root / "memory.usage_in_bytes").read_text())
+                memory_limit = int((memory_root / "memory.limit_in_bytes").read_text())
+                oom = int((memory_root / "memory.failcnt").read_text())
+                if quota <= 0 or period <= 0 or memory_limit <= 0 or memory_limit >= 1 << 60:
+                    raise ValueError("The cgroup v1 resource limits are unavailable")
+                values = (cpu_usage, quota / period, memory, memory_limit, oom)
+            usage, limit, memory, memory_limit, oom = values
             if self.initial_oom is None:
                 self.initial_oom = oom
-            usage = int(cpu["usage_usec"]) / 1_000_000
             utilization = None
             if self.previous and now > self.previous[0]:
                 utilization = max(0, (usage - self.previous[1]) / (now - self.previous[0]) / limit)

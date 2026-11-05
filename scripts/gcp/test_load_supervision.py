@@ -262,6 +262,32 @@ class EvidenceTests(unittest.TestCase):
 
 
 class ResourceTests(unittest.TestCase):
+    def test_cloud_run_cgroup_v1_reports_cpu_memory_and_limit_events(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cpu = root / "cpu,cpuacct"
+            memory = root / "memory"
+            cpu.mkdir()
+            memory.mkdir()
+            for name, content in {
+                "cpuacct.usage": "0", "cpu.cfs_quota_us": "200000", "cpu.cfs_period_us": "100000",
+            }.items():
+                (cpu / name).write_text(content)
+            for name, content in {
+                "memory.usage_in_bytes": "500", "memory.limit_in_bytes": "1000", "memory.failcnt": "2",
+            }.items():
+                (memory / name).write_text(content)
+            resources = supervision.Resources(root)
+            first = resources.sample(0)
+            self.assertTrue(first["available"])
+            self.assertEqual(first["memory_bytes"], 500)
+            self.assertEqual(first["memory_limit_bytes"], 1000)
+            self.assertFalse(first["oom"])
+            (cpu / "cpuacct.usage").write_text("250000000")
+            self.assertAlmostEqual(resources.sample(1)["cpu_utilization"], 0.125)
+            (memory / "memory.failcnt").write_text("3")
+            self.assertTrue(resources.sample(2)["oom"])
+
     def test_cpu_saturation_requires_thirty_seconds_and_oom_uses_a_baseline(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
