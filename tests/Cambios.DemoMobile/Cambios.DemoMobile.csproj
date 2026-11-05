@@ -1,1 +1,8 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup><ItemGroup><ProjectReference Include="../../mobile/src/NexoRuta.Mobile.Application/NexoRuta.Mobile.Application.csproj" /></ItemGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup><ItemGroup><ProjectReference Include="../../mobile/src/NexoRuta.Mobile.Application/NexoRuta.Mobile.Application.csproj" /></ItemGroup><ItemGroup>
+  <Compile Include="../../mobile/src/NexoRuta.Mobile/Presentacion/HojaRutaViewModel.cs" Link="Presentation/HojaRutaViewModel.cs" />
+  <Compile Include="../../mobile/src/NexoRuta.Mobile/Presentacion/EntregaViewModel.cs" Link="Presentation/EntregaViewModel.cs" />
+  <Compile Include="../../mobile/src/NexoRuta.Mobile/Presentacion/ComandoAsincrono.cs" Link="Presentation/ComandoAsincrono.cs" />
+  <Compile Include="../../mobile/src/NexoRuta.Mobile/Presentacion/ParadaResumen.cs" Link="Presentation/ParadaResumen.cs" />
+  <Compile Include="../../mobile/src/NexoRuta.Mobile/Captura/IInteraccionReparto.cs" Link="Presentation/IInteraccionReparto.cs" />
+  <Compile Include="../../mobile/src/NexoRuta.Mobile/Ubicacion/ITrackingJornada.cs" Link="Presentation/ITrackingJornada.cs" />
+</ItemGroup></Project>

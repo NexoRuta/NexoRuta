@@ -1,4 +1,8 @@
 using System.Net;
+using NexoRuta.Mobile.Presentacion;
+using NexoRuta.Mobile.Captura;
+using NexoRuta.Mobile.Core.Identidad;
+using NexoRuta.Mobile.Ubicacion;
 using System.Text.Json;
 using NexoRuta.Mobile.Api.Identidad;
 using NexoRuta.Mobile.Api.Reparto;
@@ -34,26 +38,31 @@ if(modo=="offline")
  await sync.SincronizarAsync(cuenta,jornadaId);
  // The transport rejects every HTTP call. No in-memory queue or fake server is used.
  transport.Offline=true;
+ var io=new InteraccionDemo();
+ var padre=new HojaRutaViewModel(hoja,cuenta,datos,io,io,io,cliente,sync);await padre.Refrescar();
  var evidencias=new EvidenciasLocales(datos,archivos);
- var foto=await evidencias.GuardarAsync(cuenta,jornadaId,entregaId,"Foto",Foto.Bytes);
- var resultados=entrega.Bultos.Select((b,i)=>new ResultadoBultoMovil(b.Id,b.Version,i<2,i<2?null:"AUSENTE")).ToArray();
- var d=new DatosOperacionMovil{FotoId=foto.Id,Nombre="Receptor sintético",Latitud=-34.9,Longitud=-56.2,PrecisionMetros=10,PosicionEnUtc=DateTimeOffset.UtcNow,ResultadosBultos=resultados};
- await datos.RegistrarConCapturasAsync(cuenta,jornadaId,[foto.Id],j=>j.RegistrarBultos(entregaId,Elemento(d),DateTimeOffset.UtcNow));
+ var formulario=new EntregaViewModel(padre,entrega,datos,evidencias,io);await formulario.InicializarAsync();
+ foreach(var b in formulario.Seleccion.Take(2))b.Escaneado=true;
+ formulario.Seleccion.Last().Motivo=entrega.Reglas.Motivos.Single(m=>m.Codigo=="AUSENTE");formulario.Nombre="Receptor sintético";
+ if(!formulario.Entregar.CanExecute(null))throw new InvalidOperationException("Delivery form disabled before physical declaration");
+ await formulario.Entregar.EjecutarAsync();
+ if(!formulario.PuedeRegistrar||!formulario.TomarFoto.CanExecute(null))throw new InvalidOperationException("H3: offline evidence capture disabled");
+ await formulario.TomarFoto.EjecutarAsync();await formulario.Entregar.EjecutarAsync();formulario.Desconectar();
  var retiro=hoja.Paradas.Single(p=>p.EnvioId==retiroId);
- var fotoRetiro=await evidencias.GuardarAsync(cuenta,jornadaId,retiroId,"Foto",Foto.Bytes);
- var firma=await evidencias.GuardarAsync(cuenta,jornadaId,retiroId,"Firma",Foto.Bytes);
- var rd=new DatosOperacionMovil{FotoId=fotoRetiro.Id,FirmaId=firma.Id,ResultadosBultos=retiro.Bultos.Select(b=>new ResultadoBultoMovil(b.Id,b.Version,true,null)).ToArray()};
- await datos.RegistrarConCapturasAsync(cuenta,jornadaId,[fotoRetiro.Id,firma.Id],j=>j.RegistrarBultos(retiroId,Elemento(rd),DateTimeOffset.UtcNow,true));
+ var retirar=new EntregaViewModel(padre,retiro,datos,evidencias,io);await retirar.InicializarAsync();
+ foreach(var b in retirar.Seleccion)b.Escaneado=true;
+ await retirar.TomarFoto.EjecutarAsync();await retirar.Firmar.EjecutarAsync();await retirar.Entregar.EjecutarAsync();
+ if(!retirar.Mensaje.Contains("pendiente"))throw new InvalidOperationException("Unconfirmed pickup presented as success");retirar.Desconectar();
  try { await sync.SincronizarAsync(cuenta,jornadaId);throw new InvalidOperationException("Network was not blocked."); }
  catch(HttpRequestException) { }
- if((await datos.LeerAsync(cuenta,jornadaId))!.CantidadPendientes!=2)throw new InvalidOperationException("Missing durable operations.");
- Console.WriteLine("Red bloqueada: 2 operaciones y 3 evidencias persistidas. El proceso termina; ejecutar sync en un proceso nuevo.");
+ if((await datos.LeerAsync(cuenta,jornadaId))!.CantidadPendientes!=3)throw new InvalidOperationException("Missing durable operations.");
+ Console.WriteLine("Red bloqueada: 3 operaciones mediante ViewModels y 3 evidencias persistidas. El proceso termina; ejecutar sync en un proceso nuevo.");
 }
 else if(modo=="sync")
 {
  cuenta=await cliente.ObtenerCuentaLocalAsync()??throw new InvalidOperationException("Missing persisted session.");
  var pendientes=(await datos.LeerAsync(cuenta,jornadaId))!.CantidadPendientes;
- if(pendientes!=2)throw new InvalidOperationException("Expected the offline queue from the previous process.");
+ if(pendientes!=3)throw new InvalidOperationException("Expected the offline queue from the previous process.");
  await sync.SincronizarAsync(cuenta,jornadaId);
  var acuses=(await datos.LeerConfirmacionesAsync(cuenta,jornadaId)).Select(b=>JsonSerializer.Deserialize(b,ContratosRepartoJson.Default.ConfirmacionOperacion)!).ToArray();
  if(acuses.Any(a=>a.Resultado!="Aplicada"))throw new InvalidOperationException(string.Join("; ",acuses.Where(a=>a.Resultado!="Aplicada").Select(a=>a.Detalle)));
@@ -64,7 +73,27 @@ else if(modo=="sync")
  await sync.SincronizarPendientesAsync(cuenta);
  Console.WriteLine("Proceso nuevo: cola y evidencias recuperadas; API real confirmó parcial 2/3, retiro y cierre. Retorno/liberación quedan para constatación física en Backoffice.");
 }
-else throw new ArgumentException("Modes: offline, sync");
+else if(modo=="revisit")
+{
+ cuenta=await cliente.ObtenerCuentaLocalAsync()??throw new InvalidOperationException("Missing persisted session");
+ var id=demo.GetProperty("revisitaId").GetGuid();
+ var hoja=(await cliente.ObtenerHojasAsync(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(-3)))).Single(h=>h.Id==id);
+ if(hoja.Paradas.Single().Bultos.Length!=1)throw new InvalidOperationException("The revisit must contain only the outstanding parcel");
+ await datos.GuardarHojaAsync(cuenta,id,SerializadorHojaRuta.Serializar(hoja));
+ var jornada=JornadaLocal.Iniciar(hoja.JornadaId,id,cuenta,DateTimeOffset.UtcNow);await datos.CrearAsync(jornada);await sync.SincronizarAsync(cuenta,hoja.JornadaId);
+ var bulto=hoja.Paradas.Single().Bultos.Single();
+ await datos.ModificarAsync(cuenta,hoja.JornadaId,j=>j.RegistrarCarga(entregaId,Elemento(new(){BultoId=bulto.Id}),DateTimeOffset.UtcNow));
+ await datos.ModificarAsync(cuenta,hoja.JornadaId,j=>j.ConfirmarCarga(DateTimeOffset.UtcNow));await sync.SincronizarAsync(cuenta,hoja.JornadaId);
+ var io=new InteraccionDemo();var padre=new HojaRutaViewModel(hoja,cuenta,datos,io,io,io,cliente,sync);await padre.Refrescar();
+ var formulario=new EntregaViewModel(padre,hoja.Paradas.Single(),datos,new EvidenciasLocales(datos,archivos),io);await formulario.InicializarAsync();
+ formulario.Seleccion.Single().Escaneado=true;formulario.Nombre="Receptor segunda visita";
+ await formulario.TomarFoto.EjecutarAsync();await formulario.Entregar.EjecutarAsync();
+ var actual=(await cliente.ObtenerHojasAsync(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(-3)))).Single(h=>h.Id==id);
+ if(actual.Paradas.Single().Estado!="Entregado")throw new InvalidOperationException(formulario.Mensaje);
+ await datos.ModificarAsync(cuenta,hoja.JornadaId,j=>j.Finalizar(DateTimeOffset.UtcNow));await sync.SincronizarAsync(cuenta,hoja.JornadaId);
+ formulario.Desconectar();Console.WriteLine("Segunda visita ejecutada desde EntregaViewModel: resultado remoto Entregado, solo el bulto pendiente y cierre confirmado.");
+}
+else throw new ArgumentException("Modes: offline, sync, revisit");
 static JsonElement Elemento(DatosOperacionMovil d)=>JsonSerializer.SerializeToElement(d,DatosOperacionJson.Default.DatosOperacionMovil);
 
 sealed class LoopbackTransport:DelegatingHandler
@@ -91,3 +120,14 @@ sealed class Claves(string path):IAlmacenClavesProtegidas
 }
 
 static class Foto { public static readonly byte[] Bytes=Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="); }
+
+sealed class InteraccionDemo:IInteraccionReparto,ITrackingJornada,IVerificacionLocal
+{
+ public Task<bool> IniciarAsync()=>Task.FromResult(true);public void Detener(){}
+ public Task<bool> VerificarAsync(string motivo,CancellationToken ct=default)=>Task.FromResult(true);
+ public Task<string?> EscanearAsync()=>Task.FromResult<string?>(null);
+ public Task<byte[]?> FotoAsync()=>Task.FromResult<byte[]?>(Foto.Bytes.ToArray());public Task<byte[]?> FirmaAsync()=>Task.FromResult<byte[]?>(Foto.Bytes.ToArray());
+ public Task<Guid[]?> SeleccionarRendicionAsync(IReadOnlyList<BultoRuta> bultos)=>Task.FromResult<Guid[]?>(bultos.Select(b=>b.Id).ToArray());
+ public Task<bool> ConfirmarSalidaConDiferenciasAsync(int bultosPendientes,int paradasAfectadas)=>Task.FromResult(true);
+ public Task<bool> ConfirmarCierreAsync(bool pruebaPendiente,int bultosSinRendir)=>Task.FromResult(true);
+}

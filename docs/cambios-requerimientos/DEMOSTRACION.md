@@ -49,12 +49,12 @@ El ejecutable portátil usa los ensamblados reales Core, Application, Api y Stor
 
 ```bash
 dotnet run --project tests/Cambios.DemoMobile -- "$PWD" offline
-# El proceso anterior termina con dos operaciones y tres evidencias guardadas.
+# El proceso anterior termina con tres operaciones y tres evidencias guardadas.
 dotnet run --project tests/Cambios.DemoMobile -- "$PWD" sync
 python3 scripts/cloud/demo-cambios.py finish
 ```
 
-El primer proceso descarga la hoja, inicia jornada, escanea solo dos de los tres bultos, confirma salida y corta su transporte. Registra entrega de dos, motivo AUSENTE para el tercero y un retiro con foto y firma. Comprueba que la sincronización falla por desconexión y termina. El segundo proceso abre la misma SQLite, sesión y claves, recupera evidencias, sincroniza y exige confirmaciones `Aplicada` de la API. Luego rinde el retiro y cierra la jornada. Las fotos sintéticas son PNG válidos; la firma de esta herramienta es una imagen de prueba, no una captura humana.
+El primer proceso descarga la hoja, inicia jornada, escanea solo dos de los tres bultos, confirma salida y corta su transporte. Usa `EntregaViewModel` y sus comandos reales: declara físicamente dos bultos, motivo AUSENTE para el tercero, comprueba que sigue habilitada la captura offline y completa la foto con otro comando de evidencia. Registra también el retiro con foto y firma desde el ViewModel. Comprueba que la sincronización falla por desconexión y termina. El segundo proceso abre la misma SQLite, sesión y claves, recupera evidencias, sincroniza y exige confirmaciones `Aplicada` de la API. Luego rinde el retiro y cierra la jornada. Las fotos sintéticas son PNG válidos; la firma de esta herramienta es una imagen de prueba, no una captura humana.
 
 `finish` comprueba 2/3, el enlace generado por el Worker RabbitMQ, conteos públicos sin IDs internos y el aviso recibido por Kafka real en Commerce. Recibe el retiro y confirma entrega al comercio. Constata retorno y liberación del vehículo mediante comandos separados. Si los workers aún procesan el outbox, esperar a que estén listos antes de `finish`; no repetir comandos físicos manualmente para resolver un error de conectividad.
 
@@ -70,7 +70,14 @@ Para otra visita del pendiente:
 python3 scripts/cloud/demo-cambios.py revisit
 ```
 
-Se exige una ruta que incluya solamente el tercer bulto y un incremento acumulado de exactamente 25 UYU en la nueva versión tarifaria. La visita anterior conserva sus tres miembros históricos. Este paso deja la segunda ruta despachada para inspección; no inventa otra entrega.
+Se exige una ruta que incluya solamente el tercer bulto y un incremento acumulado de exactamente 25 UYU en la nueva versión tarifaria. La visita anterior conserva sus tres miembros históricos. Después del despacho, ejecutar realmente la segunda entrega y su cierre:
+
+```bash
+dotnet run --project tests/Cambios.DemoMobile -- "$PWD" revisit
+python3 scripts/cloud/demo-cambios.py verify-revisit
+```
+
+El cliente descarga la nueva hoja, exige exactamente un bulto, confirma carga/salida y ejecuta foto y entrega desde `EntregaViewModel`. Verifica el resultado remoto `Entregado` antes de cerrar. El enlace público debe mostrar 3/3. El recargo no se vuelve a emitir al ejecutar o reintentar la entrega.
 
 ## B. Ruta mixta y cierre del retiro
 
@@ -98,3 +105,20 @@ python3 scripts/cloud/dev.py stop
 ```
 
 Se detienen los procesos propios; se conservan brokers y datos. Para recompilar un runtime activo primero detenerlo. No ejecutar `docker volume prune`, restaurar respaldos ajenos ni borrar migraciones.
+
+## Regresiones reproducibles de los hallazgos
+
+Con `env-agent.sh` cargado, ejecutar integraciones en procesos separados para que cada fixture libere su clúster sintético. No combinar indiscriminadamente todos los filtros en una sola ejecución en una VM de 32 GB con brokers.
+
+```bash
+dotnet test backend/tests/NexoRuta.IntegrationTests --filter 'FullyQualifiedName~H1H2_'
+dotnet test backend/tests/NexoRuta.IntegrationTests --filter 'FullyQualifiedName~C31_'
+dotnet test backend/tests/NexoRuta.IntegrationTests --filter 'FullyQualifiedName~C37_'
+dotnet test mobile/tests/NexoRuta.Mobile.Application.Tests -p:NuGetLockFilePath=obj/cloud.packages.lock.json
+```
+
+`H1H2_` ejecuta dos visitas HTTP con distintos repartidores para mantener simultáneamente los plazos de ambas. Comprueba valores persistidos y el proceso SQL real en t60/t80, incluyendo prueba de B2 en t70 tras vencer B1. También verifica recálculo vial antes y después de la segunda entrega. `C37_` prueba ruta mixta, rechazo físico por capacidad sin cambios parciales, resolución vinculada, idempotencia, retiro fallido/reprogramación y recepción/entrega al comercio para cantidades de 1, 500, 501 y 1500.
+
+Las pruebas `H3_`/`H4_` usan los ViewModels enlazados de la aplicación: habilitación de captura, reapertura SQLite/cifrado, acuse de conflicto conservado, exclusión de rendición, resolución explícita y pérdida de respuesta tras aplicar. Su transporte está controlado; la demostración anterior aporta API/PostgreSQL reales. Los adaptadores de ubicación y captura de la herramienta portable son sintéticos, y no acreditan cámara, GPS, escáner ni firma Android.
+
+En Android queda pendiente repetir modo avión → entrega sin prueba → captura offline → cierre del proceso → reapertura → sincronización, y retiro rechazado → coordinación con depósito → resolución → pérdida de respuesta/reintento. No borrar datos ni reinstalar para preparar estos casos.

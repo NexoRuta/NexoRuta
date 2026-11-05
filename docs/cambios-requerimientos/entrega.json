@@ -4,15 +4,27 @@
   "components": {
     "backend": {
       "baseDevelop": "71b85bf3b3e1a271543930ce0404410111eebe56",
-      "commit": "7e52bdb61f0e2eb4112c92c377dfb8f600ec2a54"
+      "commit": "f71b114ec0d4c0f832625e5e220befe654ad1850"
     },
     "frontend": {
       "baseDevelop": "b3a61482c210eceda672c65a77211da857a9ee79",
-      "commit": "e60d7119e03feba321eab2ed60e1179c8a6c0fe4"
+      "commit": "5190efff4d21e9a1a203915a9a57369dacfe2dae"
     },
     "mobile": {
       "baseDevelop": "8a71b3f9d89f2e33a9dd4d6b078b514b29b01262",
-      "commit": "0af7a70e6c05d16aea0675924630af9a9f25f6f4"
+      "commit": "683766d6d8cd6c1bd9ce45bb12f6581ddb19b98c"
     }
+  },
+  "revisionH1H6": {
+    "startRoot": "325be2c3889c1a61f11e1ba747b8ac9fc92b4ac0",
+    "startGitlinks": {
+      "backend": "7e52bdb61f0e2eb4112c92c377dfb8f600ec2a54",
+      "frontend": "e60d7119e03feba321eab2ed60e1179c8a6c0fe4",
+      "mobile": "0af7a70e6c05d16aea0675924630af9a9f25f6f4"
+    },
+    "rootCommit": "HEAD of the commit containing this manifest; use git rev-parse HEAD",
+    "migration": "20261105180000_IndependentParcelProofDeadlines",
+    "nativeAndroid": "pending: NETSDK1147, no maui-android workload or adb/emulator",
+    "validation": "VALIDACION.md (continuity H1-H6 section)"
   }
 }

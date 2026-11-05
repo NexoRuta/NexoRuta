@@ -100,8 +100,23 @@ def revisit():
  after=call('GET',f"/api/envios/{envio['id']}/tarifa",token=operator)['totalFinalUyu'];assert round(after-before,2)==25
  d['revisitaId']=h['id'];(STATE/'demo-cambios.json').write_text(json.dumps(d))
  print('Nueva visita contiene solo el pendiente; despacho aplica una única versión acumulada con recargo UYU 25.')
+def verify_revisit():
+ operator=login('operator');d=json.loads((STATE/'demo-cambios.json').read_text())
+ shipment=next(e for e in call('GET','/api/envios',token=operator) if e['id']==d['entregaId'])
+ assert shipment['estado']=='Entregado' and all(b['resultado']=='Entregado' for b in shipment['bultos'])
+ before=call('GET',f"/api/envios/{shipment['id']}/tarifa",token=operator)['totalFinalUyu']
+ try:call('POST',f"/api/rutas/{d['revisitaId']}/despacho",{'version':0},operator)
+ except RuntimeError as error:
+  if ': 409:' not in str(error):raise
+ after=call('GET',f"/api/envios/{shipment['id']}/tarifa",token=operator)['totalFinalUyu'];assert before==after
+ token=d['links']['entregaId']['url'].rstrip('/').split('/')[-1]
+ public=call('GET','/api/public/seguimiento/'+token)
+ assert public['bultosEntregados']==3 and public['totalBultos']==3
+ assert 'bultoId' not in json.dumps(public) and 'operadorId' not in json.dumps(public)
+ print('Segunda entrega verificada: 3/3 públicos sin IDs internos y reenvío de despacho sin duplicar cargo.')
 if __name__=='__main__':
  if sys.argv[1:]==['setup']:setup()
  elif sys.argv[1:]==['finish']:verify_and_finish()
  elif sys.argv[1:]==['revisit']:revisit()
- else:raise SystemExit('Uso: demo-cambios.py setup | finish | revisit')
+ elif sys.argv[1:]==['verify-revisit']:verify_revisit()
+ else:raise SystemExit('Uso: demo-cambios.py setup | finish | revisit | verify-revisit')
