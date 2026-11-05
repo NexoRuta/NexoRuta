@@ -64,7 +64,7 @@ El target GcpDemo usa confianza TLS normal: **no necesita gateway local, CA loca
 | Destinatario | Anónimo, únicamente enlace legítimo del envío nuevo. |
 | Admin plataforma | Alta/soporte de organizaciones cuando corresponda; no acceso operativo implícito. |
 
-Las contraseñas se consultan en el almacén privado disponible. No se escriben aquí. El comercio elige operador en cada envío: no es necesario inventar un vínculo permanente comercio–operador. El alta por autogestión o plataforma se explica con su actor real; no acredita por sí sola el ABM de comercios clientes desde Backoffice requerido literalmente por CU-01.
+El seed `POST /api/admin/demo-data` prepara estos accesos: A/B son `admin.operador1@demo.nexoruta.test` y `admin.operador2@demo.nexoruta.test`; C1/C2 son `admin.comercio1@demo.nexoruta.test` y `admin.comercio2@demo.nexoruta.test`; A1/A2 son `a1@demo.nexoruta.test` y `a2@demo.nexoruta.test`; R1/R2 son `r1@demo.nexoruta.test` y `r2@demo.nexoruta.test`; Solo consulta es `consulta@demo.nexoruta.test`. `admin@nexoruta.test` es Admin plataforma. El seed deja estas cuentas con la contraseña compartida `Demo12345!2026`; al repetirse sincroniza usuarios y permisos sin borrar organizaciones ni historia. El comercio elige operador en cada envío: no es necesario inventar un vínculo permanente comercio–operador. El alta por autogestión o plataforma se explica con su actor real; no acredita por sí sola el ABM de comercios clientes desde Backoffice requerido literalmente por CU-01.
 
 ### CFG-01–06 — Configuración sintética reproducible
 
