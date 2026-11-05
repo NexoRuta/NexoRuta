@@ -556,7 +556,7 @@ services:
     - ${NODE_PRIVATE_IP:?}:9090:9090
     volumes:
     - ./monitoring/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
-    - ../observability/prometheus/alerts.yaml:/etc/prometheus/alerts.yaml:ro
+    - ./monitoring/alerts.yaml:/etc/prometheus/alerts.yaml:ro
     - prometheus:/prometheus
     profiles:
     - shared
