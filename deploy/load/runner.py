@@ -71,6 +71,13 @@ def check_endpoint(url, timeout=15):
             raise RuntimeError("A required remote health endpoint is not ready")
 
 
+def safe_http_error(error):
+    parsed = urllib.parse.urlsplit(str(error.url))
+    host = parsed.hostname or "unknown"
+    path = parsed.path[:160] or "/"
+    return f"Load test failed safely: HTTPError status={error.code} endpoint={host}{path}"
+
+
 def request_stop(signum, _frame):
     global EXIT_SIGNAL
     EXIT_SIGNAL = signum
@@ -317,6 +324,9 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except urllib.error.HTTPError as error:
+        print(safe_http_error(error), file=sys.stderr)
+        raise SystemExit(1) from None
     except (ValueError, KeyError, OSError, urllib.error.URLError) as error:
         print(f"Load test failed safely: {type(error).__name__}", file=sys.stderr)
         raise SystemExit(1) from error
