@@ -178,7 +178,7 @@ prometheus.exporter.blackbox "local_services" {
 prometheus.scrape "local_services" {
   targets         = prometheus.exporter.blackbox.local_services.targets
   forward_to      = [prometheus.remote_write.local.receiver]
-  scrape_interval = "15s"
+  scrape_interval = "30s"
 }
 
 prometheus.remote_write "local" {
