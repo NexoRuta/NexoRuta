@@ -108,3 +108,35 @@ Android: `dotnet build mobile/src/NexoRuta.Mobile -f net10.0-android --no-restor
 Las regresiones adicionales completaron **3 pruebas de firmas/aislamiento RLS**, **2 matrices SQL**, **5 de GPS/retorno/visitas resueltas** y **3 del circuito de prueba previo**. La prueba de evidencia exactamente en el límite detectó una carrera en la primera corrección local de H2: dos candidatos leídos antes del bloqueo podían incrementar dos veces la versión del envío. Se corrigió antes de publicar: después del bloqueo solo se actualiza el agregado si se resolvieron bultos o sigue aplicando el caso histórico sin resultados. Se repitió esa prueba junto con H1H2: **4 aprobadas**, incluyendo dos barridos simultáneos y conservación de evidencia al competir con ellos. La versión defectuosa intermedia no se publicó.
 
 El runtime y los workers propios se detuvieron después de verificar la demostración. Se conservaron bases, volúmenes, claves locales y capturas. Se retiraron únicamente sus salidas de compilación regenerables para disponer de espacio para el checkout limpio.
+
+## Publicación y checkout limpio de esta corrección
+
+Los submódulos se publicaron primero en `feature/cambiosrequerimientos`; después se publicaron los gitlinks del principal. No hubo merge a develop/main ni force push.
+
+| Repositorio | SHA publicado de las fuentes verificadas |
+|---|---|
+|Principal integrado|`380236678794e4fb275c82a3c86b610832741f04`|
+|Backend|`f71b114ec0d4c0f832625e5e220befe654ad1850`|
+|Frontend|`5190efff4d21e9a1a203915a9a57369dacfe2dae`|
+|Mobile|`683766d6d8cd6c1bd9ce45bb12f6581ddb19b98c`|
+
+Se clonó nuevamente desde GitHub con `--depth 1 --branch feature/cambiosrequerimientos --recurse-submodules --shallow-submodules`. Git descargó los tres commits anteriores por sus SHA; `verify-gitlinks.py` confirmó los tres. No se copiaron `.env`, bases, binarios, obj ni estado privado desde el checkout de trabajo. Se reutilizaron exclusivamente SDK, herramientas y caché NuGet del entorno.
+
+Desde ese clon: API, Worker, solución Frontend completa y `Cambios.DemoMobile` compilan con **cero errores**, manteniendo advertencias de analizadores/NU1510/CA1416. Se ejecutaron **4 pruebas de plazos/concurrencia**, **5 de retiro** y **92 de Mobile Application**, todas aprobadas. Al terminar, el principal y los tres submódulos estaban limpios y sus gitlinks seguían coincidiendo. Comandos adicionales:
+
+```bash
+python3 scripts/cloud/verify-gitlinks.py
+dotnet build backend/src/NexoRuta.Api
+dotnet build backend/src/NexoRuta.Worker
+dotnet build frontend/NexoRuta.sln
+dotnet build tests/Cambios.DemoMobile
+dotnet test backend/tests/NexoRuta.IntegrationTests --filter 'FullyQualifiedName~H1H2_|FullyQualifiedName~EvidenciaEnElLimite'
+dotnet test backend/tests/NexoRuta.IntegrationTests --no-build --no-restore --filter 'FullyQualifiedName~C37_'
+dotnet test mobile/tests/NexoRuta.Mobile.Application.Tests -p:NuGetLockFilePath=obj/cloud.packages.lock.json
+```
+
+Este cierre documental posterior conserva exactamente esos tres gitlinks. El SHA final del principal es `HEAD` del commit que contiene este documento; se informa con su enlace canónico en la entrega, evitando una referencia circular dentro de su propio commit. `entrega.json` registra el principal integrado comprobado y los SHA completos de componentes.
+
+La búsqueda de PR para `head:feature/cambiosrequerimientos` no encontró una PR existente en ninguno de los cuatro repositorios. La consulta de ejecuciones de PR asociadas a los SHA devolvió listas vacías; no se acredita CI remota verde. Se mantuvieron los workflows existentes sin introducir nueva infraestructura.
+
+**Conclusión:** correcciones H1–H6 implementadas, publicadas y listas para revisión técnica dentro de requerimientos 31–41. La aceptación operativa/integración final mantiene pendiente el recorrido Android nativo y las verificaciones manuales indicadas en DEMOSTRACION/TRAZABILIDAD. No se declaran aceptados otros CU ni se certifican servicios externos de comercios o correo.

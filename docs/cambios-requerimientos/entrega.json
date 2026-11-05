@@ -25,6 +25,19 @@
     "rootCommit": "HEAD of the commit containing this manifest; use git rev-parse HEAD",
     "migration": "20261105180000_IndependentParcelProofDeadlines",
     "nativeAndroid": "pending: NETSDK1147, no maui-android workload or adb/emulator",
-    "validation": "VALIDACION.md (continuity H1-H6 section)"
+    "validation": "VALIDACION.md (continuity H1-H6 section)",
+    "verifiedIntegratedRoot": "380236678794e4fb275c82a3c86b610832741f04",
+    "cleanCheckout": {
+      "builds": [
+        "API",
+        "Worker",
+        "Frontend solution",
+        "portable Mobile demonstration"
+      ],
+      "deadlineAndConcurrencyTests": 4,
+      "pickupTests": 5,
+      "portableApplicationTests": 92,
+      "workingTrees": "clean"
+    }
   }
 }
