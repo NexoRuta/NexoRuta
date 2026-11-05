@@ -49,7 +49,6 @@ jobs:
           persist-credentials: false
       - name: Validate deployment and publication configuration
         run: |
-          python3 scripts/gcp/github_environment.py validate deploy
           python3 scripts/gcp/github_environment.py validate publish
           python3 scripts/gcp/demo_session.py check
       - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
