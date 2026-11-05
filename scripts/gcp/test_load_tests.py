@@ -2,6 +2,8 @@
 
 import subprocess
 import unittest
+from contextlib import nullcontext, redirect_stdout
+from io import StringIO
 from unittest.mock import patch
 
 import load_tests as load_test_control
@@ -23,6 +25,22 @@ class MemoryStorage:
         return str(self.generation)
 
 
+class ObjectStorage:
+    def __init__(self, objects=None):
+        self.objects = dict(objects or {})
+        self.generations = {name: 1 for name in self.objects}
+
+    def read(self, name):
+        return str(self.generations.get(name, 0)), self.objects.get(name)
+
+    def write(self, name, generation, value):
+        if str(self.generations.get(name, 0)) != generation:
+            raise AssertionError("generation precondition was not preserved")
+        self.objects[name] = dict(value)
+        self.generations[name] = self.generations.get(name, 0) + 1
+        return str(self.generations[name])
+
+
 class LoadTestLeaseTests(unittest.TestCase):
     def test_expired_prelaunch_lease_is_closed_without_starting_cloud_run(self):
         store = MemoryStorage({"run_id": "run-1", "status": "starting", "expires_at": 1})
@@ -42,7 +60,7 @@ class LoadTestLeaseTests(unittest.TestCase):
         }]}}]}
 
         def request(_method, url, _project, body=None):
-            if url.endswith("/executions?pageSize=100&orderBy=createTime+desc"):
+            if url.endswith("/executions?pageSize=100"):
                 return listing
             if url.endswith(execution_name):
                 return {"conditions": [{"type": "Completed", "state": "CONDITION_FAILED"}]}
@@ -52,6 +70,58 @@ class LoadTestLeaseTests(unittest.TestCase):
             self.assertTrue(load_test_control.reconcile_execution(store, "demo-project", run_id))
         self.assertEqual(store.value["execution"], execution_name)
         self.assertEqual(store.value["status"], "failed")
+
+    def test_running_jobs_run_operation_does_not_delay_execution_discovery(self):
+        run_id = "00000000-0000-4000-8000-000000000001"
+        operation = "projects/demo/locations/southamerica-west1/operations/op-1"
+        execution_name = "projects/demo/locations/southamerica-west1/jobs/nexoruta-load-tests/executions/run-1"
+        with patch.object(load_test_control, "find_execution", return_value=execution_name), \
+                patch.object(load_test_control, "gcp_request") as request:
+            result = load_test_control.execution_reference("demo-project", run_id, operation)
+
+        self.assertEqual(result, execution_name)
+        request.assert_not_called()
+
+    def test_pending_operation_without_visible_execution_remains_recoverable(self):
+        run_id = "00000000-0000-4000-8000-000000000001"
+        operation = "projects/demo/locations/southamerica-west1/operations/op-1"
+        store = MemoryStorage({"run_id": run_id, "status": "starting", "operation": operation,
+                               "launch_requested_at": 5, "expires_at": 100})
+        with patch.object(load_test_control, "find_execution", return_value=None), \
+                patch.object(load_test_control, "gcp_request", return_value={"done": False}) as request:
+            self.assertFalse(load_test_control.reconcile_execution(store, "demo-project", run_id))
+
+        self.assertEqual(store.value["status"], "starting")
+        request.assert_called_once_with("GET", "https://run.googleapis.com/v2/" + operation, "demo-project")
+
+    def test_wait_finalizes_completed_execution_after_lease_deadline(self):
+        run_id = "00000000-0000-4000-8000-000000000001"
+        execution = "projects/demo/locations/southamerica-west1/jobs/nexoruta-load-tests/executions/run-1"
+        lease_store = ObjectStorage({load_test_control.LEASE_OBJECT: {
+            "run_id": run_id, "profile": "smoke", "status": "starting", "expires_at": 0,
+            "execution": execution,
+        }})
+        result_store = ObjectStorage({f"runs/{run_id}/summary.json": {
+            "run_id": run_id, "status": "passed", "classification": "passed",
+            "evidence": {"measured_requests": 1, "generator_cpu_samples": 1,
+                         "generator_memory_samples": 1,
+                         "measurement_report": {"valid": True, "complete": True}},
+            "authentication": {"ready": True}, "session_cleanup": {"complete": True},
+        }})
+        stores = {"demo-project-nexoruta-load-control": lease_store, "results": result_store}
+        config = {"GCP_PROJECT_ID": "demo-project", "GCP_LOAD_RESULTS_BUCKET": "results"}
+        completed_execution = {"conditions": [{"type": "Completed", "state": "CONDITION_SUCCEEDED"}]}
+
+        with patch.object(load_test_control, "token", return_value="token"), \
+                patch.object(load_test_control, "Storage", side_effect=lambda bucket, _token: stores[bucket]), \
+                patch.object(load_test_control, "demo_control_lock", return_value=nullcontext()), \
+                patch.object(load_test_control, "gcp_request", return_value=completed_execution), \
+                redirect_stdout(StringIO()):
+            self.assertTrue(load_test_control.wait(config, run_id))
+
+        self.assertEqual(lease_store.objects[load_test_control.LEASE_OBJECT]["status"], "completed")
+        report = result_store.objects[f"runs/{run_id}/controller-summary.json"]
+        self.assertEqual(report["classification"], "passed")
 
     def test_multiple_executions_for_one_run_id_are_never_guessed(self):
         run_id = "00000000-0000-4000-8000-000000000001"

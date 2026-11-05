@@ -104,25 +104,11 @@ def gcp_request(method, url, project, body=None):
     return json.loads(content) if content else {}
 
 
-def operation_result(operation, project, timeout=120):
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        result = gcp_request("GET", "https://run.googleapis.com/v2/" + operation, project)
-        if result.get("done"):
-            if "error" in result:
-                raise RuntimeError("Cloud Run rejected the load-test execution request")
-            execution = result.get("response", {}).get("name", "")
-            if execution:
-                return execution
-        time.sleep(2)
-    raise RuntimeError("Cloud Run execution creation is ambiguous; the lease remains reserved for recovery")
-
-
 def find_execution(project, run_id):
     parent = f"projects/{project}/locations/{REGION}/jobs/{JOB}"
     page_token = ""
     while True:
-        query = {"pageSize": "100", "orderBy": "createTime desc"}
+        query = {"pageSize": "100"}
         if page_token:
             query["pageToken"] = page_token
         url = "https://run.googleapis.com/v2/" + parent + "/executions?" + urllib.parse.urlencode(query)
@@ -145,36 +131,62 @@ def find_execution(project, run_id):
             return None
 
 
+def execution_reference(project, run_id, operation=""):
+    """Resolve the execution resource without waiting for its task to finish.
+
+    Cloud Run's jobs.run operation may remain pending while the job is running.
+    The execution carries the run ID supplied in the container override, so use
+    that exact marker as soon as Cloud Run publishes the execution resource.
+    """
+    execution = find_execution(project, run_id)
+    if execution or not operation:
+        return execution
+    result = gcp_request("GET", "https://run.googleapis.com/v2/" + operation, project)
+    if not result.get("done"):
+        return None
+    if "error" in result:
+        raise RuntimeError("Cloud Run rejected the load-test execution request")
+    return result.get("response", {}).get("name") or None
+
+
+def wait_for_execution_reference(project, run_id, operation="", timeout=120):
+    deadline = time.monotonic() + timeout
+    while True:
+        execution = execution_reference(project, run_id, operation)
+        if execution:
+            return execution
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(2)
+    raise RuntimeError("Cloud Run has not exposed the exact execution yet; the lease remains reserved for recovery")
+
+
 def reconcile_execution(leases, project, run_id):
     generation, active = leases.read(LEASE_OBJECT)
     if not active or active.get("run_id") != run_id:
         return True
     execution = active.get("execution")
-    if not execution and not active.get("operation") and active.get("launch_requested_at"):
-        execution = find_execution(project, run_id)
-        if execution:
-            generation, current = leases.read(LEASE_OBJECT)
-            if current and current.get("run_id") == run_id:
-                current["execution"] = execution
-                leases.write(LEASE_OBJECT, generation, current)
-        else:
-            return False
-    elif not execution and not active.get("operation"):
+    if (not execution and not active.get("operation") and not active.get("launch_requested_at")):
         if active.get("expires_at", 0) <= time.time():
             active.update(status="failed", completed_at=time.time(), failure_reason="expired_before_launch")
             leases.write(LEASE_OBJECT, generation, active)
             return True
         return False
+    if not execution:
+        execution = find_execution(project, run_id)
     if not execution and active.get("operation"):
-        try:
-            execution = operation_result(active["operation"], project)
-        except RuntimeError:
-            operation = gcp_request("GET", "https://run.googleapis.com/v2/" + active["operation"], project)
-            if not operation.get("done") or "error" not in operation:
-                raise
+        operation = gcp_request("GET", "https://run.googleapis.com/v2/" + active["operation"], project)
+        if operation.get("done") and "error" in operation:
             active.update(status="failed", completed_at=time.time(), execution_status="CREATE_FAILED")
             leases.write(LEASE_OBJECT, generation, active)
             return True
+        if operation.get("done"):
+            execution = operation.get("response", {}).get("name", "")
+        else:
+            return False
+    if not execution and not active.get("operation"):
+        return False
+    if execution:
         generation, current = leases.read(LEASE_OBJECT)
         if not current or current.get("run_id") != run_id:
             return True
@@ -394,35 +406,39 @@ def run(config, profile, run_id=None):
         name = operation.get("name", "")
         if not name:
             raise RuntimeError("Cloud Run did not return an execution operation")
-        generation, manifest = leases.read(LEASE_OBJECT)
-        if (not manifest or manifest.get("run_id") != run_id or manifest.get("status") != "starting"
-                or manifest.get("expires_at", 0) <= time.time()):
-            execution = operation_result(name, config["GCP_PROJECT_ID"])
-            gcp_request("POST", "https://run.googleapis.com/v2/" + execution + ":cancel", config["GCP_PROJECT_ID"], {})
-            raise RuntimeError("The load-test lease was cancelled or expired while Cloud Run started")
-        manifest["operation"] = name
-        generation = leases.write(LEASE_OBJECT, generation, manifest)
-        try:
-            execution = operation_result(name, config["GCP_PROJECT_ID"])
-        except RuntimeError:
-            operation_state = gcp_request("GET", "https://run.googleapis.com/v2/" + name, config["GCP_PROJECT_ID"])
-            if operation_state.get("done") and "error" in operation_state:
-                generation, failed = leases.read(LEASE_OBJECT)
-                if failed and failed.get("run_id") == run_id:
-                    failed.update(status="failed", completed_at=time.time(), execution_status="CREATE_FAILED")
-                    leases.write(LEASE_OBJECT, generation, failed)
-            raise
-        generation, current = leases.read(LEASE_OBJECT)
-        if (not current or current.get("run_id") != run_id or current.get("status") != "starting"
-                or current.get("expires_at", 0) <= time.time()):
+        with demo_control_lock(config, access):
+            generation, current = leases.read(LEASE_OBJECT)
+            if not current or current.get("run_id") != run_id:
+                raise RuntimeError("The load-test lease changed after Cloud Run accepted the execution")
+            current["operation"] = name
+            cancelled_or_expired = (current.get("status") != "starting"
+                                    or current.get("expires_at", 0) <= time.time())
+            if cancelled_or_expired:
+                current["status"] = "cancelling"
+                current["cancel_requested_at"] = current.get("cancel_requested_at", time.time())
+            leases.write(LEASE_OBJECT, generation, current)
+        execution = wait_for_execution_reference(config["GCP_PROJECT_ID"], run_id, name)
+        with demo_control_lock(config, access):
+            generation, current = leases.read(LEASE_OBJECT)
+            if (not current or current.get("run_id") != run_id or current.get("status") != "starting"
+                    or current.get("expires_at", 0) <= time.time()):
+                if current and current.get("run_id") == run_id:
+                    current["execution"] = execution
+                    current["status"] = "cancelling"
+                    current["cancel_requested_at"] = current.get("cancel_requested_at", time.time())
+                    leases.write(LEASE_OBJECT, generation, current)
+                should_cancel = True
+            else:
+                current.update(status="running", execution=execution)
+                leases.write(LEASE_OBJECT, generation, current)
+                should_cancel = False
+        if should_cancel:
             try:
                 gcp_request("POST", "https://run.googleapis.com/v2/" + execution + ":cancel", config["GCP_PROJECT_ID"], {})
             except urllib.error.HTTPError as error:
                 if error.code not in (404, 409):
                     raise
             raise RuntimeError("The load-test lease changed while Cloud Run started; the execution was cancelled")
-        current.update(status="running", execution=execution)
-        leases.write(LEASE_OBJECT, generation, current)
     except urllib.error.HTTPError as error:
         if error.code < 500:
             generation, failed = leases.read(LEASE_OBJECT)
@@ -505,11 +521,25 @@ def wait(config, run_id):
     leases = Storage(load_control_bucket(config), access)
     results = Storage(config["GCP_LOAD_RESULTS_BUCKET"], access)
     generation, active = leases.read(LEASE_OBJECT)
-    if not active or active.get("run_id") != run_id or not active.get("execution"):
+    if not active or active.get("run_id") != run_id:
         raise RuntimeError("No matching Cloud Run execution is recorded")
-    deadline = min(active["expires_at"], time.time() + PROFILES[active["profile"]] + 180)
-    execution = "https://run.googleapis.com/v2/" + active["execution"]
-    while time.time() < deadline:
+    execution_name = active.get("execution") or wait_for_execution_reference(
+        config["GCP_PROJECT_ID"], run_id, active.get("operation", ""))
+    if not active.get("execution"):
+        with demo_control_lock(config, access):
+            generation, current = leases.read(LEASE_OBJECT)
+            if not current or current.get("run_id") != run_id:
+                raise RuntimeError("The load-test lease changed while recovering its execution")
+            current["execution"] = execution_name
+            if current.get("status") == "starting":
+                current["status"] = "running"
+            leases.write(LEASE_OBJECT, generation, current)
+        active["execution"] = execution_name
+    remaining_lease = active.get("expires_at", 0) - time.time()
+    recovery_window = min(PROFILES[active["profile"]] + 180, max(60, remaining_lease))
+    deadline = time.monotonic() + recovery_window
+    execution = "https://run.googleapis.com/v2/" + execution_name
+    while time.monotonic() < deadline:
         current = gcp_request("GET", execution, config["GCP_PROJECT_ID"])
         completed = next((item for item in current.get("conditions", []) if item.get("type") == "Completed"), None)
         if completed and completed.get("state") in ("CONDITION_SUCCEEDED", "CONDITION_FAILED"):
@@ -517,7 +547,7 @@ def wait(config, run_id):
             _, summary = results.read(f"runs/{run_id}/summary.json")
             observed = lease if lease and lease.get("run_id") == run_id else active
             report = execution_report(observed, completed["state"], summary)
-            report.update(execution=active["execution"], cloud_state=completed["state"])
+            report.update(execution=execution_name, cloud_state=completed["state"])
             _, existing = results.read(f"runs/{run_id}/controller-summary.json")
             if existing is None:
                 try:
@@ -529,7 +559,7 @@ def wait(config, run_id):
                 lease.update(status="completed" if report.get("status") == "passed" else "failed",
                              completed_at=time.time(), execution_status=completed["state"])
                 leases.write(LEASE_OBJECT, generation, lease)
-            print(json.dumps({"run_id": run_id, "execution": active["execution"],
+            print(json.dumps({"run_id": run_id, "execution": execution_name,
                               "status": completed["state"], "result": report}))
             return completed["state"] == "CONDITION_SUCCEEDED" and report.get("status") == "passed"
         time.sleep(10)
@@ -557,9 +587,23 @@ def cancel(config, run_id=None, wait_seconds=120):
         active["expires_at"] = min(active.get("expires_at", time.time()), time.time())
         leases.write(LEASE_OBJECT, generation, active)
     execution_name = active.get("execution")
-    operation = active.get("operation")
-    if not execution_name and operation:
-        execution_name = operation_result(operation, config["GCP_PROJECT_ID"], wait_seconds)
+    discovery_deadline = time.monotonic() + wait_seconds
+    while not execution_name and time.monotonic() < discovery_deadline:
+        _, current_lease = leases.read(LEASE_OBJECT)
+        if not current_lease or current_lease.get("run_id") != active.get("run_id"):
+            return "Load-test execution finished."
+        execution_name = current_lease.get("execution") or execution_reference(
+            config["GCP_PROJECT_ID"], active["run_id"], current_lease.get("operation", ""))
+        if execution_name:
+            with demo_control_lock(config, access):
+                generation, current_lease = leases.read(LEASE_OBJECT)
+                if current_lease and current_lease.get("run_id") == active.get("run_id"):
+                    current_lease["execution"] = execution_name
+                    leases.write(LEASE_OBJECT, generation, current_lease)
+            break
+        time.sleep(2)
+    if not execution_name:
+        raise RuntimeError("Cancellation is pending while Cloud Run exposes the exact execution; the guard must retry")
     if execution_name:
         current = gcp_request("GET", "https://run.googleapis.com/v2/" + execution_name,
                               config["GCP_PROJECT_ID"])
