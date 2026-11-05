@@ -254,7 +254,7 @@ cancel_expired_load_test:
         steps:
         - already_finished:
             switch:
-            - condition: $${map.get(error, "code") == 409 or map.get(error, "code") == 404}
+            - condition: $${map.get(error, "code") == 409 or map.get(error, "code") == 404 or (map.get(error, "code") == 400 and map.get(error, "payload") != null and text.match_regex(map.get(error, "payload"), ".*cannot be cancelled because it is not running.*"))}
               steps:
               - finished:
                   return: already_finished
