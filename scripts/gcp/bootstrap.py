@@ -47,14 +47,19 @@ def check_plan(plan):
         raise RuntimeError("Bootstrap plan deletes/replaces resources: " + ", ".join(deletions))
 
 
+def write_backend_file(module=MODULE):
+    path = module / "backend.generated.tf"
+    path.write_text('terraform {\n  backend "gcs" {}\n}\n', encoding="utf-8")
+    return path
+
+
 def main():
     bucket = os.environ["GCP_STATE_BUCKET"]
     # The first setup must create the bucket, remote state and WIF identity.
     # Refuse an empty/wrong state rather than re-creating a second foundation.
     command("gcloud", "storage", "objects", "describe",
             f"gs://{bucket}/foundation/default.tfstate", capture=True)
-    (MODULE / "backend.generated.tf").write_text(
-        'terraform { backend "gcs" {} }\n', encoding="utf-8")
+    write_backend_file()
     tofu = ("tofu", f"-chdir={MODULE}")
     command(*tofu, "init", "-input=false", "-lockfile=readonly",
             f"-backend-config=bucket={bucket}", "-backend-config=prefix=foundation")
