@@ -130,6 +130,12 @@ resource "google_storage_bucket_iam_member" "load_controller_results" {
   member = "serviceAccount:nexoruta-load-controller@${var.project_id}.iam.gserviceaccount.com"
 }
 
+resource "google_storage_bucket_iam_member" "load_controller_results_writer" {
+  bucket = google_storage_bucket.load_test_results.name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:nexoruta-load-controller@${var.project_id}.iam.gserviceaccount.com"
+}
+
 resource "google_storage_bucket_iam_member" "load_runner_control" {
   bucket = google_storage_bucket.load_test_control.name
   role   = "roles/storage.objectViewer"
