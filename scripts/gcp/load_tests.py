@@ -222,7 +222,9 @@ def reconcile_execution(leases, project, run_id):
     if completed and completed.get("state") in ("CONDITION_SUCCEEDED", "CONDITION_FAILED"):
         generation, current = leases.read(LEASE_OBJECT)
         if current and current.get("run_id") == run_id:
-            current.update(status="completed" if completed["state"] == "CONDITION_SUCCEEDED" else "failed",
+            terminal_status = ("completed" if completed["state"] == "CONDITION_SUCCEEDED"
+                               else "cancelled" if current.get("cancel_requested_at") else "failed")
+            current.update(status=terminal_status,
                            completed_at=time.time(), execution_status=completed["state"])
             leases.write(LEASE_OBJECT, generation, current)
         return True
@@ -579,7 +581,9 @@ def wait(config, run_id):
                     if error.code != 412:
                         raise
             if lease and lease.get("run_id") == run_id:
-                lease.update(status="completed" if report.get("status") == "passed" else "failed",
+                terminal_status = {"passed": "completed", "cancelled": "cancelled"}.get(
+                    report.get("status"), "failed")
+                lease.update(status=terminal_status,
                              completed_at=time.time(), execution_status=completed["state"])
                 leases.write(LEASE_OBJECT, generation, lease)
             print(json.dumps({"run_id": run_id, "execution": execution_name,

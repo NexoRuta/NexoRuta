@@ -53,8 +53,8 @@ class LoadTestLeaseTests(unittest.TestCase):
     def test_lost_jobs_run_response_is_reconciled_by_exact_run_id(self):
         run_id = "00000000-0000-4000-8000-000000000001"
         execution_name = "projects/demo/locations/southamerica-west1/jobs/nexoruta-load-tests/executions/run-1"
-        store = MemoryStorage({"run_id": run_id, "status": "cancelling", "launch_requested_at": 5,
-                              "expires_at": 10})
+        store = MemoryStorage({"run_id": run_id, "status": "cancelling", "cancel_requested_at": 9,
+                              "launch_requested_at": 5, "expires_at": 10})
         listing = {"executions": [{"name": execution_name, "template": {"containers": [{
             "env": [{"name": "NEXORUTA_RUN_ID", "value": run_id}]
         }]}}]}
@@ -69,7 +69,7 @@ class LoadTestLeaseTests(unittest.TestCase):
         with patch.object(load_test_control, "gcp_request", side_effect=request):
             self.assertTrue(load_test_control.reconcile_execution(store, "demo-project", run_id))
         self.assertEqual(store.value["execution"], execution_name)
-        self.assertEqual(store.value["status"], "failed")
+        self.assertEqual(store.value["status"], "cancelled")
 
     def test_running_jobs_run_operation_does_not_delay_execution_discovery(self):
         run_id = "00000000-0000-4000-8000-000000000001"
@@ -122,6 +122,41 @@ class LoadTestLeaseTests(unittest.TestCase):
         self.assertEqual(lease_store.objects[load_test_control.LEASE_OBJECT]["status"], "completed")
         report = result_store.objects[f"runs/{run_id}/controller-summary.json"]
         self.assertEqual(report["classification"], "passed")
+
+    def test_wait_preserves_partial_report_and_marks_cancelled_lease(self):
+        run_id = "00000000-0000-4000-8000-000000000002"
+        execution = "projects/demo/locations/southamerica-west1/jobs/nexoruta-load-tests/executions/run-2"
+        lease_store = ObjectStorage({load_test_control.LEASE_OBJECT: {
+            "run_id": run_id, "profile": "smoke", "status": "cancelling", "cancel_requested_at": 5,
+            "expires_at": 0, "execution": execution,
+        }})
+        partial_summary = {
+            "run_id": run_id, "status": "cancelled", "classification": "cancelled",
+            "stop_reason": "lease_cancelled_or_expired",
+            "evidence": {
+                "measured_requests": 73, "measured_errors": 0, "unexpected_results": 0,
+                "dropped_iterations": 0, "generator_cpu_samples": 6, "generator_memory_samples": 6,
+                "measurement_report": {"valid": True, "complete": False},
+            },
+            "authentication": {"ready": True},
+            "session_cleanup": {"complete": True, "revoked_sessions": 1},
+        }
+        result_store = ObjectStorage({f"runs/{run_id}/summary.json": partial_summary})
+        stores = {"demo-project-nexoruta-load-control": lease_store, "results": result_store}
+        config = {"GCP_PROJECT_ID": "demo-project", "GCP_LOAD_RESULTS_BUCKET": "results"}
+        cancelled_execution = {"conditions": [{"type": "Completed", "state": "CONDITION_FAILED"}]}
+
+        with patch.object(load_test_control, "token", return_value="token"), \
+                patch.object(load_test_control, "Storage", side_effect=lambda bucket, _token: stores[bucket]), \
+                patch.object(load_test_control, "gcp_request", return_value=cancelled_execution), \
+                redirect_stdout(StringIO()):
+            self.assertFalse(load_test_control.wait(config, run_id))
+
+        self.assertEqual(lease_store.objects[load_test_control.LEASE_OBJECT]["status"], "cancelled")
+        report = result_store.objects[f"runs/{run_id}/controller-summary.json"]
+        self.assertEqual(report["classification"], "cancelled")
+        self.assertEqual(report["evidence"]["measured_requests"], 73)
+        self.assertFalse(report["evidence"]["measurement_report"]["complete"])
 
     def test_multiple_executions_for_one_run_id_are_never_guessed(self):
         run_id = "00000000-0000-4000-8000-000000000001"
