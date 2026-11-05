@@ -87,7 +87,7 @@ class DeliveryTests(unittest.TestCase):
         compose = (root / "deploy/gcp/compose.yaml").read_text(encoding="utf-8")
         self.assertIn("storage:\n  tsdb:\n    out_of_order_time_window: 6h", prometheus)
         self.assertIn("max_elapsed_time: 5m", collector)
-        self.assertIn("processors: [memory_limiter, resource/node, batch]", collector)
+        self.assertIn("processors: [memory_limiter, filter/drop_stale_metrics, resource/node, batch]", collector)
         self.assertIn("limit_mib: 384", collector)
         self.assertIn("spike_limit_mib: 64", collector)
         self.assertIn("GOMEMLIMIT: 300MiB", compose)

@@ -11,6 +11,10 @@ processors:
     check_interval: 1s
     limit_mib: 384
     spike_limit_mib: 64
+  filter/drop_stale_metrics:
+    error_mode: ignore
+    metric_conditions:
+      - datapoint.time_unix_nano < UnixNano(Now()) - Nanoseconds(Duration("5m"))
   resource/node:
     attributes:
       - key: node
@@ -39,7 +43,7 @@ service:
   pipelines:
     metrics:
       receivers: [otlp]
-      processors: [memory_limiter, resource/node, batch]
+      processors: [memory_limiter, filter/drop_stale_metrics, resource/node, batch]
       exporters: [prometheus_remote_write]
     traces:
       receivers: [otlp]
