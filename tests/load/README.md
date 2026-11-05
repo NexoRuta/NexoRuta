@@ -25,7 +25,7 @@ Ejemplo de contenido del secreto (guardar fuera del repositorio):
 }
 ```
 
-El objeto de operaciones es JSON con una propiedad por `jornadaId`; su valor contiene los 50 eventos en orden:
+El objeto de operaciones es JSON con una propiedad por `jornadaId`; su valor contiene los 50 eventos en orden. No tiene que incluir una entrada para cada cuenta del secreto: `baseline` es de solo lectura y no necesita jornadas. Para `smoke`, `sync`, `stress` o `soak`, debe haber una secuencia válida para cada jornada asignada a un VU activo del perfil. El preflight comprueba antes del tráfico de aplicación que haya suficientes cuentas y que cada VU activo tenga sus operaciones; las cuentas adicionales sin eventos pueden permanecer en el fixture para perfiles de lectura.
 
 ```json
 {
