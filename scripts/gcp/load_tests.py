@@ -25,6 +25,8 @@ LEASE_OBJECT = "leases/load-test.json"
 PROFILES = {"smoke": 300, "baseline": 1260, "sync": 1500, "stress": 2700, "soak": 5100}
 SUITE_SOURCES = ("tests/load/Dockerfile", "tests/load/profiles.json", "tests/load/scenario.js",
                  "deploy/load/runner.py", "deploy/load/supervision.py", "deploy/load/sessions.py")
+RELEASE_MARKER_START = "__NEXORUTA_RELEASE_BEGIN__"
+RELEASE_MARKER_END = "__NEXORUTA_RELEASE_END__"
 
 
 def config():
@@ -192,6 +194,17 @@ def reconcile_execution(leases, project, run_id):
     return False
 
 
+def parse_release_marker(output):
+    if output.count(RELEASE_MARKER_START) != 1 or output.count(RELEASE_MARKER_END) != 1:
+        raise RuntimeError("Could not isolate the applied VM release marker")
+    _, output = output.split(RELEASE_MARKER_START, 1)
+    marker, _ = output.split(RELEASE_MARKER_END, 1)
+    marker = marker.strip()
+    if not re.fullmatch(r"release-[a-f0-9]{32}", marker):
+        raise RuntimeError("The VM returned an invalid applied release marker")
+    return marker
+
+
 def immutable_manifest(config, run_id, profile, session_expires_at, fixture_version):
     project = config["GCP_PROJECT_ID"]
     delivery = config["GCP_DELIVERY_BUCKET"]
@@ -202,12 +215,17 @@ def immutable_manifest(config, run_id, profile, session_expires_at, fixture_vers
         if not vm or vm.get("status") != "RUNNING":
             raise RuntimeError(f"Demo VM {node['VM_NAME']} is not RUNNING")
         session.check_deadline(vm)
-        applied[node["NODE_ID"]] = session.gcloud(
+        output = session.gcloud(
             node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
-            "--command=sudo cat /srv/nexoruta/current-release", capture=True,
-        ).strip()
-    if len(set(applied.values())) != 1 or not re.fullmatch(r"release-[a-f0-9]{32}", applied["a"]):
-        raise RuntimeError("The two VMs do not run the same valid application release")
+            "--command=printf '__NEXORUTA_RELEASE_BEGIN__\\n'; sudo cat /srv/nexoruta/current-release; "
+            "printf '\\n__NEXORUTA_RELEASE_END__\\n'", capture=True,
+        )
+        applied[node["NODE_ID"]] = parse_release_marker(output)
+    if len(set(applied.values())) != 1:
+        raise RuntimeError(
+            "The two VMs do not run the same application release "
+            f"(node a: {applied['a']}, node b: {applied['b']})"
+        )
     release = applied["a"]
     manifest = json.loads(session.command(
         "gcloud", "storage", "cat", f"gs://{delivery}/releases/{release}/manifest.json",
