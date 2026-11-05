@@ -188,6 +188,15 @@ class SessionTests(unittest.TestCase):
         self.assertNotIn("@nexoruta.test", public)
         self.assertEqual(set(manager.session(0)), {"accessToken", "expiresAtUtc"})
 
+    def test_public_fixture_exposes_only_journeys_assigned_to_active_vus(self):
+        source = fixture(5)
+        manager = sessions.Sessions("https://controlled.invalid", source, 2)
+
+        self.assertEqual(manager.public_fixture["accounts"], [
+            {"jornadaId": source["accounts"][0]["jornadaId"]},
+            {"jornadaId": source["accounts"][1]["jornadaId"]},
+        ])
+
     def test_cleanup_revokes_only_created_sessions_and_respects_a_bounded_deadline(self):
         manager, clock, transport = self.manager(2)
         self.prepare(manager, clock)

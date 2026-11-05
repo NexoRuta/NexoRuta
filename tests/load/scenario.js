@@ -36,9 +36,6 @@ if (fixture.accounts.length < profile.vus
     || new Set(fixture.accounts.map((account) => account.jornadaId)).size !== fixture.accounts.length) {
   throw new Error('Each active VU needs a distinct account and journey fixture.');
 }
-if (profile.sync && Object.keys(operationsByJourney).length !== fixture.accounts.length) {
-  throw new Error('The pinned replay dataset must contain exactly one journey for each account.');
-}
 if (profile.sync && !fixture.accounts.every((account) => Array.isArray(operationsByJourney[account.jornadaId])
     && operationsByJourney[account.jornadaId].length === 50
     && operationsByJourney[account.jornadaId].every((operation, index) => operation?.tipo === 'Posicion'

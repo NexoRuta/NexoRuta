@@ -96,6 +96,37 @@ def load_thresholds(profile_name, profile, defaults):
     return thresholds
 
 
+def validate_fixture_accounts(profile_name, fixture, profile):
+    accounts = fixture.get("accounts")
+    required = profile.get("vus")
+    if (not isinstance(accounts, list) or not 1 <= len(accounts) <= 50
+            or not isinstance(required, int) or not 1 <= required <= 50):
+        raise ValueError("A bounded synthetic account fixture is required")
+    if len(accounts) < required:
+        raise ValueError(f"Profile {profile_name} requires {required} synthetic accounts; fixture contains {len(accounts)}")
+    return accounts[:required]
+
+
+def validate_sync_dataset(accounts, operations):
+    journeys = [account["jornadaId"] for account in accounts]
+    if not isinstance(operations, dict) or any(journey not in operations for journey in journeys):
+        raise ValueError("The pinned replay dataset is missing an active VU journey")
+    operation_ids = set()
+    for journey in journeys:
+        events = operations[journey]
+        if not isinstance(events, list) or len(events) != 50:
+            raise ValueError("Each active VU journey requires 50 pre-applied position events")
+        for index, event in enumerate(events):
+            event_id = event.get("id") if isinstance(event, dict) else None
+            if (not isinstance(event, dict) or not isinstance(event_id, str)
+                    or not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", event_id)
+                    or event_id in operation_ids or event.get("secuencia") != index + 2
+                    or event.get("tipo") != "Posicion" or not isinstance(event.get("ocurridaEn"), str)
+                    or event.get("envioId") is not None or event.get("versionEnvio") is not None):
+                raise ValueError("The pinned replay dataset contains an invalid position sequence")
+            operation_ids.add(event_id)
+
+
 def verify_suite(manifest, configuration):
     digest = hashlib.sha256()
     for name in ("Dockerfile", "profiles.json", "scenario.js", "runner.py", "supervision.py", "sessions.py"):
@@ -216,6 +247,7 @@ def main():
     max_duration, max_vus = PROFILES[profile_name]
     if selected["duration"] != max_duration or selected["vus"] > max_vus:
         raise ValueError("The selected profile exceeds its reviewed execution limits")
+    active_accounts = validate_fixture_accounts(profile_name, fixture_data, selected)
     selected_sync = selected.get("sync") is True
     operations_sha256 = None
     operations_object = None
@@ -238,6 +270,11 @@ def main():
         operations_data = read_object(fixtures_bucket, operations_object, 4 * 1024 * 1024)
         if hashlib.sha256(operations_data).hexdigest() != operations_sha256:
             raise ValueError("The synthetic sync dataset hash does not match the secret fixture")
+        try:
+            operations = json.loads(operations_data)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("The pinned sync dataset is not valid JSON") from error
+        validate_sync_dataset(active_accounts, operations)
         operations_path = Path("/tmp/nexoruta-load-operations.json")
         operations_path.write_bytes(operations_data)
         operations_path.chmod(0o600)

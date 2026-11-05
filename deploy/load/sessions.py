@@ -65,9 +65,11 @@ class Sessions:
         if (len({a["email"] for a in accounts}) != len(accounts)
                 or len({a["jornadaId"].lower() for a in accounts}) != len(accounts)):
             raise ValueError("Synthetic identities and journeys must be distinct")
-        self.public_fixture = {"readPath": fixture["readPath"],
-                               "accounts": [{"jornadaId": a["jornadaId"]} for a in accounts]}
         self.accounts = [dict(a) for a in accounts[:count]]
+        # k6 needs only the identities assigned to active VUs. Keep the other
+        # fixture journey IDs private to this wrapper for smaller profiles.
+        self.public_fixture = {"readPath": fixture["readPath"],
+                               "accounts": [{"jornadaId": a["jornadaId"]} for a in self.accounts]}
         self.origin, self.transport, self.wall, self.monotonic = origin, transport, wall, monotonic
         self.values = [None] * count
         self.lock = threading.Lock()

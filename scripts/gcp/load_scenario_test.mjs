@@ -7,11 +7,14 @@ const source = fs.readFileSync(new URL('../../tests/load/scenario.js', import.me
 const profiles = JSON.parse(fs.readFileSync(new URL('../../tests/load/profiles.json', import.meta.url)));
 
 async function harness({ count = 1, sync = false, warmupStatus = 200, rateProfile = false,
-  readyPolls = 0, brokerStatus = 200, generatorReadyPolls = 0 } = {}) {
+  readyPolls = 0, brokerStatus = 200, generatorReadyPolls = 0, extraOperationJourneys = 0 } = {}) {
   const accounts = Array.from({ length: count }, (_, index) => ({
     jornadaId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
   }));
-  const operations = Object.fromEntries(accounts.map(account => [account.jornadaId,
+  const operationAccounts = [...accounts, ...Array.from({ length: extraOperationJourneys }, (_, index) => ({
+    jornadaId: `00000000-0000-4000-8000-${String(count + index + 1).padStart(12, '0')}`,
+  }))];
+  const operations = Object.fromEntries(operationAccounts.map(account => [account.jornadaId,
     Array.from({ length: 50 }, (_, index) => ({
       id: `10000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
       tipo: 'Posicion', secuencia: index + 2, ocurridaEn: '2026-11-04T00:00:00Z',
@@ -88,6 +91,14 @@ test('private session readiness and warm-up precede measured traffic and never r
   assert.equal(JSON.parse(replays[0].body).secuencia, 2);
   assert.equal(JSON.parse(replays.at(-1).body).secuencia, 51);
   assert.equal(h.requests.filter(r => r.tags.phase === 'measured' && r.tags.kind === 'read').length, 1);
+});
+
+test('sync accepts a prepared dataset containing journeys unused by the selected profile', async () => {
+  const h = await harness({ sync: true, extraOperationJourneys: 4 });
+  const data = h.scenario.setup();
+  h.execution.scenario.startTime = h.elapsed();
+  h.scenario.default(data);
+  assert.equal(h.requests.filter(r => r.tags.phase === 'measured' && r.tags.kind === 'sync').length, 50);
 });
 
 test('stress labels stages from the actual scenario clock and does not add think-time', async () => {

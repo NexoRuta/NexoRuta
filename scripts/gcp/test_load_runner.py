@@ -27,6 +27,36 @@ class LoadRunnerDiagnosticTests(unittest.TestCase):
         self.assertNotIn("access_token", message)
         self.assertNotIn("private", message)
 
+    def test_fixture_capacity_fails_with_profile_requirements_before_cloud_calls(self):
+        fixture = {"accounts": [{"email": "a@nexoruta.test"}]}
+        with self.assertRaisesRegex(ValueError, "Profile stress requires 50.*fixture contains 1"):
+            runner.validate_fixture_accounts("stress", fixture, {"vus": 50})
+
+    def test_sync_dataset_validates_only_active_journeys_and_allows_unused_prepared_rows(self):
+        accounts = [{"jornadaId": "00000000-0000-4000-8000-000000000001"}]
+        events = [{"id": f"10000000-0000-4000-8000-{index + 1:012x}",
+                   "secuencia": index + 2, "tipo": "Posicion", "ocurridaEn": "2026-11-05T00:00:00Z",
+                   "envioId": None, "versionEnvio": None} for index in range(50)]
+        operations = {accounts[0]["jornadaId"]: events,
+                      "00000000-0000-4000-8000-000000000002": events}
+
+        runner.validate_sync_dataset(accounts, operations)
+
+    def test_sync_dataset_rejects_a_missing_active_journey_before_traffic(self):
+        with self.assertRaisesRegex(ValueError, "missing an active VU journey"):
+            runner.validate_sync_dataset(
+                [{"jornadaId": "00000000-0000-4000-8000-000000000001"}], {})
+
+    def test_sync_dataset_rejects_replayed_ids_shared_between_active_journeys(self):
+        first = "00000000-0000-4000-8000-000000000001"
+        second = "00000000-0000-4000-8000-000000000002"
+        events = [{"id": f"10000000-0000-4000-8000-{index + 1:012x}",
+                   "secuencia": index + 2, "tipo": "Posicion", "ocurridaEn": "2026-11-05T00:00:00Z",
+                   "envioId": None, "versionEnvio": None} for index in range(50)]
+        with self.assertRaisesRegex(ValueError, "invalid position sequence"):
+            runner.validate_sync_dataset([{"jornadaId": first}, {"jornadaId": second}],
+                                         {first: events, second: events})
+
 
 if __name__ == "__main__":
     unittest.main()
