@@ -150,6 +150,14 @@ jobs:
         with:
           tofu_version_file: .opentofu-version
           tofu_wrapper: false
+      - name: Apply remote bootstrap before deploying the demo
+        if: inputs.operation == 'start' || inputs.operation == 'update'
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          BOOTSTRAP_REPOSITORY_ID: ${{ github.repository_id }}
+          BOOTSTRAP_OWNER_ID: ${{ github.repository_owner_id }}
+        run: python3 scripts/gcp/bootstrap.py
       - name: Configure integrations from Compose and GitHub Secrets
         if: inputs.operation == 'start' || inputs.operation == 'update'
         env:

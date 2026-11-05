@@ -20,4 +20,8 @@ La identidad de GitHub Actions accede a GCP con OIDC; no configures claves JSON 
 
 ## Probar develop en GCP
 
+En main y develop, start y update aplican primero el módulo bootstrap desde su estado remoto GCS (prefijo foundation), antes de sincronizar integraciones y desplegar la demo. Esto aprovisiona las nuevas identidades, secretos y permisos declarados en la revisión seleccionada. El plan conserva el presupuesto opcional existente y bloquea eliminaciones o reemplazos de recursos; si falla, no continúa el despliegue. Stop omite este paso para conservar su capacidad de apagado.
+
+La instalación inicial del proyecto, bucket/estado remoto y la identidad WIF sigue usando scripts/gcp/setup.ps1: el workflow necesita esos recursos para autenticarse. No utiliza archivos de configuración ni credenciales del Windows del operador.
+
 En **Run workflow**, seleccione la rama `develop`. `start` o `update` construye y despliega los commits fijados en el root y sus gitlinks en el canal privado `develop`; no ejecuta el Integrated CI. Despues, inicie `NexoRuta - pruebas de carga` desde `develop`. Para el camino publicado y probado, seleccione `main`. Ambos canales comparten VMs y Cloud SQL, por lo que las migraciones de `develop` quedan en la base compartida.
