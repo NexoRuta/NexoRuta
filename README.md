@@ -145,3 +145,7 @@ La publicación GCP copia el mismo archivo del archive del backend validado a
 una rama durante el build. El CI independiente del frontend fija el commit del
 backend y pasa su ruta mediante `OfficialDepartmentSource`; una compilación
 independiente puede usar esa misma propiedad para indicar el archivo canónico.
+
+## Entrega parcial y retiro en domicilio (31–41)
+
+Implementación en `feature/cambiosrequerimientos`: [ADR](docs/cambios-requerimientos/ADR-031-041.md), [trazabilidad](docs/cambios-requerimientos/TRAZABILIDAD.md), [demostraciones reproducibles](docs/cambios-requerimientos/DEMOSTRACION.md) y [verificación y límites](docs/cambios-requerimientos/VALIDACION.md). El PDF de cambios acompaña esas guías.

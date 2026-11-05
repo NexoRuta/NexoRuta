@@ -25,3 +25,6 @@ secrets/
 # Local audit captures/logs: retained locally, not a portable source fixture.
 /docs/auditorias/**/evidencias/
 /cloud-artifacts/
+
+/tests/Cambios.DemoMobile/bin/
+/tests/Cambios.DemoMobile/obj/
