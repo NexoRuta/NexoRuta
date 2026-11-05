@@ -154,6 +154,28 @@ resource "google_storage_bucket_iam_member" "load_runner_fixtures" {
   member = "serviceAccount:${google_service_account.load_runner.email}"
 }
 
+resource "google_storage_bucket_iam_member" "load_preparer_fixture_reader" {
+  bucket = google_storage_bucket.load_test_fixtures.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:nexoruta-load-preparer@${var.project_id}.iam.gserviceaccount.com"
+}
+
+resource "google_storage_bucket_iam_member" "load_preparer_fixture_writer" {
+  bucket = google_storage_bucket.load_test_fixtures.name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:nexoruta-load-preparer@${var.project_id}.iam.gserviceaccount.com"
+}
+
+resource "google_storage_bucket_iam_member" "load_preparer_lease_reader" {
+  bucket = google_storage_bucket.load_test_control.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:nexoruta-load-preparer@${var.project_id}.iam.gserviceaccount.com"
+  condition {
+    title      = "Load fixture preparer lease only"
+    expression = "resource.name == 'projects/_/buckets/${google_storage_bucket.load_test_control.name}/objects/leases/load-test.json'"
+  }
+}
+
 resource "google_storage_bucket_iam_member" "load_deployer_control" {
   bucket = google_storage_bucket.load_test_control.name
   role   = "roles/storage.objectAdmin"
@@ -178,6 +200,24 @@ resource "google_secret_manager_secret_iam_member" "load_runner_fixtures" {
   secret_id = google_secret_manager_secret.load_fixtures.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.load_runner.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "load_preparer_fixture_reader" {
+  secret_id = google_secret_manager_secret.load_fixtures.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:nexoruta-load-preparer@${var.project_id}.iam.gserviceaccount.com"
+}
+
+resource "google_secret_manager_secret_iam_member" "load_preparer_fixture_writer" {
+  secret_id = google_secret_manager_secret.load_fixtures.secret_id
+  role      = "roles/secretmanager.secretVersionAdder"
+  member    = "serviceAccount:nexoruta-load-preparer@${var.project_id}.iam.gserviceaccount.com"
+}
+
+resource "google_secret_manager_secret_iam_member" "load_preparer_credentials" {
+  secret_id = "projects/${var.project_id}/secrets/nexoruta-load-preparer-credentials"
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:nexoruta-load-preparer@${var.project_id}.iam.gserviceaccount.com"
 }
 
 resource "google_secret_manager_secret_iam_member" "load_controller_fixture_versions" {

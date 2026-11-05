@@ -295,24 +295,20 @@ Antes de habilitar una corrida:
    demo. Grafana muestra carga k6, errores, p95/p99 del cliente, p95 del API,
    respuestas de sincronización, CPU de las VMs, conexiones de Cloud SQL y el
    estado del gateway de métricas de A.
-2. Crear usuarios y jornadas sintéticas independientes de las cuentas de demo.
-   Para smoke, sync, stress y soak, cada jornada debe tener `InicioJornada`
-   aplicado en secuencia 1 y 50 operaciones `Posicion` aplicadas en secuencias
-   2–51, con IDs y payload estables. Se repiten en
-   orden para medir reconexión e idempotencia sin insertar filas durante la
-   prueba. `baseline` solo hace lecturas.
-3. Cargar las credenciales e IDs sintéticos en una versión de
-   `nexoruta-load-fixtures` de Secret Manager. Guardar el objeto JSON de
-   operaciones en el bucket `nexoruta-load-fixtures`, bajo una ruta nueva por
-   versión, y añadir su SHA-256 al secreto. El secreto queda bajo el límite de
-   64 KiB; el dataset privado admite hasta 4 MiB y se valida antes de enviar
-   carga. Ver el esquema y formato de objeto en `tests/load/README.md`. Mantener
-   ambos archivos fuera del repositorio y no imprimirlos:
-
-   ```powershell
-   gcloud secrets versions add nexoruta-load-fixtures --project=PROJECT_ID --data-file=RUTA_PRIVADA\fixtures.json
-   ```
-
+2. Confirmar que el environment `nexoruta-demo` tenga la variable
+   `GCP_LOAD_PREPARER_SERVICE_ACCOUNT` generada por bootstrap. El workflow de
+   carga reserva una lease de preparación por 30 minutos y usa esa identidad
+   separada para crear o reanudar hasta 50 cuentas sintéticas mediante
+   `POST /api/admin/demo-data/load-fixture`. El endpoint usa los casos de uso y
+   repositorios de la aplicación, prepara jornadas activas con 50 posiciones
+   aplicadas y devuelve sus IDs y payloads. No se usa SQL directo.
+3. El preparador guarda primero las credenciales en una versión `preparing` de
+   `nexoruta-load-fixtures`, crea un objeto de operaciones inmutable en el bucket
+   privado y publica una versión `ready` con SHA-256. Si se interrumpe, la próxima
+   corrida reusa las credenciales persistidas; no cambia contraseñas ya asignadas.
+   El objeto admite hasta 4 MiB y el secreto queda bajo el límite de 64 KiB. La
+   identidad preparadora solo accede a los secretos, fixtures y leases necesarios;
+   ver el contrato en `tests/load/README.md`.
 4. Iniciar las dos VMs con el workflow existente. La acción de carga valida la
    sesión y su plazo, que ambas ejecutan la misma release, salud HTTPS del API,
    backends A/B, workers y SQL. Si una condición falla, no envía carga.

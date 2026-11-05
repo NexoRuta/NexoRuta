@@ -23,6 +23,7 @@ REGION = "southamerica-west1"
 JOB = "nexoruta-load-tests"
 LEASE_OBJECT = "leases/load-test.json"
 PROFILES = {"smoke": 300, "baseline": 1260, "sync": 1500, "stress": 2700, "soak": 5100}
+FIXTURE_PREPARATION_SECONDS = 1800
 CONTROL_LOCK_BUSY = "Another demo control operation holds the shared lock"
 SUITE_SOURCES = ("tests/load/Dockerfile", "tests/load/profiles.json", "tests/load/scenario.js",
                  "deploy/load/runner.py", "deploy/load/supervision.py", "deploy/load/sessions.py")
@@ -48,6 +49,12 @@ def config():
 
 def load_control_bucket(config):
     return config.get("GCP_LOAD_CONTROL_BUCKET") or f"{config['GCP_PROJECT_ID']}-nexoruta-load-control"
+
+
+def lease_expired(active, now):
+    expires_at = active.get("expires_at") if isinstance(active, dict) else None
+    return (isinstance(expires_at, (int, float)) and not isinstance(expires_at, bool)
+            and expires_at <= now)
 
 
 def demo_control_lock(config, access):
@@ -377,7 +384,10 @@ def run(config, profile, run_id=None):
         reserved_here = bool(active and active.get("run_id") == run_id
                              and active.get("owner") == os.environ.get("GITHUB_RUN_ID", "manual")
                              and active.get("status") == "reserved")
-        expired_reservation = bool(active and active.get("status") == "reserved" and active.get("expires_at", 0) <= now)
+        expired_reservation = bool(active and active.get("status") == "reserved"
+                                   and not active.get("operation") and lease_expired(active, now))
+        if active and active.get("status") == "preparing_fixture":
+            raise RuntimeError("A synthetic load fixture is being prepared; wait or cancel its reservation first")
         if active and active.get("status") in ("reserved", "starting", "running", "cancelling") and not reserved_here and not expired_reservation:
             if active.get("status") == "reserved" or not reconcile_execution(leases, config["GCP_PROJECT_ID"], active["run_id"]):
                 raise RuntimeError("A load-test execution is active or its cancellation is pending")
@@ -485,37 +495,76 @@ def run(config, profile, run_id=None):
                 stream.write(f"{key}={value}\n")
 
 
-def reserve(config, profile):
+def reserve_preparation(config, profile):
     if profile not in PROFILES:
         raise ValueError("Select one of smoke, baseline, sync, stress or soak")
     run_id = str(uuid.uuid4())
     access = token(config["GCP_PROJECT_ID"])
     state = Storage(config["GCP_STATE_BUCKET"], access)
     leases = Storage(load_control_bucket(config), access)
-    fixture_version = latest_fixture_version(config["GCP_PROJECT_ID"])
     with demo_control_lock(config, access):
         generation, active = leases.read(LEASE_OBJECT)
         now = time.time()
-        expired_reservation = bool(active and active.get("status") == "reserved" and active.get("expires_at", 0) <= now)
-        if active and active.get("status") in ("reserved", "starting", "running", "cancelling") and not expired_reservation:
-            if active.get("status") == "reserved" or not reconcile_execution(leases, config["GCP_PROJECT_ID"], active["run_id"]):
+        expired_reservation = bool(active and active.get("status") in ("preparing_fixture", "reserved")
+                                   and not active.get("operation") and lease_expired(active, now))
+        if active and active.get("status") in ("preparing_fixture", "reserved", "starting", "running", "cancelling") and not expired_reservation:
+            if active.get("status") in ("preparing_fixture", "reserved") or not reconcile_execution(
+                    leases, config["GCP_PROJECT_ID"], active["run_id"]):
                 raise RuntimeError("A load-test execution is already reserved; finish or cancel it first")
             generation, active = leases.read(LEASE_OBJECT)
         _, session = state.read("leases/demo.json")
         if not session or session.get("expires_at", 0) <= now:
             raise RuntimeError("The remote demo session is not active")
-        if session["expires_at"] - now < PROFILES[profile] + 600:
-            raise RuntimeError("The active VM session does not have enough time for this profile and cleanup")
-        manifest = immutable_manifest(config, run_id, profile, session["expires_at"], fixture_version)
-        manifest.update(status="reserved", owner=os.environ.get("GITHUB_RUN_ID", "manual"),
-                        created_at=now, expires_at=min(session["expires_at"], now + 900))
+        required = FIXTURE_PREPARATION_SECONDS + PROFILES[profile] + 600
+        if session["expires_at"] - now < required:
+            raise RuntimeError("The active VM session does not have enough time for fixture preparation, this profile and cleanup")
+        manifest = {"run_id": run_id, "profile": profile,
+                    "owner": os.environ.get("GITHUB_RUN_ID", "manual"),
+                    "created_at": now, "session_expires_at": session["expires_at"],
+                    "status": "preparing_fixture",
+                    "expires_at": min(session["expires_at"], now + FIXTURE_PREPARATION_SECONDS)}
+        leases.write(LEASE_OBJECT, generation, manifest)
+    output = os.environ.get("GITHUB_OUTPUT")
+    if output:
+        with open(output, "a", encoding="utf-8") as stream:
+            stream.write(f"run_id={run_id}\n")
+    print(json.dumps({"run_id": run_id, "profile": profile, "status": "preparing_fixture"}))
+
+
+def finalize_preparation(config, run_id, fixture_version):
+    if not re.fullmatch(r"[a-f0-9-]{36}", run_id) or not re.fullmatch(r"[1-9][0-9]*", fixture_version):
+        raise ValueError("Invalid fixture-preparation run ID or version")
+    access = token(config["GCP_PROJECT_ID"])
+    state = Storage(config["GCP_STATE_BUCKET"], access)
+    leases = Storage(load_control_bucket(config), access)
+    with demo_control_lock(config, access):
+        generation, active = leases.read(LEASE_OBJECT)
+        now = time.time()
+        owner = os.environ.get("GITHUB_RUN_ID", "manual")
+        if (not active or active.get("run_id") != run_id or active.get("owner") != owner
+                or active.get("status") != "preparing_fixture"
+                or active.get("expires_at", 0) <= now):
+            raise RuntimeError("The fixture-preparation lease was cancelled, expired or replaced")
+        _, session = state.read("leases/demo.json")
+        if (not session or session.get("expires_at", 0) <= now
+                or session.get("expires_at") != active.get("session_expires_at")
+                or session["expires_at"] - now < PROFILES[active["profile"]] + 600):
+            raise RuntimeError("The active VM session changed or lacks time for this profile and cleanup")
+        latest = latest_fixture_version(config["GCP_PROJECT_ID"])
+        if latest != fixture_version:
+            raise RuntimeError("The prepared fixture version is not the latest enabled version")
+        manifest = immutable_manifest(config, run_id, active["profile"], session["expires_at"], fixture_version)
+        manifest.update(status="reserved", owner=owner, created_at=active["created_at"],
+                        fixture_prepared_at=now,
+                        expires_at=min(session["expires_at"], now + 900))
         leases.write(LEASE_OBJECT, generation, manifest)
     output = os.environ.get("GITHUB_OUTPUT")
     if output:
         with open(output, "a", encoding="utf-8") as stream:
             stream.write(f"run_id={run_id}\n")
             stream.write(f"fixture_version={fixture_version}\n")
-    print(json.dumps({"run_id": run_id, "profile": profile, "fixture_version": fixture_version, "status": "reserved"}))
+    print(json.dumps({"run_id": run_id, "profile": manifest["profile"],
+                      "fixture_version": fixture_version, "status": "reserved"}))
 
 
 def execution_report(active, cloud_state, summary):
@@ -603,12 +652,12 @@ def cancel(config, run_id=None, wait_seconds=120):
         generation, active = leases.read(LEASE_OBJECT)
         if not active or (run_id and active.get("run_id") != run_id):
             return "No matching load-test execution is active."
-        if active.get("status") not in ("reserved", "starting", "running", "cancelling"):
+        if active.get("status") not in ("preparing_fixture", "reserved", "starting", "running", "cancelling"):
             return "The matching load-test execution is already finished."
-        if active.get("status") == "reserved" and not active.get("operation"):
-            active.update(status="cancelled", completed_at=time.time())
+        if active.get("status") in ("preparing_fixture", "reserved") and not active.get("operation"):
+            active.update(status="cancelled", cancel_requested_at=time.time(), completed_at=time.time())
             leases.write(LEASE_OBJECT, generation, active)
-            return "Load-test reservation cancelled before Cloud Run started."
+            return "Load-test fixture preparation or reservation cancelled before Cloud Run started."
         active["cancel_requested_at"] = time.time()
         active["status"] = "cancelling"
         active["expires_at"] = min(active.get("expires_at", time.time()), time.time())
@@ -659,12 +708,12 @@ def cancel(config, run_id=None, wait_seconds=120):
 def assert_no_active(config):
     leases = Storage(load_control_bucket(config), token(config["GCP_PROJECT_ID"]))
     _, active = leases.read(LEASE_OBJECT)
-    if not active or active.get("status") not in ("reserved", "starting", "running", "cancelling"):
+    if not active or active.get("status") not in ("preparing_fixture", "reserved", "starting", "running", "cancelling"):
         return
-    if active.get("status") == "reserved":
-        if active.get("expires_at", 0) <= time.time():
+    if active.get("status") in ("preparing_fixture", "reserved"):
+        if lease_expired(active, time.time()):
             return
-        raise RuntimeError("A load-test image is being prepared; wait or cancel its reservation before VM start/update")
+        raise RuntimeError("A load-test fixture or image is being prepared; wait or cancel its reservation before VM start/update")
     if not reconcile_execution(leases, config["GCP_PROJECT_ID"], active["run_id"]):
         raise RuntimeError("A remote load test is active; cancel it before starting or updating the demo")
 
@@ -675,8 +724,10 @@ def main(args):
         run(settings, args[1])
     elif args[0] == "run" and len(args) == 3:
         run(settings, args[1], args[2])
-    elif args[0] == "reserve" and len(args) == 2:
-        reserve(settings, args[1])
+    elif args[0] == "reserve-fixture" and len(args) == 2:
+        reserve_preparation(settings, args[1])
+    elif args[0] == "finalize-fixture" and len(args) == 3:
+        finalize_preparation(settings, args[1], args[2])
     elif args[0] == "cancel" and len(args) <= 2:
         print(cancel(settings, args[1] if len(args) == 2 else None))
     elif args[0] == "wait" and len(args) == 2:
@@ -685,7 +736,7 @@ def main(args):
     elif args[0] == "check-active" and len(args) == 1:
         assert_no_active(settings)
     else:
-        raise ValueError("Usage: load_tests.py reserve PROFILE | run PROFILE [RUN_ID] | wait RUN_ID | cancel [RUN_ID]")
+        raise ValueError("Usage: load_tests.py reserve-fixture PROFILE | finalize-fixture RUN_ID VERSION | run PROFILE [RUN_ID] | wait RUN_ID | cancel [RUN_ID]")
 
 
 if __name__ == "__main__":

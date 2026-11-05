@@ -174,6 +174,135 @@ class LoadTestLeaseTests(unittest.TestCase):
         self.assertEqual(store.value["status"], "running")
 
 
+class FixturePreparationLeaseTests(unittest.TestCase):
+    run_id = "00000000-0000-4000-8000-000000000099"
+
+    def setUp(self):
+        self.config = {"GCP_PROJECT_ID": "demo-project", "GCP_STATE_BUCKET": "state",
+                       "GCP_LOAD_CONTROL_BUCKET": "control"}
+        self.now = 1_000
+        self.session_store = ObjectStorage({"leases/demo.json": {"expires_at": self.now + 20_000}})
+        self.lease_store = ObjectStorage()
+        self.stores = {"state": self.session_store, "control": self.lease_store}
+
+    def storage(self, bucket, _access):
+        return self.stores[bucket]
+
+    def test_reserve_fixture_creates_bounded_preparation_lease(self):
+        with patch.object(load_test_control, "token", return_value="token"), \
+                patch.object(load_test_control, "Storage", side_effect=self.storage), \
+                patch.object(load_test_control, "demo_control_lock", return_value=nullcontext()), \
+                patch.object(load_test_control.uuid, "uuid4", return_value=self.run_id), \
+                patch.object(load_test_control.time, "time", return_value=self.now), \
+                patch.dict("os.environ", {"GITHUB_RUN_ID": "workflow-9"}), \
+                redirect_stdout(StringIO()):
+            load_test_control.reserve_preparation(self.config, "baseline")
+
+        lease = self.lease_store.objects[load_test_control.LEASE_OBJECT]
+        self.assertEqual(self.run_id, lease["run_id"])
+        self.assertEqual("workflow-9", lease["owner"])
+        self.assertEqual("preparing_fixture", lease["status"])
+        self.assertEqual(self.now + load_test_control.FIXTURE_PREPARATION_SECONDS, lease["expires_at"])
+        self.assertEqual(self.now + 20_000, lease["session_expires_at"])
+
+    def test_reserve_fixture_rejects_active_or_malformed_reservations(self):
+        for active in (
+            {"run_id": "old", "status": "preparing_fixture", "expires_at": self.now + 20},
+            {"run_id": "old", "status": "reserved"},
+        ):
+            self.lease_store.objects[load_test_control.LEASE_OBJECT] = active
+            self.lease_store.generations[load_test_control.LEASE_OBJECT] = 1
+            with patch.object(load_test_control, "token", return_value="token"), \
+                    patch.object(load_test_control, "Storage", side_effect=self.storage), \
+                    patch.object(load_test_control, "demo_control_lock", return_value=nullcontext()), \
+                    patch.object(load_test_control.time, "time", return_value=self.now), \
+                    patch.dict("os.environ", {"GITHUB_RUN_ID": "workflow-9"}):
+                with self.assertRaisesRegex(RuntimeError, "already reserved"):
+                    load_test_control.reserve_preparation(self.config, "baseline")
+
+    def test_finalize_fixture_pins_latest_version_and_reserves_run(self):
+        self.lease_store.objects[load_test_control.LEASE_OBJECT] = {
+            "run_id": self.run_id, "profile": "baseline", "owner": "workflow-9",
+            "created_at": self.now - 20, "status": "preparing_fixture",
+            "expires_at": self.now + 1_000, "session_expires_at": self.now + 20_000,
+        }
+        self.lease_store.generations[load_test_control.LEASE_OBJECT] = 1
+        with patch.object(load_test_control, "token", return_value="token"), \
+                patch.object(load_test_control, "Storage", side_effect=self.storage), \
+                patch.object(load_test_control, "demo_control_lock", return_value=nullcontext()), \
+                patch.object(load_test_control, "latest_fixture_version", return_value="7"), \
+                patch.object(load_test_control, "immutable_manifest",
+                             return_value={"fixture_version": "7", "profile": "baseline"}), \
+                patch.object(load_test_control.time, "time", return_value=self.now), \
+                patch.dict("os.environ", {"GITHUB_RUN_ID": "workflow-9"}), \
+                redirect_stdout(StringIO()):
+            load_test_control.finalize_preparation(self.config, self.run_id, "7")
+
+        lease = self.lease_store.objects[load_test_control.LEASE_OBJECT]
+        self.assertEqual("reserved", lease["status"])
+        self.assertEqual("7", lease["fixture_version"])
+        self.assertEqual(self.now + 900, lease["expires_at"])
+        self.assertEqual(self.now, lease["fixture_prepared_at"])
+
+    def test_finalize_fixture_rejects_wrong_latest_version(self):
+        self.lease_store.objects[load_test_control.LEASE_OBJECT] = {
+            "run_id": self.run_id, "profile": "baseline", "owner": "workflow-9",
+            "created_at": self.now - 20, "status": "preparing_fixture",
+            "expires_at": self.now + 1_000, "session_expires_at": self.now + 20_000,
+        }
+        self.lease_store.generations[load_test_control.LEASE_OBJECT] = 1
+        with patch.object(load_test_control, "token", return_value="token"), \
+                patch.object(load_test_control, "Storage", side_effect=self.storage), \
+                patch.object(load_test_control, "demo_control_lock", return_value=nullcontext()), \
+                patch.object(load_test_control, "latest_fixture_version", return_value="8"), \
+                patch.object(load_test_control.time, "time", return_value=self.now), \
+                patch.dict("os.environ", {"GITHUB_RUN_ID": "workflow-9"}):
+            with self.assertRaisesRegex(RuntimeError, "not the latest enabled version"):
+                load_test_control.finalize_preparation(self.config, self.run_id, "7")
+
+        self.assertEqual("preparing_fixture",
+                         self.lease_store.objects[load_test_control.LEASE_OBJECT]["status"])
+
+    def test_cancel_preparation_closes_lease_without_cloud_run(self):
+        self.lease_store.objects[load_test_control.LEASE_OBJECT] = {
+            "run_id": self.run_id, "status": "preparing_fixture", "expires_at": self.now + 500,
+        }
+        self.lease_store.generations[load_test_control.LEASE_OBJECT] = 1
+        with patch.object(load_test_control, "token", return_value="token"), \
+                patch.object(load_test_control, "Storage", side_effect=self.storage), \
+                patch.object(load_test_control, "demo_control_lock", return_value=nullcontext()), \
+                patch.object(load_test_control, "gcp_request") as request, \
+                patch.object(load_test_control.time, "time", return_value=self.now):
+            result = load_test_control.cancel(self.config, self.run_id)
+
+        self.assertIn("cancelled", result)
+        self.assertEqual("cancelled", self.lease_store.objects[load_test_control.LEASE_OBJECT]["status"])
+        request.assert_not_called()
+
+    def test_start_guard_blocks_active_or_malformed_preparation_lease(self):
+        for active in (
+            {"run_id": "run-1", "status": "preparing_fixture", "expires_at": self.now + 20},
+            {"run_id": "run-1", "status": "reserved"},
+        ):
+            self.lease_store.objects[load_test_control.LEASE_OBJECT] = active
+            self.lease_store.generations[load_test_control.LEASE_OBJECT] = 1
+            with patch.object(load_test_control, "token", return_value="token"), \
+                    patch.object(load_test_control, "Storage", side_effect=self.storage), \
+                    patch.object(load_test_control.time, "time", return_value=self.now):
+                with self.assertRaisesRegex(RuntimeError, "fixture or image is being prepared"):
+                    load_test_control.assert_no_active(self.config)
+
+    def test_start_guard_ignores_only_expired_preparation(self):
+        self.lease_store.objects[load_test_control.LEASE_OBJECT] = {
+            "run_id": "run-1", "status": "preparing_fixture", "expires_at": self.now - 1,
+        }
+        self.lease_store.generations[load_test_control.LEASE_OBJECT] = 1
+        with patch.object(load_test_control, "token", return_value="token"), \
+                patch.object(load_test_control, "Storage", side_effect=self.storage), \
+                patch.object(load_test_control.time, "time", return_value=self.now):
+            load_test_control.assert_no_active(self.config)
+
+
 class LatestFixtureVersionTests(unittest.TestCase):
     @patch("load_tests.subprocess.run")
     def test_accepts_short_version_name_from_gcloud_value_format(self, run):

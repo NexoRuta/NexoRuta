@@ -1,10 +1,12 @@
 # Pruebas remotas de carga
 
-El workflow `.github/workflows/load-tests.yml` corre k6 como Cloud Run Job en `southamerica-west1`. Primero reserva la sesión en GCS y exige que su vencimiento supere la duración del perfil y el margen de conciliación. La cancelación usa el `run_id` y la execution exactos. El guard intenta cancelar leases vencidas; stop cancela antes de detener las VMs.
+El workflow `.github/workflows/load-tests.yml` corre k6 como Cloud Run Job en `southamerica-west1`. Primero reserva en GCS hasta 30 minutos para preparar la fixture y exige que la sesión tenga tiempo para preparación, perfil y conciliación. Después fija la versión lista del fixture y la release en una lease de corrida. La cancelación usa el `run_id` y la execution exactos; también puede cancelar una preparación sin iniciar Cloud Run. El guard intenta cancelar leases vencidas; stop cancela antes de detener las VMs.
 
 ## Fixtures sintéticas
 
-Tras aplicar bootstrap y demo, crear en Secret Manager una versión de `nexoruta-load-fixtures` con JSON privado. No imprimir el archivo ni cargar usuarios o envíos existentes. Las cuentas y jornadas deben ser sintéticas, distintas entre sí y con permiso móvil `reparto.ejecutar`; se preparan por flujos administrativos existentes antes de habilitar la primera corrida.
+Después de aplicar bootstrap y demo, el workflow prepara la fixture por sí mismo. Requiere la variable `GCP_LOAD_PREPARER_SERVICE_ACCOUNT`, generada por bootstrap. La identidad preparadora inicia sesión como el administrador de plataforma reservado y llama al endpoint restringido `POST /api/admin/demo-data/load-fixture` en lotes de hasta cinco cuentas. El backend crea hasta 50 cuentas bajo organizaciones sintéticas reservadas, asigna solo `reparto.ejecutar` y prepara para cada una una jornada activa con `InicioJornada` y 50 posiciones aplicadas. El fixture no usa cuentas de demo ni SQL directo. Las cuentas comparten las organizaciones sintéticas OPT-06; esta suite no mide aislamiento entre tenants.
+
+Antes de tocar la base, el preparador persiste las credenciales en Secret Manager con `fixtureStatus: "preparing"`. Una corrida interrumpida las reutiliza para que el retry no cambie contraseñas. Al completar los lotes, fija las operaciones en un objeto inmutable del bucket privado y publica una nueva versión `fixtureStatus: "ready"` con su SHA-256. El controlador verifica que siga vigente la lease, que la versión sea la última habilitada y que la sesión de VM conserve tiempo suficiente antes de habilitar Cloud Run.
 
 El payload de Secret Manager queda acotado a credenciales e identificadores. Los eventos grandes viven en el bucket privado `GCP_LOAD_FIXTURES_BUCKET`, con nombre propio de versión y SHA-256. Secret Manager limita cada versión a 64 KiB; el Job rechaza secretos mayores, limita el objeto de eventos a 4 MiB y verifica el hash antes de cargar k6.
 
@@ -12,12 +14,13 @@ Ejemplo de contenido del secreto (guardar fuera del repositorio):
 
 ```json
 {
+  "fixtureStatus": "ready",
   "readPath": "/api/mobile/perfil",
-  "operationsObject": "fixtures/fixture-2026-11-03-v1/operations.json",
+  "operationsObject": "fixtures/opt06-<hash>/operations.json",
   "operationsSha256": "<sha256 del archivo de operaciones>",
   "accounts": [
     {
-      "email": "load-01@nexoruta.test",
+      "email": "opt06-load-001@nexoruta.test",
       "password": "<credencial sintética>",
       "jornadaId": "00000000-0000-4000-8000-000000000001"
     }
@@ -48,20 +51,15 @@ El objeto de operaciones es JSON con una propiedad por `jornadaId`; su valor con
 }
 ```
 
-Subir el objeto con una ruta nueva para cada versión, sin sobrescribir fixtures que sigan referenciadas; calcular su SHA-256 localmente y colocarlo en el secreto. El objeto de ejemplo abrevia los eventos; los perfiles de sincronización necesitan 50 por jornada.
+El workflow sube el objeto con `ifGenerationMatch=0` y verifica el hash si ya existe una ruta de contenido idéntico. Las versiones anteriores del secreto y los objetos quedan privados para conservar la referencia de corridas previas. El objeto de ejemplo abrevia los eventos; los perfiles de sincronización necesitan 50 por jornada.
 
-Para ejecutar `smoke` alcanza una cuenta. `baseline` usa cinco cuentas y es de solo lectura. `sync` necesita veinte cuentas; `stress` cincuenta; `soak` cinco. Cada jornada usada por `smoke`, `sync`, `stress` o `soak` debe tener primero un `InicioJornada` aplicado en la secuencia 1 y luego 50 eventos `Posicion` ya registrados en orden, con resultado `Aplicada`, en las secuencias 2–51. Esto refleja el contrato del backend: las posiciones solo se aceptan cuando la jornada está en curso. Cada ID es único en su jornada. La prueba vuelve a enviar solo las 50 posiciones con el mismo ID y payload en orden; el replay idempotente no agrega filas ni altera el estado. No cambiar secuencia, ID, timestamp ni payload entre corridas. El fixture mostrado abrevia la lista; para perfiles de sync se completa hasta la secuencia 51. Para cerrar las jornadas preparadas, aplicar el flujo normal de fin y liberación después de verificar las posiciones; los replays posteriores devuelven el resultado almacenado. Para medir nuevas escrituras o generar datos se necesita una jornada exclusiva y un flujo de conciliación/limpieza separado.
+Para ejecutar `smoke` alcanza una cuenta. `baseline` usa cinco cuentas y es de solo lectura. `sync` necesita veinte cuentas; `stress` cincuenta; `soak` cinco. Cada jornada usada por `smoke`, `sync`, `stress` o `soak` debe tener primero un `InicioJornada` aplicado en la secuencia 1 y luego 50 eventos `Posicion` ya registrados en orden, con resultado `Aplicada`, en las secuencias 2–51. Esto refleja el contrato del backend: las posiciones solo se aceptan cuando la jornada está en curso. Cada ID es único en su jornada. La prueba vuelve a enviar solo las 50 posiciones con el mismo ID y payload en orden; el replay idempotente no agrega filas ni altera el estado. No cambiar secuencia, ID, timestamp ni payload entre corridas. El fixture mostrado abrevia la lista; el preparador genera las secuencias completas. Mantener las jornadas activas mientras se quieran repetir perfiles con sync; para medir nuevas escrituras o generar datos hace falta una jornada exclusiva y un flujo de conciliación separado.
 
 La política de login permite cinco intentos por minuto. El wrapper autentica secuencialmente y espera 12,1 segundos después de cada respuesta; así la latencia variable no comprime las llegadas al servidor. Renueva las sesiones tres minutos antes de que venza el JWT de 15 minutos, incluidas las identidades aún inactivas. Refresh y logout comparten una pausa de 2,1 segundos después de cada respuesta, por debajo de 30 solicitudes/minuto. Un rechazo o una respuesta perdida de rotación abortan la corrida; no se reintenta con un refresh token cuyo estado es incierto. Los perfiles se ejecutan solo contra `api` de la release activa; no activan ni usan Mapbox/Geoapify, SMTP externo o FCM.
 
-Guardar ambos archivos fuera del repositorio con permisos de usuario. Subir primero el objeto de operaciones de forma create-only y luego agregar una nueva versión del secreto, sin mostrar el contenido:
+No cargar fixtures manualmente ni imprimir credenciales. El workflow controla la preparación y el `run_id` permite cancelar una preparación atascada desde Actions. Las cuentas sintéticas persistentes quedan reservadas para OPT-06; conservarlas para repetir corridas con credenciales estables.
 
-```powershell
-gcloud storage cp RUTA_PRIVADA\operations.json gs://PROJECT_ID-nexoruta-load-fixtures/fixtures/fixture-2026-11-03-v1/operations.json --if-generation-match=0
-gcloud secrets versions add nexoruta-load-fixtures --project=PROJECT_ID --data-file=RUTA_PRIVADA\fixtures.json
-```
-
-No habilitar el workflow hasta que las cuentas y jornadas existan en el entorno remoto y la secret version haya sido creada. Las fixtures no se generan ni se siembran automáticamente por esta feature; conservar su inventario privado y retirar cuentas de prueba por sus flujos administrativos cuando ya no se usen.
+Las cuentas y sus jornadas son persistentes para permitir repetir corridas con credenciales estables. El endpoint solo admite el rango reservado `opt06-load-001..050@nexoruta.test` y asegura la operación con un lock transaccional.
 
 ## Métricas e informes
 

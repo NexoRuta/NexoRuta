@@ -32,7 +32,7 @@ jobs:
   load:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
-    timeout-minutes: 105
+    timeout-minutes: 150
     environment: nexoruta-demo
     permissions:
       contents: read
@@ -45,6 +45,7 @@ jobs:
       GCP_DELIVERY_BUCKET: ${{ vars.GCP_DELIVERY_BUCKET }}
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       GCP_LOAD_SERVICE_ACCOUNT: ${{ vars.GCP_LOAD_SERVICE_ACCOUNT }}
+      GCP_LOAD_PREPARER_SERVICE_ACCOUNT: ${{ vars.GCP_LOAD_PREPARER_SERVICE_ACCOUNT }}
       GCP_BASE_DOMAIN: ${{ vars.GCP_BASE_DOMAIN }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -62,6 +63,50 @@ jobs:
           version: "590.0.0"
       - name: Validate demo settings
         run: python3 scripts/gcp/github_environment.py validate load
+      - name: Reserve fixture preparation and load test
+        if: inputs.operation == 'run'
+        id: reservation
+        env:
+          PROFILE: ${{ inputs.profile }}
+        run: python3 scripts/gcp/load_tests.py reserve-fixture "$PROFILE"
+      - name: Publish preparation run ID
+        if: inputs.operation == 'run'
+        env:
+          RUN_ID: ${{ steps.reservation.outputs.run_id }}
+          PROFILE: ${{ inputs.profile }}
+        run: |
+          {
+            echo "## Prueba de carga · preparación de fixture"
+            echo
+            echo "- Perfil: ${PROFILE}"
+            echo "- Corrida: ${RUN_ID}"
+            echo "- Para cancelar: operation cancel con este run_id."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        if: inputs.operation == 'run'
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_LOAD_PREPARER_SERVICE_ACCOUNT }}
+      - name: Ensure application load fixture
+        if: inputs.operation == 'run'
+        id: fixture
+        env:
+          NEXORUTA_LOAD_PREPARATION_RUN_ID: ${{ steps.reservation.outputs.run_id }}
+        run: python3 scripts/gcp/prepare_load_fixture.py
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        if: inputs.operation == 'run'
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_LOAD_SERVICE_ACCOUNT }}
+      - name: Pin the prepared fixture and verified release
+        if: inputs.operation == 'run'
+        id: finalize
+        env:
+          RUN_ID: ${{ steps.reservation.outputs.run_id }}
+          FIXTURE_VERSION: ${{ steps.fixture.outputs.fixture_version }}
+        run: python3 scripts/gcp/load_tests.py finalize-fixture "$RUN_ID" "$FIXTURE_VERSION"
       - name: Cancel the identified execution
         if: inputs.operation == 'cancel'
         env:
@@ -72,12 +117,6 @@ jobs:
           else
             python3 scripts/gcp/load_tests.py cancel
           fi
-      - name: Reserve the active demo session
-        if: inputs.operation == 'run'
-        id: reservation
-        env:
-          PROFILE: ${{ inputs.profile }}
-        run: python3 scripts/gcp/load_tests.py reserve "$PROFILE"
       - name: Publish the live Grafana link
         if: inputs.operation == 'run'
         id: live-link
@@ -106,7 +145,7 @@ jobs:
         id: image
         env:
           PROFILE: ${{ inputs.profile }}
-          FIXTURE_VERSION: ${{ steps.reservation.outputs.fixture_version }}
+          FIXTURE_VERSION: ${{ steps.finalize.outputs.fixture_version }}
         run: |
           image="$(python3 scripts/gcp/load_image.py)"
           gcloud run jobs update nexoruta-load-tests --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
@@ -119,18 +158,18 @@ jobs:
         env:
           PROFILE: ${{ inputs.profile }}
           RUN_ID: ${{ steps.reservation.outputs.run_id }}
-          NEXORUTA_FIXTURE_VERSION: ${{ steps.reservation.outputs.fixture_version }}
+          NEXORUTA_FIXTURE_VERSION: ${{ steps.finalize.outputs.fixture_version }}
           NEXORUTA_LOAD_IMAGE: ${{ steps.image.outputs.image }}
         run: python3 scripts/gcp/load_tests.py run "$PROFILE" "$RUN_ID"
       - name: Wait for the exact execution and check its result
         if: inputs.operation == 'run'
         env:
-          RUN_ID: ${{ steps.execution.outputs.run_id }}
+          RUN_ID: ${{ steps.execution.outputs.run_id || steps.reservation.outputs.run_id }}
         run: python3 scripts/gcp/load_tests.py wait "$RUN_ID"
       - name: Publish run links
         if: always() && inputs.operation == 'run'
         env:
-          RUN_ID: ${{ steps.execution.outputs.run_id }}
+          RUN_ID: ${{ steps.execution.outputs.run_id || steps.reservation.outputs.run_id }}
           IMAGE: ${{ steps.image.outputs.image }}
           MONITOR_URL: ${{ steps.live-link.outputs.monitor_url }}
         run: |

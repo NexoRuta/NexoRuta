@@ -24,6 +24,7 @@ número, que son valores diferentes.
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/nexoruta-github/providers/demo-vm` |
 | `GCP_DEPLOY_SERVICE_ACCOUNT` | `nexoruta-demo-deployer@PROJECT_ID.iam.gserviceaccount.com` para publicación y controles de VM |
 | `GCP_LOAD_SERVICE_ACCOUNT` | `nexoruta-load-controller@PROJECT_ID.iam.gserviceaccount.com` para el workflow de carga |
+| `GCP_LOAD_PREPARER_SERVICE_ACCOUNT` | `nexoruta-load-preparer@PROJECT_ID.iam.gserviceaccount.com` para crear fixtures sintéticas por HTTP |
 | `GCP_SECONDARY_ZONE` | `southamerica-west1-b` |
 | `MONITOR_ALLOWED_EMAILS` | Correos Google explícitamente autorizados, separados por comas |
 

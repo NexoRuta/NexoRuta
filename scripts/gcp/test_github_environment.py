@@ -19,6 +19,7 @@ class GitHubEnvironmentTests(unittest.TestCase):
             "GCP_WORKLOAD_IDENTITY_PROVIDER": "projects/123456/locations/global/workloadIdentityPools/nexoruta-github/providers/demo-vm",
             "GCP_DEPLOY_SERVICE_ACCOUNT": "nexoruta-demo-deployer@demo-project.iam.gserviceaccount.com",
             "GCP_LOAD_SERVICE_ACCOUNT": "nexoruta-load-controller@demo-project.iam.gserviceaccount.com",
+            "GCP_LOAD_PREPARER_SERVICE_ACCOUNT": "nexoruta-load-preparer@demo-project.iam.gserviceaccount.com",
         }, clear=True)
         environment.start()
         self.addCleanup(environment.stop)
@@ -85,6 +86,9 @@ class GitHubEnvironmentTests(unittest.TestCase):
         settings.validate("load")
         with patch.dict(os.environ, {"GCP_LOAD_SERVICE_ACCOUNT": "nexoruta-demo-deployer@demo-project.iam.gserviceaccount.com"}):
             with self.assertRaisesRegex(ValueError, "GCP_LOAD_SERVICE_ACCOUNT"):
+                settings.validate("load")
+        with patch.dict(os.environ, {"GCP_LOAD_PREPARER_SERVICE_ACCOUNT": "nexoruta-demo-deployer@demo-project.iam.gserviceaccount.com"}):
+            with self.assertRaisesRegex(ValueError, "GCP_LOAD_PREPARER_SERVICE_ACCOUNT"):
                 settings.validate("load")
 
     def test_unconfigured_integrations_use_mailpit_and_configured_secrets_are_paired(self):

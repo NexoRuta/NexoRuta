@@ -144,6 +144,24 @@ resource "google_service_account" "load_controller" {
   depends_on   = [google_project_service.required]
 }
 
+resource "google_service_account" "load_preparer" {
+  account_id   = "nexoruta-load-preparer"
+  display_name = "Prepare synthetic application data for OPT-06 load tests"
+  depends_on   = [google_project_service.required]
+}
+
+resource "google_project_iam_custom_role" "load_fixture_preparer" {
+  role_id     = "nexorutaLoadFixturePreparer"
+  title       = "Resolve the public demo address for OPT-06 fixture preparation"
+  permissions = ["compute.addresses.get"]
+}
+
+resource "google_project_iam_member" "load_fixture_preparer" {
+  project = var.project_id
+  role    = google_project_iam_custom_role.load_fixture_preparer.name
+  member  = "serviceAccount:${google_service_account.load_preparer.email}"
+}
+
 resource "google_project_iam_custom_role" "load_execution" {
   role_id     = "nexorutaLoadExecution"
   title       = "NexoRuta load execution observer and canceller"
@@ -211,6 +229,26 @@ resource "google_storage_bucket_iam_member" "load_controller_control_objects" {
   }
 }
 
+resource "google_storage_bucket_iam_member" "load_preparer_control_lock" {
+  bucket = google_storage_bucket.state.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.load_preparer.email}"
+  condition {
+    title      = "Load fixture preparer control lock only"
+    expression = "resource.name == 'projects/_/buckets/${local.state_bucket}/objects/locks/demo-control.json'"
+  }
+}
+
+resource "google_storage_bucket_iam_member" "load_preparer_session_reader" {
+  bucket = google_storage_bucket.state.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.load_preparer.email}"
+  condition {
+    title      = "Load fixture preparer session lease only"
+    expression = "resource.name == 'projects/_/buckets/${local.state_bucket}/objects/leases/demo.json'"
+  }
+}
+
 resource "google_iam_workload_identity_pool" "github" {
   workload_identity_pool_id = "nexoruta-github"
   display_name              = "NexoRuta GitHub Actions"
@@ -251,16 +289,23 @@ resource "google_service_account_iam_member" "github_load_controller" {
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository_id/${var.github_repository_id}"
 }
 
+resource "google_service_account_iam_member" "github_load_preparer" {
+  service_account_id = google_service_account.load_preparer.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository_id/${var.github_repository_id}"
+}
+
 output "github_variables" {
   value = {
-    GCP_PROJECT_ID                 = var.project_id
-    GCP_REGION                     = var.region
-    GCP_ZONE                       = "${var.region}-a"
-    GCP_STATE_BUCKET               = google_storage_bucket.state.name
-    GCP_DELIVERY_BUCKET            = google_storage_bucket.delivery.name
-    GCP_WORKLOAD_IDENTITY_PROVIDER = google_iam_workload_identity_pool_provider.github.name
-    GCP_DEPLOY_SERVICE_ACCOUNT     = google_service_account.deployer.email
-    GCP_LOAD_SERVICE_ACCOUNT       = google_service_account.load_controller.email
+    GCP_PROJECT_ID                    = var.project_id
+    GCP_REGION                        = var.region
+    GCP_ZONE                          = "${var.region}-a"
+    GCP_STATE_BUCKET                  = google_storage_bucket.state.name
+    GCP_DELIVERY_BUCKET               = google_storage_bucket.delivery.name
+    GCP_WORKLOAD_IDENTITY_PROVIDER    = google_iam_workload_identity_pool_provider.github.name
+    GCP_DEPLOY_SERVICE_ACCOUNT        = google_service_account.deployer.email
+    GCP_LOAD_SERVICE_ACCOUNT          = google_service_account.load_controller.email
+    GCP_LOAD_PREPARER_SERVICE_ACCOUNT = google_service_account.load_preparer.email
   }
 }
 

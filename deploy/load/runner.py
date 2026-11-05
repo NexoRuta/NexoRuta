@@ -97,6 +97,8 @@ def load_thresholds(profile_name, profile, defaults):
 
 
 def validate_fixture_accounts(profile_name, fixture, profile):
+    if fixture.get("fixtureStatus") != "ready":
+        raise ValueError("The synthetic fixture is not ready for load testing")
     accounts = fixture.get("accounts")
     required = profile.get("vus")
     if (not isinstance(accounts, list) or not 1 <= len(accounts) <= 50

@@ -126,6 +126,15 @@ resource "google_secret_manager_secret_version" "runtime" {
   })
 }
 
+resource "google_secret_manager_secret_version" "load_preparer_credentials" {
+  secret          = "projects/${var.project_id}/secrets/nexoruta-load-preparer-credentials"
+  deletion_policy = "ABANDON"
+  secret_data = jsonencode({
+    email    = "admin@nexoruta.test"
+    password = random_password.password["admin"].result
+  })
+}
+
 resource "google_dns_managed_zone" "demo" {
   count    = var.manage_dns ? 1 : 0
   name     = "nexoruta-demo"

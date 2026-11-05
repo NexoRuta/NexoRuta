@@ -65,6 +65,7 @@ def validate(job):
         patterns["GCP_DEPLOY_SERVICE_ACCOUNT"] = r"[a-z][a-z0-9-]*@[a-z][a-z0-9-]*\.iam\.gserviceaccount\.com"
     if job == "load":
         patterns["GCP_LOAD_SERVICE_ACCOUNT"] = r"nexoruta-load-controller@[a-z][a-z0-9-]*\.iam\.gserviceaccount\.com"
+        patterns["GCP_LOAD_PREPARER_SERVICE_ACCOUNT"] = r"nexoruta-load-preparer@[a-z][a-z0-9-]*\.iam\.gserviceaccount\.com"
     if job in ("publish", "deploy"):
         patterns.update({
             "GCP_ZONE": re.escape(session.REGION + "-a"),

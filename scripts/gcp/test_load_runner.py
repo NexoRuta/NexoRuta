@@ -28,9 +28,14 @@ class LoadRunnerDiagnosticTests(unittest.TestCase):
         self.assertNotIn("private", message)
 
     def test_fixture_capacity_fails_with_profile_requirements_before_cloud_calls(self):
-        fixture = {"accounts": [{"email": "a@nexoruta.test"}]}
+        fixture = {"fixtureStatus": "ready", "accounts": [{"email": "a@nexoruta.test"}]}
         with self.assertRaisesRegex(ValueError, "Profile stress requires 50.*fixture contains 1"):
             runner.validate_fixture_accounts("stress", fixture, {"vus": 50})
+
+    def test_preparing_fixture_is_rejected_before_any_load_traffic(self):
+        fixture = {"fixtureStatus": "preparing", "accounts": [{"email": "a@nexoruta.test"}]}
+        with self.assertRaisesRegex(ValueError, "fixture is not ready"):
+            runner.validate_fixture_accounts("smoke", fixture, {"vus": 1})
 
     def test_sync_dataset_validates_only_active_journeys_and_allows_unused_prepared_rows(self):
         accounts = [{"jornadaId": "00000000-0000-4000-8000-000000000001"}]

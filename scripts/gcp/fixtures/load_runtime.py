@@ -225,7 +225,7 @@ def main():
     manifest = {"run_id": RUN_ID, "profile": "smoke", "fixture_version": "1", "release": "controlled-fixture",
                 "api_origin": ORIGIN, "suite_sha256": suite_hash.hexdigest(), "thresholds_version": configuration["version"]}
     lease = {"run_id": RUN_ID, "status": "running", "expires_at": time.time() + 600}
-    fixture = {"readPath": "/api/mobile/perfil", "operationsObject": "fixtures/runtime-v1/operations.json",
+    fixture = {"fixtureStatus": "ready", "readPath": "/api/mobile/perfil", "operationsObject": "fixtures/runtime-v1/operations.json",
                "operationsSha256": hashlib.sha256(DATASET).hexdigest(), "accounts": [
                    {"email": "load-01@nexoruta.test", "password": PASSWORD, "jornadaId": JOURNEY}]}
     os.environ.update(NEXORUTA_LOAD_PROFILE_NAME="smoke", NEXORUTA_RUN_ID=RUN_ID,
