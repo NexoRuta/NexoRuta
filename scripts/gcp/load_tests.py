@@ -1,7 +1,7 @@
 """Reserve, run, cancel and reconcile the bounded Cloud Run load-test job."""
 
 import datetime as dt
-from contextlib import nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
 import hashlib
 import ipaddress
 import json
@@ -23,6 +23,7 @@ REGION = "southamerica-west1"
 JOB = "nexoruta-load-tests"
 LEASE_OBJECT = "leases/load-test.json"
 PROFILES = {"smoke": 300, "baseline": 1260, "sync": 1500, "stress": 2700, "soak": 5100}
+CONTROL_LOCK_BUSY = "Another demo control operation holds the shared lock"
 SUITE_SOURCES = ("tests/load/Dockerfile", "tests/load/profiles.json", "tests/load/scenario.js",
                  "deploy/load/runner.py", "deploy/load/supervision.py", "deploy/load/sessions.py")
 RELEASE_MARKER_START = "__NEXORUTA_RELEASE_BEGIN__"
@@ -52,6 +53,28 @@ def load_control_bucket(config):
 def demo_control_lock(config, access):
     store = control_lock.JsonStorage(config["GCP_STATE_BUCKET"], access)
     return control_lock.control_lock(config, store=store)
+
+
+@contextmanager
+def demo_control_lock_retry(config, access, *, wait_seconds=60, retry_interval=1):
+    """Wait briefly for an in-flight VM control operation before saving load state."""
+    deadline = time.monotonic() + max(0, wait_seconds)
+    while True:
+        stack = ExitStack()
+        try:
+            lease = stack.enter_context(demo_control_lock(config, access))
+        except RuntimeError as error:
+            stack.close()
+            remaining = deadline - time.monotonic()
+            if str(error) != CONTROL_LOCK_BUSY or remaining <= 0:
+                raise
+            time.sleep(min(retry_interval, remaining))
+            continue
+        try:
+            yield lease
+        finally:
+            stack.close()
+        return
 
 
 def token(project):
@@ -406,7 +429,7 @@ def run(config, profile, run_id=None):
         name = operation.get("name", "")
         if not name:
             raise RuntimeError("Cloud Run did not return an execution operation")
-        with demo_control_lock(config, access):
+        with demo_control_lock_retry(config, access):
             generation, current = leases.read(LEASE_OBJECT)
             if not current or current.get("run_id") != run_id:
                 raise RuntimeError("The load-test lease changed after Cloud Run accepted the execution")
@@ -418,7 +441,7 @@ def run(config, profile, run_id=None):
                 current["cancel_requested_at"] = current.get("cancel_requested_at", time.time())
             leases.write(LEASE_OBJECT, generation, current)
         execution = wait_for_execution_reference(config["GCP_PROJECT_ID"], run_id, name)
-        with demo_control_lock(config, access):
+        with demo_control_lock_retry(config, access):
             generation, current = leases.read(LEASE_OBJECT)
             if (not current or current.get("run_id") != run_id or current.get("status") != "starting"
                     or current.get("expires_at", 0) <= time.time()):
@@ -526,7 +549,7 @@ def wait(config, run_id):
     execution_name = active.get("execution") or wait_for_execution_reference(
         config["GCP_PROJECT_ID"], run_id, active.get("operation", ""))
     if not active.get("execution"):
-        with demo_control_lock(config, access):
+        with demo_control_lock_retry(config, access):
             generation, current = leases.read(LEASE_OBJECT)
             if not current or current.get("run_id") != run_id:
                 raise RuntimeError("The load-test lease changed while recovering its execution")
@@ -571,7 +594,7 @@ def cancel(config, run_id=None, wait_seconds=120):
     state = Storage(config["GCP_STATE_BUCKET"], access)
     leases = Storage(load_control_bucket(config), access)
     lock = (nullcontext() if os.environ.get("NEXORUTA_CONTROL_LOCK_HELD") == "true"
-            else demo_control_lock(config, access))
+            else demo_control_lock_retry(config, access))
     with lock:
         generation, active = leases.read(LEASE_OBJECT)
         if not active or (run_id and active.get("run_id") != run_id):
@@ -595,7 +618,7 @@ def cancel(config, run_id=None, wait_seconds=120):
         execution_name = current_lease.get("execution") or execution_reference(
             config["GCP_PROJECT_ID"], active["run_id"], current_lease.get("operation", ""))
         if execution_name:
-            with demo_control_lock(config, access):
+            with demo_control_lock_retry(config, access):
                 generation, current_lease = leases.read(LEASE_OBJECT)
                 if current_lease and current_lease.get("run_id") == active.get("run_id"):
                     current_lease["execution"] = execution_name

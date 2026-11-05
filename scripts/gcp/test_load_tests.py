@@ -178,6 +178,48 @@ class DemoControlLockTests(unittest.TestCase):
         storage.assert_called_once_with("state-bucket", "access-token")
         guard.assert_called_once_with(config, store=lock_store)
 
+    @patch("load_tests.time.sleep")
+    @patch.object(load_test_control, "demo_control_lock")
+    def test_retry_waits_for_transient_busy_lock(self, lock_factory, sleep):
+        class BusyOnce:
+            def __init__(self):
+                self.attempts = 0
+
+            def __enter__(self):
+                self.attempts += 1
+                if self.attempts == 1:
+                    raise RuntimeError(load_test_control.CONTROL_LOCK_BUSY)
+                return "lease"
+
+            def __exit__(self, *_args):
+                return False
+
+        lock = BusyOnce()
+        lock_factory.return_value = lock
+
+        with load_test_control.demo_control_lock_retry({}, "access", wait_seconds=5) as lease:
+            self.assertEqual("lease", lease)
+
+        self.assertEqual(2, lock_factory.call_count)
+        sleep.assert_called_once()
+
+    @patch.object(load_test_control, "demo_control_lock")
+    def test_retry_stops_at_deadline_and_preserves_busy_error(self, lock_factory):
+        class AlwaysBusy:
+            def __enter__(self):
+                raise RuntimeError(load_test_control.CONTROL_LOCK_BUSY)
+
+            def __exit__(self, *_args):
+                return False
+
+        lock_factory.return_value = AlwaysBusy()
+
+        with self.assertRaisesRegex(RuntimeError, load_test_control.CONTROL_LOCK_BUSY):
+            with load_test_control.demo_control_lock_retry({}, "access", wait_seconds=0):
+                self.fail("busy lock should not enter its body")
+
+        lock_factory.assert_called_once()
+
 
 class ReleaseMarkerTests(unittest.TestCase):
     def test_parses_marker_when_ssh_adds_output_around_the_command(self):
