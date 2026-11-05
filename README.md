@@ -106,6 +106,10 @@ Admin is available at `http://localhost:5104`. The API maps the ignored `.env` k
 
 Apply reviewed migrations explicitly to the confirmed local Compose PostgreSQL with the old API and workers stopped; then recreate them together from the same checkout. Do not delete volumes or reset data. The configured `local-bootstrap` command creates the account atomically and synchronizes an existing matching platform account to the configured password. No manual `platform-admin create` is required in this configured local flow. See the [backend procedure](backend/docs/workflow/platform-administration.md).
 
+## Demo de extremo a extremo
+
+La [guía de demo remota](docs/demo/README.md) recorre Commerce, Backoffice y Android, con datos nuevos, estados esperados, extensiones y brechas del alcance. Incluye un [workflow para agentes](docs/demo/workflow.json), [instrucciones de automatización](docs/demo/automatizacion.md) y [cobertura por requisito](docs/demo/cobertura.md). Antes del ensayo consultar el [estado observado del entorno](docs/demo/estado-observado.md).
+
 ## Estructura del repositorio
 
 ```text
@@ -145,7 +149,3 @@ La publicación GCP copia el mismo archivo del archive del backend validado a
 una rama durante el build. El CI independiente del frontend fija el commit del
 backend y pasa su ruta mediante `OfficialDepartmentSource`; una compilación
 independiente puede usar esa misma propiedad para indicar el archivo canónico.
-
-## Entrega parcial y retiro en domicilio (31–41)
-
-Implementación en `feature/cambiosrequerimientos`: [ADR](docs/cambios-requerimientos/ADR-031-041.md), [trazabilidad](docs/cambios-requerimientos/TRAZABILIDAD.md), [demostraciones reproducibles](docs/cambios-requerimientos/DEMOSTRACION.md) y [verificación y límites](docs/cambios-requerimientos/VALIDACION.md). El PDF de cambios acompaña esas guías.
