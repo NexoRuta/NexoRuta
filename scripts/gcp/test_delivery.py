@@ -42,6 +42,10 @@ class DeliveryTests(unittest.TestCase):
 
     def test_local_and_gcp_grafana_use_the_shared_prometheus_dashboard(self):
         root = Path(__file__).parents[2]
+        canonical_alerts = root / "deploy/observability/prometheus/alerts.yaml"
+        gcp_alerts = root / "deploy/gcp/monitoring/alerts.yaml"
+        self.assertEqual(canonical_alerts.read_bytes(), gcp_alerts.read_bytes())
+
         canonical = root / "deploy/observability/grafana/nexoruta.json"
         gcp_copy = root / "deploy/gcp/grafana/provisioning/dashboards/nexoruta.json"
         self.assertEqual(canonical.read_bytes(), gcp_copy.read_bytes())
@@ -78,6 +82,7 @@ class DeliveryTests(unittest.TestCase):
 
     def test_load_test_dashboard_is_in_the_gcp_delivery_bundle(self):
         root = Path(__file__).parents[2]
+        canonical_alerts = root / "deploy/observability/prometheus/alerts.yaml"
         dashboard_path = root / "deploy/observability/grafana/load-tests.json"
         dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
         self.assertEqual(dashboard["uid"], "nexoruta-load-tests")
@@ -111,6 +116,9 @@ class DeliveryTests(unittest.TestCase):
                 packaged = archive.extractfile("grafana/provisioning/dashboards/load-tests.json")
                 self.assertIsNotNone(packaged)
                 self.assertEqual(packaged.read(), dashboard_path.read_bytes())
+                packaged_alerts = archive.extractfile("monitoring/alerts.yaml")
+                self.assertIsNotNone(packaged_alerts)
+                self.assertEqual(packaged_alerts.read(), canonical_alerts.read_bytes())
 
     def test_environment_cannot_inject_additional_lines(self):
         with self.assertRaises(ValueError):

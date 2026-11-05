@@ -109,5 +109,28 @@ class DemoControlLockTests(unittest.TestCase):
         guard.assert_called_once_with(config, store=lock_store)
 
 
+class ReleaseMarkerTests(unittest.TestCase):
+    def test_parses_marker_when_ssh_adds_output_around_the_command(self):
+        output = (
+            "gcloud ssh notice\n" + load_test_control.RELEASE_MARKER_START +
+            "\nrelease-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n" +
+            load_test_control.RELEASE_MARKER_END + "\nremote shell notice"
+        )
+
+        self.assertEqual(
+            "release-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            load_test_control.parse_release_marker(output),
+        )
+
+    def test_rejects_invalid_or_ambiguous_markers(self):
+        with self.assertRaisesRegex(RuntimeError, "invalid applied release marker"):
+            load_test_control.parse_release_marker(
+                load_test_control.RELEASE_MARKER_START + "\ninvalid\n" +
+                load_test_control.RELEASE_MARKER_END
+            )
+        with self.assertRaisesRegex(RuntimeError, "Could not isolate"):
+            load_test_control.parse_release_marker("release-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+
+
 if __name__ == "__main__":
     unittest.main()
