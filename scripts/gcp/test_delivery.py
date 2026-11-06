@@ -51,7 +51,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(canonical.read_bytes(), gcp_copy.read_bytes())
 
         dashboard = json.loads(canonical.read_text(encoding="utf-8"))
-        self.assertEqual(dashboard["uid"], "nexoruta-observabilidad")
+        self.assertEqual(dashboard["uid"], "nexoruta-demo")
 
         panels = []
 

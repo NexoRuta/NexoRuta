@@ -9,7 +9,7 @@
   "refresh": "30s",
   "time": { "from": "now-2h", "to": "now" },
   "tags": ["nexoruta", "carga"],
-  "links": [{ "title": "Métricas generales de la aplicación", "url": "/d/nexoruta-observabilidad", "type": "link", "targetBlank": false }],
+  "links": [{ "title": "Métricas generales de la aplicación", "url": "/d/nexoruta-demo", "type": "link", "targetBlank": false }],
   "templating": { "list": [
     { "name": "run_id", "label": "Corrida", "type": "query", "datasource": { "type": "prometheus", "uid": "prometheus" }, "query": { "query": "label_values(k6_http_reqs_total, run_id)", "refId": "PrometheusVariableQueryEditor-VariableQuery" }, "refresh": 2, "sort": 3, "current": {}, "options": [], "includeAll": false, "multi": false, "hide": 0 },
     { "name": "node", "label": "Nodo", "type": "query", "datasource": { "type": "prometheus", "uid": "prometheus" }, "query": { "query": "label_values(http_server_request_duration_seconds_count, node)", "refId": "PrometheusVariableQueryEditor-VariableQuery" }, "refresh": 2, "sort": 1, "current": { "text": "All", "value": "$__all" }, "options": [], "includeAll": true, "multi": true, "hide": 0 }

@@ -9,7 +9,7 @@ docker compose up -d --build
 
 El arranque ejecuta `rls-migrator` y luego `rls-role-provisioner`; API y workers esperan a que ambos terminen correctamente. El migrador está fijado al PostgreSQL local `postgres/nexoruta`. En Windows, `levantar-entorno-dev.bat` también valida el destino y ejecuta importación de catálogo y bootstrap de desarrollo.
 
-Ese comando levanta la aplicación y Prometheus, Loki, Tempo, Grafana Alloy, OpenTelemetry Collector y Grafana. También conserva Aspire Dashboard. Grafana queda en <http://localhost:3000>, Prometheus en <http://localhost:9090> y Aspire Dashboard en <http://localhost:18888>. El dashboard es el mismo que se aprovisiona en GCP, con UID `nexoruta-observabilidad` y definición en [nexoruta.json](../../observability/grafana/nexoruta.json).
+Ese comando levanta la aplicación y Prometheus, Loki, Tempo, Grafana Alloy, OpenTelemetry Collector y Grafana. También conserva Aspire Dashboard. Grafana queda en <http://localhost:3000>, Prometheus en <http://localhost:9090> y Aspire Dashboard en <http://localhost:18888>. El dashboard es el mismo que se aprovisiona en GCP, con UID `nexoruta-demo` y definición en [nexoruta.json](../../observability/grafana/nexoruta.json).
 
 Grafana usa Prometheus para todas las métricas, Loki para logs y Tempo para trazas. El tablero filtra métricas HTTP, workers, sincronizaciones y alertas por `service_name`; conserva el filtro de contenedores y logs por servicio y `correlation_id`. Incluye latencia media/p95/p99, tasa 5xx, cola, resultados y pendientes de sync, errores de worker, fallos Push/notificaciones, caché, disponibilidad y alertas activas. La fila plegable de infraestructura GCP muestra VMs, balanceador y Cloud SQL cuando se abre en GCP.
 

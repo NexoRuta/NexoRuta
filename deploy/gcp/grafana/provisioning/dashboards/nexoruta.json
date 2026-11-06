@@ -2193,7 +2193,7 @@
     "to": "now"
   },
   "timezone": "America/Montevideo",
-  "title": "NexoRuta · Observabilidad",
-  "uid": "nexoruta-observabilidad",
+  "title": "NexoRuta · infraestructura y aplicación",
+  "uid": "nexoruta-demo",
   "version": 1
 }
