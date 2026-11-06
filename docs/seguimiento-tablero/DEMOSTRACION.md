@@ -27,14 +27,15 @@ dotnet test backend/tests/NexoRuta.IntegrationTests/NexoRuta.IntegrationTests.cs
   --logger trx --results-directory backend/artifacts/operacion
 ```
 
-Los siete escenarios crean sus servicios y bases efímeros. La colección se ejecuta de forma exclusiva para reducir el pico de disco del driver Docker VFS; no reduce los casos.
+Los ocho escenarios crean sus servicios y bases efímeros. La colección se ejecuta de forma exclusiva para reducir el pico de disco del driver Docker VFS; no reduce los casos.
 
 1. **Seguimiento y tablero reales en Chromium.** Crear un envío sintético, despachar, cargar y confirmar. Publicar por el circuito legítimo su token cifrado. Comprobar el intervalo manual previsto de cinco minutos y su procedencia. Registrar un intento fallido aceptado: el intervalo deja de aplicar. Registrar GPS aceptado. Abrir el seguimiento sin cuenta, solicitar otra visita y repetir la solicitud sin duplicarla. Ingresar en Backoffice, revisar la solicitud y aprobarla con el comando privado. El tablero ya abierto observa `Reprogramado` mediante outbox → Kafka → proyección → SignalR. La custodia permanece en el repartidor; no hay recepción ni nueva asignación automática. Forzar un error de negociación y reconectar con teclado. Guardar capturas de escritorio/320 px y resultado axe.
 2. **Dos consumidores y replay.** Crear un topic aleatorio y grupos independientes para tablero e historial, con destinos PostgreSQL/MongoDB aislados. Publicar posiciones, envío parcial, bultos, ruta, parada, estimación y flota, incluyendo duplicado, versión atrasada y GPS futuro. Reconstruir otra proyección desde el principio con grupos nuevos. Comparar el estado completo y los documentos por identidad; la posición vigente no retrocede. El broker y sus topics pertenecen solo a esta prueba.
 3. **Aislamiento documental.** Consultar dos operadores y dos comercios por API con rol restringido. Comprobar resultados y agregados propios, límites, TTL y deduplicación. Detener únicamente el MongoDB de la prueba y comprobar 503, sin presentar el resultado anterior como actual.
 4. **Dos API y reconexión SignalR.** Abrir dos Kestrel reales con la misma base de lectura. Comprobar fotografías equivalentes, actualización sin afinidad de sesión, reconexión, ausencia de filas de otro operador y rechazo anónimo.
 5. **Mailpit y recuperación.** Usar RabbitMQ y Mailpit reales. El primer intento apunta a un puerto loopback cerrado; comprobar que no se marca enviado. Restituir SMTP al Mailpit de la prueba, esperar el reintento de la cola y consultar su API HTTP: un correo con marca del operador y enlace público opaco. Repetir el mensaje y comprobar que el total sigue siendo uno. Nunca usar un SMTP externo.
-6. **Upgrade poblado.** Migrar una base con hechos previos: se agrega el log derivado, sin cambiar hechos/estado canónico, enviar avisos históricos ni dejar políticas temporales de bootstrap.
+6. **Paginación pública.** Con 250 bultos y API real restringida, Chromium recorre páginas de 200/50 sin cuenta, vuelve con teclado y conserva el foco. Se guardan capturas a 1280/320 px. El flujo de retiro CU-37 verifica además 1/500/501/1500 bultos y los estados públicos antes del retiro, con el repartidor, en depósito y entregados al comercio.
+7. **Upgrade poblado.** Migrar una base con hechos previos: se agrega el log derivado, sin cambiar hechos/estado canónico, enviar avisos históricos ni dejar políticas temporales de bootstrap.
 
 ## Configuración de una demo local seleccionada explícitamente
 
