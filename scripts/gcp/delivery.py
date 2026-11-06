@@ -505,9 +505,10 @@ def deploy(config, release):
         for attempt in range(80):
             try:
                 session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
-                    "--command=sudo test -f /srv/nexoruta/bootstrap-ready")
+                    "--command=sudo test -f /srv/nexoruta/bootstrap-ready", capture=True)
                 return
-            except subprocess.CalledProcessError:
+            except subprocess.CalledProcessError as error:
+                print(error.stderr or str(error), file=sys.stderr)
                 time.sleep(5)
         raise RuntimeError(f"Node {node['NODE_ID']} bootstrap did not finish")
 

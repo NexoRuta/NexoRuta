@@ -186,3 +186,6 @@ jobs:
             echo "- Resultados privados: gs://${GCP_PROJECT_ID}-nexoruta-load-results/runs/${RUN_ID}/"
             echo "- Cloud Run: https://console.cloud.google.com/run/jobs/details/${GCP_REGION}/nexoruta-load-tests?project=${GCP_PROJECT_ID}"
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove this runner's OS Login SSH key
+        if: always()
+        run: python3 scripts/gcp/ssh_keys.py cleanup
