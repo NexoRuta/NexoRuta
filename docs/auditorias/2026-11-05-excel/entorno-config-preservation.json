@@ -1,0 +1,14 @@
+{
+  ".env": {
+    "unchangedFromBackup": true
+  },
+  "ca.crt": {
+    "unchangedFromBackup": true
+  },
+  "server.crt": {
+    "unchangedFromBackup": true
+  },
+  "server.key": {
+    "unchangedFromBackup": true
+  }
+}

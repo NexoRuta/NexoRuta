@@ -1,0 +1,24 @@
+{
+  "args": [
+    "docker",
+    "compose",
+    "<existing files + audit runtime override>",
+    "--profile",
+    "kafka",
+    "up",
+    "-d",
+    "--no-deps",
+    "--no-build",
+    "api",
+    "worker",
+    "worker-kafka",
+    "worker-push",
+    "dashboard",
+    "admin",
+    "backoffice",
+    "commerce",
+    "tracking"
+  ],
+  "exit": 0,
+  "seconds": 12.27
+}

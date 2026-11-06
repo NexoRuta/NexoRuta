@@ -1,0 +1,14 @@
+{
+  "command": [
+    "docker",
+    "compose",
+    "<existing-files>",
+    "--profile",
+    "kafka",
+    "build",
+    "api",
+    "worker"
+  ],
+  "exit": 0,
+  "seconds": 69.67
+}

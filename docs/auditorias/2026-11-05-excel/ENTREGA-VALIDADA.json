@@ -1,0 +1,13 @@
+{
+  "rows": 104,
+  "columns": 27,
+  "exactOriginalNamesAndRequirements": true,
+  "dependenciesUseOriginalTypeNotInventedName": true,
+  "sourceHashUnchanged": true,
+  "brokenLocalLinks": [],
+  "secretOrJwtLeaks": [],
+  "testsPassed": 1061,
+  "browserTestsSkipped": 5,
+  "visualNative": "blocked, not accepted",
+  "remoteCi": "limited query, no attributable run"
+}

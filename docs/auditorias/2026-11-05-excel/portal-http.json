@@ -1,0 +1,116 @@
+{
+  "kind": "HTTP against real portals; NOT browser/visual",
+  "requests": [
+    {
+      "method": "GET",
+      "path": "http://127.0.0.1:5101/ingresar",
+      "status": 200,
+      "finalPath": "/ingresar",
+      "bodyBytes": 3211
+    },
+    {
+      "method": "POST",
+      "path": "http://127.0.0.1:5101/ingresar",
+      "status": 200,
+      "finalPath": "/",
+      "bodyBytes": 48378
+    },
+    {
+      "method": "GET",
+      "path": "http://127.0.0.1:5101/",
+      "status": 200,
+      "finalPath": "/",
+      "bodyBytes": 48378,
+      "authenticated": true,
+      "ssrError": false
+    },
+    {
+      "method": "GET",
+      "path": "http://127.0.0.1:5101/vehiculos",
+      "status": 200,
+      "finalPath": "/vehiculos",
+      "bodyBytes": 15393,
+      "authenticated": true,
+      "ssrError": false
+    },
+    {
+      "method": "GET",
+      "path": "http://127.0.0.1:5101/rutas",
+      "status": 200,
+      "finalPath": "/rutas",
+      "bodyBytes": 12119,
+      "authenticated": true,
+      "ssrError": false
+    },
+    {
+      "method": "GET",
+      "path": "http://127.0.0.1:5101/configuracion-reparto",
+      "status": 200,
+      "finalPath": "/configuracion-reparto",
+      "bodyBytes": 16836,
+      "authenticated": true,
+      "ssrError": false
+    },
+    {
+      "method": "GET",
+      "path": "http://127.0.0.1:5101/ReporteOperaciones",
+      "status": 200,
+      "finalPath": "/ReporteOperaciones",
+      "bodyBytes": 8623,
+      "authenticated": true,
+      "ssrError": false
+    },
+    {
+      "method": "GET",
+      "path": "http://127.0.0.1:5102/ingresar",
+      "status": 200,
+      "finalPath": "/ingresar",
+      "bodyBytes": 3509
+    },
+    {
+      "method": "POST",
+      "path": "http://127.0.0.1:5102/ingresar",
+      "status": 200,
+      "finalPath": "/envios",
+      "bodyBytes": 26711
+    },
+    {
+      "method": "GET",
+      "path": "http://127.0.0.1:5102/envios",
+      "status": 200,
+      "finalPath": "/envios",
+      "bodyBytes": 26604,
+      "authenticated": true,
+      "ssrError": false
+    },
+    {
+      "method": "GET",
+      "path": "http://127.0.0.1:5102/envios/crear",
+      "status": 200,
+      "finalPath": "/envios/crear",
+      "bodyBytes": 16395,
+      "authenticated": true,
+      "ssrError": false
+    },
+    {
+      "method": "GET",
+      "path": "http://127.0.0.1:5102/retiros/crear",
+      "status": 200,
+      "finalPath": "/retiros/crear",
+      "bodyBytes": 17205,
+      "authenticated": true,
+      "ssrError": false
+    },
+    {
+      "method": "GET",
+      "path": "http://127.0.0.1:5102/avisos",
+      "status": 200,
+      "finalPath": "/avisos",
+      "bodyBytes": 9815,
+      "authenticated": true,
+      "ssrError": false
+    }
+  ],
+  "failures": [],
+  "passed": true
+}

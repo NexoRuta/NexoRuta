@@ -1,0 +1,29 @@
+{
+  "step": "frontend-repeat",
+  "command": "dotnet test tests/NexoRuta.ApiClient.Tests/NexoRuta.ApiClient.Tests.csproj -c Release --artifacts-path /tmp/audit/frontend/.artifacts --nologo --blame-hang-timeout 2m",
+  "source": "ephemeral copy preserves test-output source ancestry",
+  "exit": 0,
+  "seconds": 122.79,
+  "tail": [
+    "/tmp/audit/frontend/tests/NexoRuta.ApiClient.Tests/SelectorDestinoLifecycleTests.cs(106,61): warning BL0005: Component parameter 'ParaAlta' should not be set outside of its component. [/tmp/audit/frontend/tests/NexoRuta.ApiClient.Tests/NexoRuta.ApiClient.Tests.csproj]",
+    "/tmp/audit/frontend/tests/NexoRuta.ApiClient.Tests/SelectorDestinoLifecycleTests.cs(106,78): warning BL0005: Component parameter 'ApiToken' should not be set outside of its component. [/tmp/audit/frontend/tests/NexoRuta.ApiClient.Tests/NexoRuta.ApiClient.Tests.csproj]",
+    "/tmp/audit/frontend/tests/NexoRuta.ApiClient.Tests/SelectorDestinoLifecycleTests.cs(109,9): warning BL0005: Component parameter 'PuntoCambiado' should not be set outside of its component. [/tmp/audit/frontend/tests/NexoRuta.ApiClient.Tests/NexoRuta.ApiClient.Tests.csproj]",
+    "/tmp/audit/frontend/tests/NexoRuta.ApiClient.Tests/OperatorShipmentsPresentationTests.cs(47,9): warning xUnit2013: Do not use Assert.Equal() to check for collection size. Use Assert.Single instead. (https://xunit.net/xunit.analyzers/rules/xUnit2013) [/tmp/audit/frontend/tests/NexoRuta.ApiClient.Tests/NexoRuta.ApiClient.Tests.csproj]",
+    "  NexoRuta.ApiClient.Tests -> /tmp/audit/frontend/.artifacts/bin/NexoRuta.ApiClient.Tests/release/NexoRuta.ApiClient.Tests.dll",
+    "Test run for /tmp/audit/frontend/.artifacts/bin/NexoRuta.ApiClient.Tests/release/NexoRuta.ApiClient.Tests.dll (.NETCoreApp,Version=v10.0)",
+    "A total of 1 test files matched the specified pattern.",
+    "[xUnit.net 00:00:01.35]     NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.BaseBrowserUsesRealRazorAndIsolatedApi [SKIP]",
+    "  Skipped NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.BaseBrowserUsesRealRazorAndIsolatedApi [1 ms]",
+    "[xUnit.net 00:00:16.11]     NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.DestinationSearchSelectSaveEditAndManualFallbackInChromium [SKIP]",
+    "[xUnit.net 00:00:16.12]     NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.RoadEstimatesUseRealRazorWithIsolatedControlledData [SKIP]",
+    "  Skipped NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.DestinationSearchSelectSaveEditAndManualFallbackInChromium [1 ms]",
+    "  Skipped NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.RoadEstimatesUseRealRazorWithIsolatedControlledData [1 ms]",
+    "[xUnit.net 00:00:27.23]     NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.FleetBrowserUsesRealRazorAndIsolatedApiFixture [SKIP]",
+    "  Skipped NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.FleetBrowserUsesRealRazorAndIsolatedApiFixture [1 ms]",
+    "[xUnit.net 00:00:40.48]     NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.RoadUpdatesShowGpsManualInitialAndConflictInRealChromium [SKIP]",
+    "  Skipped NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.RoadUpdatesShowGpsManualInitialAndConflictInRealChromium [1 ms]",
+    "Data collector 'Blame' message: All tests finished running, Sequence file will not be generated.",
+    "",
+    "Passed!  - Failed:     0, Passed:   491, Skipped:     5, Total:   496, Duration: 1 m 7 s - NexoRuta.ApiClient.Tests.dll (net10.0)"
+  ]
+}

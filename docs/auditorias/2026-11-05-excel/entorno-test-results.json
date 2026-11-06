@@ -1,0 +1,68 @@
+[
+  {
+    "step": "backend-unit",
+    "command": [
+      "docker",
+      "run",
+      "<readonly checkout>",
+      "sdk:10.0",
+      "dotnet",
+      "test",
+      "backend/tests/NexoRuta.UnitTests/NexoRuta.UnitTests.csproj",
+      "-c",
+      "Release",
+      "--artifacts-path",
+      "/tmp/audit-tests",
+      "--nologo"
+    ],
+    "exit": 0,
+    "seconds": 53.77,
+    "tail": [
+      "  Restored /workspace/backend/src/NexoRuta.Worker/NexoRuta.Worker.csproj (in 7.3 sec).",
+      "  Restored /workspace/backend/tests/NexoRuta.UnitTests/NexoRuta.UnitTests.csproj (in 7.3 sec).",
+      "/workspace/backend/src/NexoRuta.Infrastructure/NexoRuta.Infrastructure.csproj : warning NU1510: PackageReference System.Security.Cryptography.Xml will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.",
+      "  NexoRuta.Domain -> /tmp/audit-tests/bin/NexoRuta.Domain/release/NexoRuta.Domain.dll",
+      "  NexoRuta.Application -> /tmp/audit-tests/bin/NexoRuta.Application/release/NexoRuta.Application.dll",
+      "  NexoRuta.Infrastructure -> /tmp/audit-tests/bin/NexoRuta.Infrastructure/release/NexoRuta.Infrastructure.dll",
+      "  NexoRuta.Worker -> /tmp/audit-tests/bin/NexoRuta.Worker/release/NexoRuta.Worker.dll",
+      "  NexoRuta.UnitTests -> /tmp/audit-tests/bin/NexoRuta.UnitTests/release/NexoRuta.UnitTests.dll",
+      "Test run for /tmp/audit-tests/bin/NexoRuta.UnitTests/release/NexoRuta.UnitTests.dll (.NETCoreApp,Version=v10.0)",
+      "A total of 1 test files matched the specified pattern.",
+      "",
+      "Passed!  - Failed:     0, Passed:   336, Skipped:     0, Total:   336, Duration: 2 s - NexoRuta.UnitTests.dll (net10.0)"
+    ]
+  },
+  {
+    "step": "frontend-tests",
+    "command": [
+      "docker",
+      "run",
+      "<readonly checkout>",
+      "sdk:10.0",
+      "dotnet",
+      "test",
+      "frontend/tests/NexoRuta.ApiClient.Tests/NexoRuta.ApiClient.Tests.csproj",
+      "-c",
+      "Release",
+      "--artifacts-path",
+      "/tmp/audit-tests",
+      "--nologo"
+    ],
+    "exit": 1,
+    "seconds": 133.2,
+    "tail": [
+      "   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)",
+      "   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)",
+      "[xUnit.net 00:00:18.15]     NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.DestinationSearchSelectSaveEditAndManualFallbackInChromium [SKIP]",
+      "[xUnit.net 00:00:18.15]     NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.RoadEstimatesUseRealRazorWithIsolatedControlledData [SKIP]",
+      "  Skipped NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.DestinationSearchSelectSaveEditAndManualFallbackInChromium [1 ms]",
+      "  Skipped NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.RoadEstimatesUseRealRazorWithIsolatedControlledData [1 ms]",
+      "[xUnit.net 00:00:30.37]     NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.FleetBrowserUsesRealRazorAndIsolatedApiFixture [SKIP]",
+      "  Skipped NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.FleetBrowserUsesRealRazorAndIsolatedApiFixture [1 ms]",
+      "[xUnit.net 00:00:40.16]     NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.RoadUpdatesShowGpsManualInitialAndConflictInRealChromium [SKIP]",
+      "  Skipped NexoRuta.ApiClient.Tests.BackofficeSessionAndPagesTests.RoadUpdatesShowGpsManualInitialAndConflictInRealChromium [1 ms]",
+      "",
+      "Failed!  - Failed:     1, Passed:   490, Skipped:     5, Total:   496, Duration: 1 m 21 s - NexoRuta.ApiClient.Tests.dll (net10.0)"
+    ]
+  }
+]

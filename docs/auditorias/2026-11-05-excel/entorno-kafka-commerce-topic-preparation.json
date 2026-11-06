@@ -1,0 +1,312 @@
+{
+  "utc": "2026-11-05T18:52:42.810385+00:00",
+  "classification": "required local environment preparation; current source-declared initializer topic was absent",
+  "source": "compose.yaml kafka-init and CommerceNoticeConsumer.Topic",
+  "brokerContainer": "nexoruta-kafka",
+  "brokerImage": "confluentinc/cp-kafka:7.9.10",
+  "kafkaCliVersion": "7.9.10-ccs",
+  "topic": "nexoruta.comercios.v2",
+  "topicCreateCommand": [
+    "docker",
+    "exec",
+    "nexoruta-kafka",
+    "kafka-topics",
+    "--bootstrap-server",
+    "kafka:9092",
+    "--create",
+    "--if-not-exists",
+    "--topic",
+    "nexoruta.comercios.v2",
+    "--partitions",
+    "3",
+    "--replication-factor",
+    "1",
+    "--config",
+    "min.insync.replicas=1",
+    "--config",
+    "retention.ms=604800000"
+  ],
+  "createExit": 0,
+  "createOutput": "WARNING: Due to limitations in metric names, topics with a period ('.') or underscore ('_') could collide. To avoid issues it is best to use either, but not both.\nCreated topic nexoruta.comercios.v2.",
+  "seconds": 7.95,
+  "beforeTopics": [
+    "__consumer_offsets",
+    "nexoruta.envios.creados.v1",
+    "nexoruta.password-recovery.requested.v1"
+  ],
+  "afterTopics": [
+    "__consumer_offsets",
+    "nexoruta.comercios.v2",
+    "nexoruta.envios.creados.v1",
+    "nexoruta.password-recovery.requested.v1"
+  ],
+  "existingTopicDescriptorsUnchanged": {
+    "__consumer_offsets": true,
+    "nexoruta.envios.creados.v1": true,
+    "nexoruta.password-recovery.requested.v1": true
+  },
+  "newTopicDescription": "Topic: nexoruta.comercios.v2\tTopicId: g4Rzo0NnSfSYfbrRK6KTmA\tPartitionCount: 3\tReplicationFactor: 1\tConfigs: min.insync.replicas=1,retention.ms=604800000\n\tTopic: nexoruta.comercios.v2\tPartition: 0\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: nexoruta.comercios.v2\tPartition: 1\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: nexoruta.comercios.v2\tPartition: 2\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr:",
+  "initialSyntheticOutbox": [
+    {
+      "id": "f3360063-62ba-4a00-9e5e-575c56b84d36",
+      "type": "BultoActualizado",
+      "state": "Error",
+      "attempts": 22,
+      "error": "Kafka:Local_UnknownTopic",
+      "published": null
+    },
+    {
+      "id": "ac038763-d368-4df5-b665-58ba16e198ae",
+      "type": "BultoActualizado",
+      "state": "Error",
+      "attempts": 22,
+      "error": "Kafka:Local_UnknownTopic",
+      "published": null
+    },
+    {
+      "id": "12387404-c40a-448e-8e51-1531b489ef9e",
+      "type": "OperacionActualizada",
+      "state": "Error",
+      "attempts": 22,
+      "error": "Kafka:Local_UnknownTopic",
+      "published": null
+    }
+  ],
+  "commands": [
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "nexoruta-postgres",
+        "psql",
+        "-X",
+        "-U",
+        "nexoruta",
+        "-d",
+        "nexoruta",
+        "-tA",
+        "-c",
+        "SELECT coalesce(json_agg(json_build_object('id',\"Id\",'type',\"Tipo\",'state',\"Estado\",'attempts',\"Intentos\",'error',\"UltimoError\",'published',\"PublicadoEnUtc\")),'[]') FROM public.\"OutboxMessages\" WHERE \"Id\" IN ('f3360063-62ba-4a00-9e5e-575c56b84d36','ac038763-d368-4df5-b665-58ba16e198ae','12387404-c40a-448e-8e51-1531b489ef9e');"
+      ],
+      "exit": 0
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "nexoruta-kafka",
+        "kafka-topics",
+        "--bootstrap-server",
+        "kafka:9092",
+        "--list"
+      ],
+      "exit": 0
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "nexoruta-kafka",
+        "kafka-topics",
+        "--version"
+      ],
+      "exit": 0
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "nexoruta-kafka",
+        "kafka-topics",
+        "--bootstrap-server",
+        "kafka:9092",
+        "--describe",
+        "--topic",
+        "__consumer_offsets"
+      ],
+      "exit": 0
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "nexoruta-kafka",
+        "kafka-topics",
+        "--bootstrap-server",
+        "kafka:9092",
+        "--describe",
+        "--topic",
+        "nexoruta.envios.creados.v1"
+      ],
+      "exit": 0
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "nexoruta-kafka",
+        "kafka-topics",
+        "--bootstrap-server",
+        "kafka:9092",
+        "--describe",
+        "--topic",
+        "nexoruta.password-recovery.requested.v1"
+      ],
+      "exit": 0
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "nexoruta-kafka",
+        "kafka-topics",
+        "--bootstrap-server",
+        "kafka:9092",
+        "--create",
+        "--if-not-exists",
+        "--topic",
+        "nexoruta.comercios.v2",
+        "--partitions",
+        "3",
+        "--replication-factor",
+        "1",
+        "--config",
+        "min.insync.replicas=1",
+        "--config",
+        "retention.ms=604800000"
+      ],
+      "exit": 0
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "nexoruta-kafka",
+        "kafka-topics",
+        "--bootstrap-server",
+        "kafka:9092",
+        "--list"
+      ],
+      "exit": 0
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "nexoruta-kafka",
+        "kafka-topics",
+        "--bootstrap-server",
+        "kafka:9092",
+        "--describe",
+        "--topic",
+        "__consumer_offsets"
+      ],
+      "exit": 0
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "nexoruta-kafka",
+        "kafka-topics",
+        "--bootstrap-server",
+        "kafka:9092",
+        "--describe",
+        "--topic",
+        "nexoruta.envios.creados.v1"
+      ],
+      "exit": 0
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "nexoruta-kafka",
+        "kafka-topics",
+        "--bootstrap-server",
+        "kafka:9092",
+        "--describe",
+        "--topic",
+        "nexoruta.password-recovery.requested.v1"
+      ],
+      "exit": 0
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "nexoruta-kafka",
+        "kafka-topics",
+        "--bootstrap-server",
+        "kafka:9092",
+        "--describe",
+        "--topic",
+        "nexoruta.comercios.v2"
+      ],
+      "exit": 0
+    }
+  ],
+  "afterPublish": {
+    "observedUtc": "2026-11-05T18:53:22.500791+00:00",
+    "outbox": [
+      {
+        "id": "f3360063-62ba-4a00-9e5e-575c56b84d36",
+        "type": "BultoActualizado",
+        "state": "Publicado",
+        "attempts": 23,
+        "error": null,
+        "published": "2026-11-05T18:52:55.486777+00:00"
+      },
+      {
+        "id": "ac038763-d368-4df5-b665-58ba16e198ae",
+        "type": "BultoActualizado",
+        "state": "Publicado",
+        "attempts": 23,
+        "error": null,
+        "published": "2026-11-05T18:52:57.607284+00:00"
+      },
+      {
+        "id": "12387404-c40a-448e-8e51-1531b489ef9e",
+        "type": "OperacionActualizada",
+        "state": "Publicado",
+        "attempts": 23,
+        "error": null,
+        "published": "2026-11-05T18:52:57.654152+00:00"
+      }
+    ],
+    "matchingInboxRows": 3,
+    "matchingInboxUniqueEvents": 3
+  },
+  "beforeExistingDescriptorRawRetained": false,
+  "existingDescriptorComparisonScope": "Writer-observed in-memory exact text equality; independent verifier has no retained raw historical descriptor snapshot.",
+  "existingDescriptorsAfter": {
+    "__consumer_offsets": "Topic: __consumer_offsets\tTopicId: _Gi3GMlSRDCBRWOyGydTLg\tPartitionCount: 50\tReplicationFactor: 1\tConfigs: compression.type=producer,min.insync.replicas=1,cleanup.policy=compact,segment.bytes=104857600\n\tTopic: __consumer_offsets\tPartition: 0\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 1\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 2\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 3\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 4\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 5\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 6\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 7\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 8\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 9\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 10\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 11\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 12\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 13\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 14\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 15\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 16\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 17\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 18\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 19\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 20\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 21\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 22\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 23\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 24\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 25\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 26\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 27\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 28\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 29\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 30\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 31\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 32\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 33\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 34\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 35\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 36\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 37\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 38\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 39\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 40\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 41\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 42\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 43\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 44\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 45\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 46\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 47\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 48\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 49\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr:",
+    "nexoruta.envios.creados.v1": "Topic: nexoruta.envios.creados.v1\tTopicId: WKzd5G-sTrGEg84tHzlz3g\tPartitionCount: 3\tReplicationFactor: 1\tConfigs: min.insync.replicas=1,retention.ms=604800000\n\tTopic: nexoruta.envios.creados.v1\tPartition: 0\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: nexoruta.envios.creados.v1\tPartition: 1\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: nexoruta.envios.creados.v1\tPartition: 2\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr:",
+    "nexoruta.password-recovery.requested.v1": "Topic: nexoruta.password-recovery.requested.v1\tTopicId: wfZ4wKZVSEibsBZ3A0-Vyw\tPartitionCount: 1\tReplicationFactor: 1\tConfigs: min.insync.replicas=1,retention.ms=2592000000\n\tTopic: nexoruta.password-recovery.requested.v1\tPartition: 0\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr:"
+  },
+  "afterAuthenticatedHttp": {
+    "status": 200,
+    "path": "/api/avisos-comercio",
+    "utc": "2026-11-05T18:53:40.466404+00:00",
+    "totalTenantNotices": 39,
+    "sameInitialEventOccurrences": {
+      "f3360063-62ba-4a00-9e5e-575c56b84d36": 1,
+      "ac038763-d368-4df5-b665-58ba16e198ae": 1,
+      "12387404-c40a-448e-8e51-1531b489ef9e": 1
+    },
+    "initialEmptyReadStatuses": [
+      {
+        "status": 200,
+        "count": 0,
+        "utc": "2026-11-05T18:47:10.396361+00:00"
+      },
+      {
+        "status": 200,
+        "count": 0,
+        "utc": "2026-11-05T18:48:09.006722+00:00"
+      }
+    ],
+    "source": "http-evidence.json retained actual request/response"
+  }
+}

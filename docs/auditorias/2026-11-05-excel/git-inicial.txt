@@ -1,0 +1,5 @@
+﻿ M "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm"
+?? docs/auditorias/2026-11-05-excel/
+ 71b85bf3b3e1a271543930ce0404410111eebe56 backend (release-b58db15bb8beb763326335ee9237f5318862b948-127-g71b85bf)
+ b3a61482c210eceda672c65a77211da857a9ee79 frontend (release-4a9233808fc4b8149e15655f30912af39b40eb0c-89-gb3a6148)
+ 8a71b3f9d89f2e33a9dd4d6b078b514b29b01262 mobile (mobile-v1.0.0-dev.4-2-g8a71b3f)

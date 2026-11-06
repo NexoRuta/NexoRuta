@@ -1,0 +1,11 @@
+{
+  "createdUtc": "2026-11-05T18:30:59.351436+00:00",
+  "database": "nexoruta",
+  "container": "nexoruta-postgres",
+  "volume": "nexoruta_postgres_data",
+  "tableCount": 70,
+  "dumpBytes": 9801507,
+  "dumpSha256": "6ef860484cc794cf643325b2e40de6a90b32cd0e91f94e80b757e3ef89a56e99",
+  "pgRestoreList": "exit0",
+  "keysArchiveList": "exit0"
+}
