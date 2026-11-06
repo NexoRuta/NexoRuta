@@ -1,7 +1,8 @@
 # Integración de entrega parcial hacia develop
 
 Corrección de NexoRuta/NexoRuta#73, NexoRuta/NexoRuta-Backend#48 y
-NexoRuta/NexoRuta-Mobile#22. Frontend#49 ya está integrada. No se integraron PR,
+NexoRuta/NexoRuta-Mobile#22. Frontend#49 ya está integrada; la corrección puntual
+de teclado descubierta al ejecutar sus pruebas optativas está en Frontend#50. No se integraron PR,
 no se hizo force-push ni se accedió a la VM/base real.
 
 ## Causas y correcciones
@@ -16,6 +17,13 @@ no se hizo force-push ni se accedió a la VM/base real.
   cuatro pruebas CommerceCsvImportKestrelTests aprobaron con ese companion,
   conservando conflictos/reintentos y sin aumentar esperas. También se activan
   las pruebas optativas de navegador y se selecciona su configuración Release.
+- Frontend/flota: la suite ampliada detectó un fallo intermitente de foco al
+  reabrir el panel rápidamente. Se enfoca primero el contenedor y luego el control
+  inicial; se exige foco dentro del panel antes de Escape. Las 516 pruebas de
+  Frontend aprobaron localmente sin omisiones, incluidas las cinco optativas.
+  CI de Frontend y CI integrado ahora las ejecutan. Se revisaron capturas de
+  Backoffice a 1440 y 320 px; la automatización también cubre 768/390, teclado,
+  duplicados, error y reintento. No es una validación visual Android.
 - Históricos: las fixtures bajaban desde el esquema actual, atravesando
   IndependentParcelProofDeadlines.Down. Ahora parten de bases aisladas en la
   migración pertinente. No se modificó ninguna migración ni su protección. La
@@ -49,13 +57,16 @@ los 12 fallos adicionales que el paso crítico de CI ocultaba en el shard 0:
 fixtures de migración/base y reloj de retiro/segunda visita. Son bloqueos ya
 presentes en develop; se corrigen para permitir la integración.
 
-El NU1004 se reprodujo desde un clon limpio del Mobile original. Las cuatro
+El NU1004 se reprodujo desde un clon limpio del Mobile original. El lock Core
+de develop 683766d6 sólo contenía net10.0; el head original agregó android-x64,
+por lo que esa contaminación sí es una regresión de Mobile#22. Las cuatro
 suites corregidas aprobaron desde otro clon, sin bin/obj y con directorios NuGet
 nuevos: Core 36, Api 63, Storage 35 y Application 101.
 
 ## Preservación e integración
 
-Los cambios de runtime se limitan al modelo explícito de mantenimiento Stage.
+Los cambios de runtime se limitan al modelo explícito de mantenimiento Stage
+y al foco del panel de flota de Backoffice.
 No se cambian recepción física, rendición, retorno/liberación de vehículo,
 resultados aceptados, rechazo histórico, resolución vinculada, motivos por
 bulto, reglas capturadas, versiones o idempotencia de los circuitos operativos.
@@ -68,7 +79,10 @@ Se conserva íntegra la versión de entrega parcial (SHA-256
 ZIP íntegro con sus 28 partes. No hubo edición binaria arbitraria. Se preservan
 los cambios posteriores de develop en documentación, infraestructura y scripts.
 
-Orden: Frontend#49 ya integrada → Backend#48 y Mobile#22 → principal#73.
+Orden: Frontend#49 ya integrada → Frontend#50, Backend#48 y Mobile#22 → principal#73.
+Las tres correcciones hijas pueden integrarse independientemente tras aprobar
+sus checks; principal#73 depende de las tres. Backend CI conserva su companion
+inmutable c7b69ba, compatible; el CI integrado verifica además el SHA de Frontend#50.
 Los gitlinks publicados exactos y sus repositorios están en
 scripts/cloud/checkpoint.json y en el árbol Git de este commit. La integración
 principal debe esperar los checks de los hijos y del conjunto. Las PR contienen

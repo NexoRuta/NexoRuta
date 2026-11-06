@@ -11,8 +11,8 @@
     {
       "path": "frontend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Frontend.git",
-      "branch": "develop",
-      "commit": "c7b69ba05bf6172df60dc3cdd9d02d38fc0ae106"
+      "branch": "codex/repair-entregaparcial",
+      "commit": "55b0c953881974b591db3bae0ca558d3e104a68f"
     },
     {
       "path": "mobile",

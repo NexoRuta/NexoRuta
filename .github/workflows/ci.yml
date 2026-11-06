@@ -216,6 +216,14 @@ jobs:
           retention-days: 14
 
   frontend:
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+      NEXORUTA_PLAYWRIGHT_MODULE: ${{ github.workspace }}/frontend/tests/browser/node_modules/playwright
+      NEXORUTA_B2_BROWSER_DIR: ${{ github.workspace }}/artifacts/browser/frontend/b2
+      NEXORUTA_B3_BROWSER_DIR: ${{ github.workspace }}/artifacts/browser/frontend/b3
+      NEXORUTA_B4_BROWSER_DIR: ${{ github.workspace }}/artifacts/browser/frontend/b4
+      NEXORUTA_B5_BROWSER_DIR: ${{ github.workspace }}/artifacts/browser/frontend/b5
+      NEXORUTA_DESTINATION_BROWSER_DIR: ${{ github.workspace }}/artifacts/browser/frontend/destination
     needs: sources
     if: fromJSON(needs.sources.outputs.plan).components.frontend.run
     runs-on: ubuntu-latest
@@ -289,6 +297,10 @@ jobs:
               raise SystemExit('Versioned OpenAPI differs from the API built from the resolved backend SHA.')
           print(f"OpenAPI snapshot matches ({len(served.get('paths', {}))} paths).")
           PY
+      - name: Install pinned tools for all frontend browser tests
+        run: |
+          npm ci --prefix frontend/tests/browser
+          frontend/tests/browser/node_modules/.bin/playwright install --with-deps chromium
       - name: Test frontend
         env:
           NEXORUTA_OPENAPI_URL: http://127.0.0.1:58080/openapi/v1.json
