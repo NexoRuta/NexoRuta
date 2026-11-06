@@ -69,8 +69,10 @@ nuevos: Core 36, Api 63, Storage 35 y Application 101.
 
 ## Preservación e integración
 
-Los cambios de runtime se limitan al modelo explícito de mantenimiento Stage
-y al foco del panel de flota de Backoffice.
+Los cambios propios de runtime se limitan al modelo explícito de mantenimiento Stage
+y al foco del panel de flota de Backoffice. Se incorporan además, sin sobrescribirlos,
+los commits e61c60c/aeeab68 vigentes de develop sobre actores demo; su seeder se
+conserva byte a byte respecto de develop. No se ejecutó contra un entorno real.
 No se cambian recepción física, rendición, retorno/liberación de vehículo,
 resultados aceptados, rechazo histórico, resolución vinculada, motivos por
 bulto, reglas capturadas, versiones o idempotencia de los circuitos operativos.

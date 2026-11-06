@@ -6,7 +6,7 @@
       "path": "backend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Backend.git",
       "branch": "fix/entregaparcial",
-      "commit": "bd407e94ea636253f89335c1b043e57cc817e6cc"
+      "commit": "96ee1c72b50a11749d1eb95b147e473350b5a081"
     },
     {
       "path": "frontend",
