@@ -1,5 +1,6 @@
 import datetime as dt
 import json
+import subprocess
 import threading
 from pathlib import Path
 import unittest
@@ -132,6 +133,28 @@ class SessionSafetyTests(unittest.TestCase):
             self.assertIn("--zones=us-central1-a", command.call_args.args)
             session.gcloud(config, "compute", "instances", "describe", session.VM_NAME)
             self.assertIn("--zone=us-central1-a", command.call_args.args)
+
+    def test_ssh_and_scp_expire_keys_but_other_gcloud_commands_do_not(self):
+        config = {"GCP_PROJECT_ID": "demo-project", "GCP_ZONE": "us-central1-a"}
+        for args, expires in ((["compute", "ssh", "demo"], True),
+                              (["compute", "scp", "local.py", "demo:/tmp/"], True),
+                              (["compute", "instances", "describe", "demo"], False)):
+            with self.subTest(args=args), patch.object(session, "command") as command:
+                session.gcloud(config, *args)
+                self.assertEqual("--ssh-key-expire-after=1h" in command.call_args.args, expires)
+
+    def test_profile_limit_is_actionable_and_transient_ssh_errors_are_preserved(self):
+        config = {"GCP_PROJECT_ID": "demo-project", "GCP_ZONE": "us-central1-a"}
+        for operation in ("ssh", "scp"):
+            error = subprocess.CalledProcessError(1, "gcloud", stderr="Login profile size exceeds 32 KiB")
+            with self.subTest(operation=operation), patch.object(session, "command", side_effect=error):
+                with self.assertRaisesRegex(RuntimeError, "operation=repair-ssh"):
+                    session.gcloud(config, "compute", operation, "demo", capture=True)
+        error = subprocess.CalledProcessError(255, "gcloud", stderr="Connection refused")
+        with patch.object(session, "command", side_effect=error):
+            with self.assertRaises(subprocess.CalledProcessError) as raised:
+                session.gcloud(config, "compute", "ssh", "demo", capture=True)
+            self.assertIs(raised.exception, error)
 
     def test_replacing_persistent_resources_is_rejected(self):
         plan = {"resource_changes": [{

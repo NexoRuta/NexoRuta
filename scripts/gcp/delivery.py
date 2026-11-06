@@ -505,31 +505,34 @@ def deploy(config, release):
         for attempt in range(80):
             try:
                 session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
-                    "--command=sudo test -f /srv/nexoruta/bootstrap-ready")
+                    "--command=sudo test -f /srv/nexoruta/bootstrap-ready", capture=True)
                 return
-            except subprocess.CalledProcessError:
+            except subprocess.CalledProcessError as error:
+                print(error.stderr or str(error), file=sys.stderr)
                 time.sleep(5)
         raise RuntimeError(f"Node {node['NODE_ID']} bootstrap did not finish")
 
+    def prepare_node_access(node, bootstrap_ready=False):
+        if not bootstrap_ready:
+            wait_for_bootstrap(node)
+        session.gcloud(node, "compute", "scp", str(ROOT / "scripts/gcp/vm_deploy.py"),
+            f"{node['VM_NAME']}:/tmp/nexoruta-vm-deploy.py", "--tunnel-through-iap")
+        session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
+            "--command=sudo install -D -m 0700 /tmp/nexoruta-vm-deploy.py /srv/nexoruta/deploy/vm_deploy.py")
+
     def prepare_node(node, bootstrap_ready=False):
-        def prepare_node_access():
-            if not bootstrap_ready:
-                wait_for_bootstrap(node)
-            session.gcloud(node, "compute", "scp", str(ROOT / "scripts/gcp/vm_deploy.py"),
-                f"{node['VM_NAME']}:/tmp/nexoruta-vm-deploy.py", "--tunnel-through-iap")
-            session.gcloud(node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
-                "--command=sudo install -D -m 0700 /tmp/nexoruta-vm-deploy.py /srv/nexoruta/deploy/vm_deploy.py")
-        measure("bootstrap_and_script_install", prepare_node_access, node=node["NODE_ID"])
+        measure("bootstrap_and_script_install",
+                lambda: prepare_node_access(node, bootstrap_ready), node=node["NODE_ID"])
         # This stage mutates only this VM's local configuration, containers, and
         # monitoring agent. It does not touch database schema or load-balancer state.
         return measure("prepare_node", lambda: stage(node, "prepare"), node=node["NODE_ID"])
 
-    # Let gcloud create its default SSH key before any concurrent SSH/SCP calls.
+    # Let gcloud create its default SSH key before SSH/SCP calls.
     measure("initial_ssh_bootstrap", lambda: wait_for_bootstrap(inventory[0]), node=inventory[0]["NODE_ID"])
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        pending = [executor.submit(prepare_node, node, index == 0) for index, node in enumerate(inventory)]
-        for future in pending:
-            future.result()
+    # OS Login updates the deployer's shared SSH profile; concurrent connections
+    # can fail with ABORTED: Multiple concurrent mutations.
+    for index, node in enumerate(inventory):
+        prepare_node(node, bootstrap_ready=index == 0)
     last_health_report = {}
     def health(node):
         services = ("api", "admin", "backoffice", "commerce", "tracking", "monitor")

@@ -94,7 +94,8 @@ resource "google_sql_user" "migrator" {
 }
 
 locals {
-  domain = var.base_domain != "" ? var.base_domain : "${replace(google_compute_global_address.frontend.address, ".", "-")}.sslip.io"
+  demo_actor_password = "Demo12345!2026"
+  domain              = var.base_domain != "" ? var.base_domain : "${replace(google_compute_global_address.frontend.address, ".", "-")}.sslip.io"
   endpoints = {
     for name in ["api", "admin", "backoffice", "commerce", "tracking", "mail", "monitor"] : name => "https://${name}.${local.domain}"
   }
@@ -111,7 +112,7 @@ resource "google_secret_manager_secret_version" "runtime" {
     nodes            = { a = { name = local.name, zone = var.zone }, b = { name = "${local.name}-b", zone = var.secondary_zone } }
     sql_connection   = google_sql_database_instance.demo.connection_name
     sql_database     = google_sql_database.app.name
-    passwords        = { for key, item in random_password.password : key => item.result }
+    passwords        = { for key, item in random_password.password : key => key == "admin" ? local.demo_actor_password : item.result }
     keys             = { for key, item in random_bytes.key : key => item.base64 }
     organization_ids = { for key, item in random_uuid.organization : key => item.result }
     endpoints        = local.endpoints
@@ -131,7 +132,7 @@ resource "google_secret_manager_secret_version" "load_preparer_credentials" {
   deletion_policy = "ABANDON"
   secret_data = jsonencode({
     email    = "admin@nexoruta.test"
-    password = random_password.password["admin"].result
+    password = local.demo_actor_password
   })
 }
 

@@ -3,6 +3,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import subprocess
 import tarfile
 import tempfile
 import threading
@@ -29,6 +30,28 @@ class DeliveryTests(unittest.TestCase):
                 delivery.wait_for_load_balancer_health({"NODE_ID": "a"}, 2000, lambda node: False)
         sleep.assert_called_once_with(5)
 
+    def test_bootstrap_stops_after_one_profile_limit_error_without_sleeping(self):
+        config = {"GCP_PROJECT_ID": "demo-project", "GCP_STATE_BUCKET": "demo-state",
+                  "GCP_ZONE": "southamerica-west1-a"}
+        ssh_calls = []
+
+        def command(*args, capture=False):
+            if args[:3] == ("gcloud", "storage", "cat"):
+                return json.dumps({"expires_at": 2000})
+            if args[:3] == ("gcloud", "compute", "ssh"):
+                ssh_calls.append(args)
+                self.assertTrue(capture)
+                raise subprocess.CalledProcessError(1, "gcloud", stderr="Login profile size exceeds 32 KiB")
+            raise AssertionError(args)
+
+        with (patch.object(session, "command", side_effect=command),
+              patch.object(delivery.time, "time", return_value=1000),
+              patch.object(delivery.time, "sleep") as sleep):
+            with self.assertRaisesRegex(RuntimeError, "OS Login SSH profile"):
+                delivery.deploy(config, "release-" + "a" * 32)
+        self.assertEqual(len(ssh_calls), 1)
+        sleep.assert_not_called()
+
     def test_release_extraction_rejects_path_traversal_and_links(self):
         for name, kind in (("../outside", tarfile.REGTYPE), ("link", tarfile.SYMTYPE)):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temp:
@@ -51,7 +74,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(canonical.read_bytes(), gcp_copy.read_bytes())
 
         dashboard = json.loads(canonical.read_text(encoding="utf-8"))
-        self.assertEqual(dashboard["uid"], "nexoruta-observabilidad")
+        self.assertEqual(dashboard["uid"], "nexoruta-demo")
 
         panels = []
 
@@ -87,7 +110,7 @@ class DeliveryTests(unittest.TestCase):
         compose = (root / "deploy/gcp/compose.yaml").read_text(encoding="utf-8")
         self.assertIn("storage:\n  tsdb:\n    out_of_order_time_window: 6h", prometheus)
         self.assertIn("max_elapsed_time: 5m", collector)
-        self.assertIn("processors: [memory_limiter, resource/node, batch]", collector)
+        self.assertIn("processors: [memory_limiter, filter/drop_stale_metrics, resource/node, batch]", collector)
         self.assertIn("limit_mib: 384", collector)
         self.assertIn("spike_limit_mib: 64", collector)
         self.assertIn("GOMEMLIMIT: 300MiB", compose)
@@ -225,12 +248,18 @@ class DeliveryTests(unittest.TestCase):
             {"NODE_ID": "b", "VM_NAME": "nexoruta-b"},
         ]
         events = []
+        bootstrap_attempts = 0
 
         def gcloud(node, *args, capture=False):
+            nonlocal bootstrap_attempts
             if args[:2] == ("compute", "scp"):
                 return ""
             if args[:3] == ("compute", "ssh", node["VM_NAME"]):
                 command = args[-1]
+                if "bootstrap-ready" in command and node["NODE_ID"] == "a":
+                    bootstrap_attempts += 1
+                    if bootstrap_attempts == 1:
+                        raise subprocess.CalledProcessError(255, "gcloud", stderr="Connection refused")
                 if "--stage" in command:
                     stage = command.split("--stage", 1)[1].split()[0]
                     events.append(("stage", node["NODE_ID"], stage))
@@ -277,6 +306,8 @@ class DeliveryTests(unittest.TestCase):
             ("stage", "a", "apply"), ("add-instances", "a"), ("stage", "a", "verify"),
         ])
         self.assertIn(("sleep", 35), events)
+        self.assertIn(("sleep", 5), events)
+        self.assertEqual(bootstrap_attempts, 2)
         self.assertEqual(result["endpoints"]["api"], "https://api.example.test")
 
     def test_remote_error_reports_safe_http_status(self):

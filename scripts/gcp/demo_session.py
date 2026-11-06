@@ -79,10 +79,22 @@ def command(*args, capture=False, timeout=None):
 
 def gcloud(config, *args, capture=False):
     zone_flag = "--zones" if args[:3] == ("compute", "instances", "list") else "--zone"
-    return command(
-        "gcloud", *args, f"--project={config['GCP_PROJECT_ID']}",
-        f"{zone_flag}={config['GCP_ZONE']}", "--quiet", capture=capture,
-    )
+    ssh = args[:2] in (("compute", "ssh"), ("compute", "scp"))
+    if ssh:
+        args += ("--ssh-key-expire-after=1h",)
+    try:
+        return command(
+            "gcloud", *args, f"--project={config['GCP_PROJECT_ID']}",
+            f"{zone_flag}={config['GCP_ZONE']}", "--quiet", capture=capture,
+        )
+    except subprocess.CalledProcessError as error:
+        details = (error.stdout or "") + "\n" + (error.stderr or "")
+        if ssh and "Login profile size exceeds 32 KiB" in details:
+            raise RuntimeError(
+                "OS Login SSH profile exceeds 32 KiB; remove unused keys from the authenticated "
+                "account. For the deployer, run vm-controls.yml with operation=repair-ssh."
+            ) from None
+        raise
 
 
 def node_configs(config):

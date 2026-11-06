@@ -148,6 +148,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+      NEXORUTA_PLAYWRIGHT_MODULE: ${{ github.workspace }}/backend/tests/browser/node_modules/playwright
+      NEXORUTA_RECEIPT_E2E_DIR: ${{ github.workspace }}/artifacts/browser/receipt
+      NEXORUTA_GEOCODING_FULLSTACK_DIR: ${{ github.workspace }}/artifacts/browser/geocoding
+      NEXORUTA_VEHICLES_E2E_DIR: ${{ github.workspace }}/artifacts/browser/vehicles
+      NEXORUTA_SESSION_E2E_DIR: ${{ github.workspace }}/artifacts/browser/session
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -179,7 +184,11 @@ jobs:
           dotnet restore frontend/NexoRuta.sln --locked-mode
           dotnet build frontend/NexoRuta.sln -c Release --no-restore
       - name: Install pinned Chromium for browser integration
-        run: npx --yes --package=playwright@1.62.1 playwright install --with-deps chromium
+        run: |
+          npm ci --prefix backend/tests/browser
+          backend/tests/browser/node_modules/.bin/playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
       - name: Verify the critical operational decision flow first
         if: matrix.shard == 0
         env:
@@ -367,10 +376,15 @@ jobs:
           java-version: '21'
       - name: Install pinned MAUI Android workload
         run: dotnet workload install maui-android --skip-manifest-update
+      - name: Verify portable restore before Android
+        run: |
+          for layer in Core Api Storage Application; do
+            dotnet restore "mobile/tests/NexoRuta.Mobile.$layer.Tests" --locked-mode
+          done
       - name: Restore Android
-        run: dotnet restore mobile/src/NexoRuta.Mobile/NexoRuta.Mobile.csproj --locked-mode -p:TargetFramework=net10.0-android -p:RuntimeIdentifier=android-arm64 -p:NuGetLockFilePath=packages.android.lock.json
+        run: dotnet restore mobile/src/NexoRuta.Mobile/NexoRuta.Mobile.csproj --locked-mode -p:RuntimeIdentifier=android-arm64
       - name: Install Android dependencies
-        run: dotnet build mobile/src/NexoRuta.Mobile/NexoRuta.Mobile.csproj -t:InstallAndroidDependencies -f net10.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -p:JavaSdkDirectory="$JAVA_HOME" -p:AcceptAndroidSdkLicenses=true
+        run: dotnet build mobile/src/NexoRuta.Mobile/NexoRuta.Mobile.csproj -t:InstallAndroidDependencies -f net10.0-android -p:RuntimeIdentifier=android-arm64 -p:AndroidSdkDirectory="$ANDROID_HOME" -p:JavaSdkDirectory="$JAVA_HOME" -p:AcceptAndroidSdkLicenses=true
       - name: Build verification APK
         run: |
           r8_args=()
@@ -379,6 +393,14 @@ jobs:
           fi
           dotnet build mobile/src/NexoRuta.Mobile/NexoRuta.Mobile.csproj --configuration Release --framework net10.0-android \
             -p:RuntimeIdentifier=android-arm64 -p:AndroidPackageFormats=apk "${r8_args[@]}" --no-restore
+      - name: Verify emulator x64 restore
+        run: dotnet restore mobile/src/NexoRuta.Mobile/NexoRuta.Mobile.csproj --locked-mode --force -p:RuntimeIdentifier=android-x64
+      - name: Verify portable restore after Android
+        run: |
+          for layer in Core Api Storage Application; do
+            dotnet restore "mobile/tests/NexoRuta.Mobile.$layer.Tests" --locked-mode --force
+          done
+          git -C mobile diff --exit-code -- '**/packages*.lock.json'
       - name: Checksum APK
         run: sha256sum mobile/src/NexoRuta.Mobile/bin/Release/net10.0-android/android-arm64/*-Signed.apk > mobile/SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

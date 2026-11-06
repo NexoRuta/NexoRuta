@@ -1,0 +1,2302 @@
+{
+  "description": "Guía ejecutable por persona o agente. Especificación de recorrido; no implementa un runner Android/Playwright.",
+  "prepared_on": "2026-11-05",
+  "timezone": "America/Montevideo",
+  "sources": [
+    "docs/alcance/Laboratorio__NET_2026.pdf",
+    "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm",
+    "docs/alcance/Entregas/Entrega-10-4-2026-Grupo-4.pdf",
+    "docs/alcance/ADR-MT-001-PostgreSQL-RLS.md"
+  ],
+  "source_inventory": {
+    "root": "5f79e1fbd16fb90b177dae1ac23188741ff0787",
+    "backend": "09538d989399b511473ad5af063754ea76d554a6",
+    "frontend": "d328e98c27db7c5cef018ab3492c54fc563eed49",
+    "mobile": "683766d6d8cd6c1bd9ce45bb12f6581ddb19b98c",
+    "note": "SHAs fijados en el root develop desplegado en release-c5904be94e0e41f6b5ff20fc21dd1bb4 (Actions run 42104311807); no representan una ejecucion E2E aprobada."
+  },
+  "inputs": {
+    "run_id": "Alfanumérico nuevo de hasta24 caracteres",
+    "date": "Hoy del operador America/Montevideo",
+    "urls": [
+      "api",
+      "backoffice",
+      "commerce",
+      "tracking",
+      "admin",
+      "mail",
+      "monitor"
+    ],
+    "credentials": "Referencias privadas por actor, nunca contraseñas/token en Git",
+    "android": "Serial explícito; paquete uy.nexoruta.repartidor; SHA/target APK",
+    "ids": "UUID reales de actores, zona, publicaciones, recursos, envíos, rutas y jornadas"
+  },
+  "policy": {
+    "mapbox_permanent": false,
+    "real_geoapify_calls": false,
+    "provider_mode": "controlado",
+    "physical_simulation": "En fixture o tenant remoto exclusivo del run_id, registrar simulación de demo con datos sintéticos; nunca constatación de objetos/personas reales. Sobre datos operativos existentes, solo persona.",
+    "results": [
+      "pendiente",
+      "aprobado",
+      "fallido",
+      "bloqueado",
+      "parcial",
+      "no_seleccionado"
+    ],
+    "success": "Todas las assertions con evidencia. Reportar circuito principal separado de cobertura total; brecha nunca equivale a éxito.",
+    "retry": "Sondear lecturas; mutaciones idempotentes conservan ID y payload. Reconciliar POST de resultado incierto antes de repetir.",
+    "cleanup": "Restaurar red y conservar datos/evidencias. No borrar almacenamiento, pendientes, bases o volúmenes."
+  },
+  "tracks": {
+    "preparacion": "Antes de reunión; mostrar configuración brevemente",
+    "principal": "Web→depósito→ruta→Android offline→web",
+    "extension": "Datos/recursos separados del recorrido principal",
+    "tecnico": "Evidencia de suites/infra por SHA; no equivale a validación nativa",
+    "brecha": "Constatar alcance faltante sin inventar pantallas"
+  },
+  "steps": [
+    {
+      "id": "PRE-01",
+      "title": "Inventario y conectividad",
+      "track": "preparacion",
+      "actor": "coordinador",
+      "surface": "terminal",
+      "requirements": [
+        "NFR-01",
+        "NFR-03",
+        "NFR-04",
+        "NFR-11",
+        "NFR-13",
+        "NFR-14"
+      ],
+      "depends_on": [],
+      "actions": [
+        "Completar manifest.json con URLs, fecha, serial Android y referencias de credenciales privadas.",
+        "Registrar HEAD raíz/hijos y versión/target del APK; comprobar que web y Android usan la misma API/base.",
+        "Comprobar salud y estado inicial de app; no perder trabajo pendiente al entrar con el actor de demo.",
+        "En remoto: tomar URLs/release del resumen de vm-controls; APK target GcpDemo sin CA local/gateway/adb reverse. Consultar vencimiento de sesión antes de la demo.",
+        "Crear tenant exclusivo de datos sintéticos o usar uno expresamente reservado a esta ejecución; no operar datos previos de otras pruebas. La simulación no acredita hechos físicos reales."
+      ],
+      "assertions": [
+        "/health/live y /health/ready responden200; portales muestran login/inicio correcto.",
+        "Ruta de hoy del operador; APK compatible y HTTPS válido. Sin Android: tramo nativo bloqueado."
+      ],
+      "outputs": [
+        "runtime",
+        "actors",
+        "source_inventory"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "CFG-01",
+      "title": "Usuarios, perfiles y aislamiento",
+      "track": "preparacion",
+      "actor": "adminA",
+      "surface": "backoffice:/usuarios; /roles; admin:/operadores; /comercios",
+      "requirements": [
+        "CU-01",
+        "NFR-03",
+        "NFR-05"
+      ],
+      "depends_on": [
+        "PRE-01"
+      ],
+      "actions": [
+        "Crear operadores A/B y comercios C1/C2 por autogestión o Admin con el actor correcto.",
+        "Crear A1/A2 con envios.consultar+envios.gestionar, R1/R2 con reparto.ejecutar y perfil, y usuario de solo consulta.",
+        "Con solo consulta acceder directamente a /deposito; B/C2 intentan consultar una referencia NUEVA A/C1."
+      ],
+      "assertions": [
+        "La API rechaza falta de permiso; B/C2 no leen ni modifican filas ajenas.",
+        "El comercio elige operador por envío; autogestión no acredita ABM de comercios desde operador."
+      ],
+      "outputs": [
+        "operator_a",
+        "operator_b",
+        "commerce_c1",
+        "commerce_c2",
+        "dispatcher_a1",
+        "dispatcher_a2",
+        "driver_r1",
+        "driver_r2"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "CFG-02",
+      "title": "Cobertura y franjas",
+      "track": "preparacion",
+      "actor": "adminA",
+      "surface": "backoffice:/zonas",
+      "requirements": [
+        "CU-02",
+        "NFR-05",
+        "NFR-06"
+      ],
+      "depends_on": [
+        "CFG-01"
+      ],
+      "actions": [
+        "Crear zona A sobre departamento oficial UY-MO; franjas de demo diarias00:00–23:59 America/Montevideo; B distinto.",
+        "Guardar/reabrir y confirmar interior -34.9,-56.2 y exterior Rivera -30.905,-55.55.",
+        "Generar datos nuevos con scripts/demo/workflow.py preparar usando IDs reales de A/zona A."
+      ],
+      "assertions": [
+        "Geometría, horarios y versión persisten y están aislados.",
+        "Los archivos son declaraciones sintéticas; no registran hechos físicos."
+      ],
+      "outputs": [
+        "zone_a",
+        "fixtures"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "CFG-03",
+      "title": "Tarifa con oráculo independiente",
+      "track": "preparacion",
+      "actor": "adminA",
+      "surface": "backoffice:/tarifas; /tarifas/borrador; /tarifas/simular",
+      "requirements": [
+        "CU-03",
+        "NFR-06"
+      ],
+      "depends_on": [
+        "CFG-02"
+      ],
+      "actions": [
+        "Publicar v1 UYU: Estandar base100, kg10, m³1000, recargo fijo5, bonificación fija2; Urgente base150 y resto igual.",
+        "Simular dos bultos500g y20×10×5cm cada uno; guardar UUID/número de publicación. B tiene precio distinto."
+      ],
+      "assertions": [
+        "MULTI:1kg,0.002m³;100+10+2+5−2=115 UYU; Urgente165.",
+        "Un bulto:0.5kg,0.001m³;109 UYU. Desglose coincide."
+      ],
+      "outputs": [
+        "tariff_v1"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "CFG-04",
+      "title": "Reglas operativas",
+      "track": "preparacion",
+      "actor": "adminA",
+      "surface": "backoffice:/reglas-operativas; /configuracion-reparto",
+      "requirements": [
+        "CU-04",
+        "NFR-06",
+        "NFR-11"
+      ],
+      "depends_on": [
+        "CFG-02"
+      ],
+      "actions": [
+        "Publicar dos intentos, intervalo1minuto, prueba nombre+foto, motivo Ausente y política de devolución/plazos por modalidad.",
+        "Configurar reparto America/Montevideo, máximo3 paradas, bloqueo de diferencias de carga; indicar si intento exige foto.",
+        "Reabrir publicación y guardar versión. B usa reglas distintas."
+      ],
+      "assertions": [
+        "Reglas/motivos/pruebas versionados se capturan por envío y no cambian retroactivamente."
+      ],
+      "outputs": [
+        "rules_v1"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "CFG-05",
+      "title": "Identidad visual",
+      "track": "preparacion",
+      "actor": "adminA",
+      "surface": "backoffice:/identidad-visual",
+      "requirements": [
+        "CU-05",
+        "NFR-02",
+        "NFR-05"
+      ],
+      "depends_on": [
+        "CFG-01"
+      ],
+      "actions": [
+        "Guardar marca Demo A, logo de prueba, colores accesibles y contacto sintético; B diferente.",
+        "Reabrir y comprobar Commerce al seleccionar A; Tracking se comprueba en WEB-04.",
+        "Probar advertencia de contraste y descartar cambio inválido."
+      ],
+      "assertions": [
+        "Marca persistida y aislada; la previsualización sola no acredita consumidores.",
+        "Correo de código se revisa en EXT-04; avisos de estado siguen ausentes."
+      ],
+      "outputs": [
+        "branding_a"
+      ],
+      "availability": "parcial",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "CFG-06",
+      "title": "Flota, base y disponibilidad",
+      "track": "preparacion",
+      "actor": "adminA",
+      "surface": "backoffice:/repartidores; /vehiculos; /flota; /configuracion-reparto",
+      "requirements": [
+        "CU-06",
+        "CU-14",
+        "NFR-04"
+      ],
+      "depends_on": [
+        "CFG-01",
+        "CFG-04"
+      ],
+      "actions": [
+        "Habilitar R1/R2; crear V1/V2 con10000g y100000cm³; reabrir y comprobar precisión/unidades.",
+        "Configurar base confirmada -34.9,-56.2 y plan manual dentro de franjas.",
+        "Constatar disponibilidad inicial para recursos sintéticos de demo. El agente puede simularla solo en tenant/fixture exclusivo del run_id, identificando toda la ejecución como simulada."
+      ],
+      "assertions": [
+        "Capacidad, habilitación administrativa y disponibilidad física son conceptos separados.",
+        "Sin base/disponibilidad no se fuerza despacho. ETA/GPS nunca liberan recursos."
+      ],
+      "outputs": [
+        "vehicle_v1",
+        "vehicle_v2",
+        "base_a"
+      ],
+      "availability": "parcial",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "WEB-01",
+      "title": "Alta multibulto y precio",
+      "track": "principal",
+      "actor": "commerceC1",
+      "surface": "commerce:/envios/crear",
+      "requirements": [
+        "CU-07",
+        "CU-08",
+        "CU-09",
+        "AP-03",
+        "NFR-02"
+      ],
+      "depends_on": [
+        "CFG-03",
+        "CFG-04",
+        "CFG-05"
+      ],
+      "actions": [
+        "Crear MULTI con los datos individual.json, A y Estandar; seleccionar destino controlado -34.9,-56.2.",
+        "Seleccionar→ajustar→confirmar punto, guardar y reabrir destino. Automatización bloquea proveedores reales; permanent=false.",
+        "Agregar dos bultos, cotizar115 UYU, guardar y capturar IDs/UUID/versiones desde respuesta/listado."
+      ],
+      "assertions": [
+        "Un envío Admitido, dos bultos distintos,115 UYU calculado por servidor.",
+        "Texto/coordenadas/publicación persisten. A ve mismo ID; B/C2 no acceden."
+      ],
+      "outputs": [
+        "shipment_multi",
+        "parcel_multi_1",
+        "parcel_multi_2"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "WEB-02",
+      "title": "CSV idempotente y atómico",
+      "track": "principal",
+      "actor": "commerceC1",
+      "surface": "commerce:/envios/importar",
+      "requirements": [
+        "CU-07",
+        "CU-08",
+        "CU-09"
+      ],
+      "depends_on": [
+        "WEB-01"
+      ],
+      "actions": [
+        "Importar01-alta-v2.csv con A y VersionFormato=2: INTENTO/RETORNO.",
+        "Reimportar completo y02-reimportacion-parcial-v2.csv.",
+        "Importar03-lote-invalido-atomico-v2.csv y buscar ambas referencias nuevas. Probar04-sin-cobertura-v2.csv."
+      ],
+      "assertions": [
+        "Primer lote:2 envíos/2 bultos de109 UYU; reimportación completa/parcial no duplica.",
+        "Peso−1 revierte todo el lote, incluida fila ATOMICO nueva. Rivera rechaza sin alta/cargo parcial."
+      ],
+      "outputs": [
+        "shipment_attempt",
+        "shipment_return"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "WEB-03",
+      "title": "Alta API de comercio",
+      "track": "extension",
+      "actor": "commerceC1",
+      "surface": "api:POST /api/envios",
+      "requirements": [
+        "CU-07",
+        "NFR-03"
+      ],
+      "depends_on": [
+        "WEB-01"
+      ],
+      "actions": [
+        "Cargar api-alta.json; resolver versionTarifarioEsperada vigente, autenticar C1 y enviar POST sin agregar ComercioId.",
+        "Guardar ID de respuesta; reconciliar resultado incierto antes de repetir. Consultar mismo ID en C1/A.",
+        "Probar sin sesión y con actor operador en fixture aislada."
+      ],
+      "assertions": [
+        "201 y envío109 UYU propiedad de C1; rechazos no crean filas.",
+        "Alta API CU-07 no acredita OPT-13 (claves/sandbox público)."
+      ],
+      "outputs": [
+        "shipment_api"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "WEB-04",
+      "title": "Etiquetas y seguimiento público",
+      "track": "principal",
+      "actor": "commerceC1",
+      "surface": "commerce:/envios; tracking:/seguimiento/{token}",
+      "requirements": [
+        "CU-08",
+        "CU-25",
+        "AP-02",
+        "AP-03",
+        "NFR-08"
+      ],
+      "depends_on": [
+        "WEB-01"
+      ],
+      "actions": [
+        "Descargar PDF MULTI: dos páginas100×150mm y QR UUID-D de cada bulto.",
+        "Abrir Ver seguimiento solo si el contrato remoto permite recuperar el enlace. Sondear pendiente hasta60s.",
+        "Abrir token en contexto anónimo y otro inválido; evitar guardar tokens en informe público."
+      ],
+      "assertions": [
+        "QR de dos UUID persistidos distintos, códigos MULTI correctos.",
+        "Estado/marca sin login ni IDs internos/PII de terceros.",
+        "En GCP Production, recuperación del enlace exige política exclusiva Development: esta rama está bloqueada salvo enlace obtenido por un mecanismo legítimo ya disponible. No cambiar el entorno para sortearla."
+      ],
+      "outputs": [
+        "labels_multi",
+        "tracking_multi"
+      ],
+      "availability": "parcial",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "DEP-01",
+      "title": "Recibir cada bulto",
+      "track": "principal",
+      "actor": "dispatcherA1",
+      "surface": "backoffice:/deposito/recepcion",
+      "requirements": [
+        "CU-10",
+        "CU-11",
+        "CU-12"
+      ],
+      "depends_on": [
+        "WEB-02",
+        "CFG-06"
+      ],
+      "actions": [
+        "Consultar QR MULTI sin escribir; cotejar primer bulto500g,20×10×5cm y confirmar recepción conforme.",
+        "Antes del segundo comprobar estado; cotejar segundo y bultos INTENTO/RETORNO.",
+        "Repetir recepción conservando comando/payload y verificar historial."
+      ],
+      "assertions": [
+        "MULTI sigue Admitido hasta todos los bultos conformes; luego EnDeposito.",
+        "Custodia Deposito; cotejos inmutables con actor y medidas; no se duplica recepción."
+      ],
+      "outputs": [
+        "received_core"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "DEP-02",
+      "title": "Discrepancia de recepción",
+      "track": "extension",
+      "actor": "dispatcherA1",
+      "surface": "backoffice:/deposito/recepcion",
+      "requirements": [
+        "CU-10",
+        "AP-01"
+      ],
+      "depends_on": [
+        "CFG-06"
+      ],
+      "actions": [
+        "Admitir DISCREPANCIA auxiliar de05-extensiones-v2.csv.",
+        "Cotejar medida distinta, Conforme=false y observaciones; reabrir historia.",
+        "Intentar planificar sin inventar igualdad ni ajustar tarifa."
+      ],
+      "assertions": [
+        "Admitido con discrepancia pendiente y custodia Deposito; declarado/observado separados.",
+        "D-P02: la resolución operativa requiere decisión humana; no usar este envío en ruta principal."
+      ],
+      "outputs": [
+        "shipment_discrepancy"
+      ],
+      "availability": "parcial",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "RUT-01",
+      "title": "Restricciones de carga y calendario",
+      "track": "principal",
+      "actor": "dispatcherA1",
+      "surface": "backoffice:/rutas/planificar",
+      "requirements": [
+        "CU-14",
+        "NFR-04"
+      ],
+      "depends_on": [
+        "DEP-01"
+      ],
+      "actions": [
+        "Con MULTI recibido(1000g/2000cm³), intentar V-peso999g/100000cm³ y V-volumen10000g/1999cm³, ambos auxiliares libres: rechazar peso y volumen sin asignación.",
+        "Para máximo3 paradas, crear por WEB-03 y recibir API auxiliar; intentar MULTI+INTENTO+RETORNO+API y comprobar rechazo. Excluir API del plan principal.",
+        "Probar llegada23:58 con servicio2min: no cabe completa en la franja diaria00:00–23:59. Conservar error y volver al plan válido."
+      ],
+      "assertions": [
+        "Rechazo sin ruta ni asignación parcial; candidatos permanecen disponibles.",
+        "D-P01 pendiente: calendario histórico elegible no acredita una ventana individual prometida."
+      ],
+      "outputs": [],
+      "availability": "parcial",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "RUT-02",
+      "title": "Planificación concurrente",
+      "track": "extension",
+      "actor": "dispatcherA1+dispatcherA2",
+      "surface": "api:POST /api/rutas; backoffice:/rutas/planificar",
+      "requirements": [
+        "CU-15",
+        "NFR-04",
+        "NFR-05"
+      ],
+      "depends_on": [
+        "CFG-06"
+      ],
+      "actions": [
+        "Recibir CAPACIDAD auxiliar; preparar dos planes con mismo envío y recursos distintos libres.",
+        "Enviar mediante barrera concurrente; inspeccionar resultado y paradas activas."
+      ],
+      "assertions": [
+        "Un éxito y conflicto409; una sola parada activa para ese envío.",
+        "Conflicto debido al envío compartido; no usar un vehículo/repartidor común como falso oráculo."
+      ],
+      "outputs": [
+        "concurrency_result"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "RUT-03",
+      "title": "Plan de tres paradas",
+      "track": "principal",
+      "actor": "dispatcherA1",
+      "surface": "backoffice:/rutas/planificar; /rutas/{route_id}",
+      "requirements": [
+        "CU-13",
+        "CU-14",
+        "CU-16"
+      ],
+      "depends_on": [
+        "RUT-01"
+      ],
+      "actions": [
+        "Fecha local de hoy; R1/V1; orden MULTI→INTENTO→RETORNO.",
+        "Plan sintético: H=próximo minuto local; salida H,llegadas H+5/H+10/H+15min,servicio2min,retorno H+25min y base/margen coherentes. Todo dentro de franja y mismo día. Guardar/reabrir."
+      ],
+      "assertions": [
+        "Planificada:3 paradas,4 bultos,2000g,4000cm³; orden/plan/versiones persistidos.",
+        "No se atribuye optimización automática ni precisión vial a los tiempos manuales."
+      ],
+      "outputs": [
+        "route_main"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "RUT-04",
+      "title": "Despacho y ocupación",
+      "track": "principal",
+      "actor": "dispatcherA1",
+      "surface": "backoffice:/rutas/{route_id}; /flota",
+      "requirements": [
+        "CU-06",
+        "CU-11",
+        "CU-17"
+      ],
+      "depends_on": [
+        "RUT-03"
+      ],
+      "actions": [
+        "Despachar y reabrir; revisar ocupación R1/V1 y comportamiento ante repetición.",
+        "Consultar desde R1 y R2 en app."
+      ],
+      "assertions": [
+        "Ruta Despachada, envíos AsignadoRuta, una ocupación.",
+        "Custodia sigue Deposito; despacho no es salida. R2 no descarga ruta de R1."
+      ],
+      "outputs": [
+        "route_dispatched"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "MOV-01",
+      "title": "Descarga e inicio",
+      "track": "principal",
+      "actor": "driverR1",
+      "surface": "android:MainPage; Mi recorrido",
+      "requirements": [
+        "CU-18",
+        "CU-23",
+        "AP-08",
+        "NFR-11"
+      ],
+      "depends_on": [
+        "RUT-04"
+      ],
+      "actions": [
+        "Ingresar con CorreoIngreso/ClaveIngreso; descargar hoja de hoy; revisar orden,4 bultos,matrícula/reglas y Ver destino.",
+        "Iniciar jornada con red y esperar acuse; conceder permisos cámara/ubicación. Descarga de mapa offline es opcional."
+      ],
+      "assertions": [
+        "Hoja/reglas guardadas para abrir sin red; solo día del operador e inicio confirmado.",
+        "GPS registra hora/precisión/posición o informa dependencia. Datos sintéticos se identifican como tales."
+      ],
+      "outputs": [
+        "journey_main"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "MOV-02",
+      "title": "Escanear carga y comenzar reparto",
+      "track": "principal",
+      "actor": "driverR1",
+      "surface": "android:Mi recorrido",
+      "requirements": [
+        "CU-19",
+        "CU-11"
+      ],
+      "depends_on": [
+        "MOV-01"
+      ],
+      "actions": [
+        "Escanear extraño y solo3 de4 bultos; revisar rechazo/faltante y bloqueo de Comenzar reparto.",
+        "Completar cuarto; repetir código sin duplicar. Comenzar reparto y esperar acuse."
+      ],
+      "assertions": [
+        "Cuatro UUID asignados, sin duplicados. Ruta EnCurso/envíos EnTransito; custodia Repartidor.",
+        "Distinguir salida local pendiente de confirmación del servidor; ocupación sigue activa."
+      ],
+      "outputs": [
+        "loaded_core"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "MOV-03",
+      "title": "Corte real de red Android",
+      "track": "principal",
+      "actor": "driverR1",
+      "surface": "android:controles de red; Mi recorrido",
+      "requirements": [
+        "CU-18",
+        "CU-24",
+        "NFR-11"
+      ],
+      "depends_on": [
+        "MOV-02"
+      ],
+      "actions": [
+        "Cortar red solo al Android elegido; servidor/navegador siguen conectados.",
+        "Comprobar fallo de una consulta nueva a la API y acceso a hoja local; anotar inicio del corte."
+      ],
+      "assertions": [
+        "Android no llega a API y conserva ruta. context.setOffline de navegador no representa MAUI.",
+        "No se detiene la VM remota para simular falta de red del repartidor."
+      ],
+      "outputs": [
+        "offline_window"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "MOV-04",
+      "title": "Entrega sin conexión",
+      "track": "principal",
+      "actor": "driverR1",
+      "surface": "android:Detalle de parada MULTI",
+      "requirements": [
+        "CU-20",
+        "CU-11",
+        "CU-24"
+      ],
+      "depends_on": [
+        "MOV-03"
+      ],
+      "actions": [
+        "Completar nombre receptor Demo y Tomar foto válida; firma/documento si reglas lo exigen.",
+        "Confirmar entrega una vez; reabrir app sin limpiar datos."
+      ],
+      "assertions": [
+        "Hecho/evidencia durables con ID estable,hora,GPS. Servidor aún no muestra Entregado.",
+        "Reabrir conserva cola/foto; Release exige desbloqueo local, Debug lo omite."
+      ],
+      "outputs": [
+        "delivery_local"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "MOV-05",
+      "title": "Intentos sin conexión",
+      "track": "principal",
+      "actor": "driverR1",
+      "surface": "android:Detalle de parada INTENTO/RETORNO",
+      "requirements": [
+        "CU-21",
+        "CU-24"
+      ],
+      "depends_on": [
+        "MOV-04"
+      ],
+      "actions": [
+        "Elegir Ausente y Registrar intento en INTENTO y RETORNO; foto si política la exige.",
+        "Revisar pendientes locales y servidor sin eventos todavía."
+      ],
+      "assertions": [
+        "Motivos/evidencias/hora/posición quedan durables.",
+        "No se inventa entrega ni retorno; custodia sigue R1."
+      ],
+      "outputs": [
+        "attempts_local"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "MOV-06",
+      "title": "Sincronizar sin duplicados",
+      "track": "principal",
+      "actor": "driverR1",
+      "surface": "android:Actualizar; backoffice:/; commerce:/envios",
+      "requirements": [
+        "CU-11",
+        "CU-12",
+        "CU-20",
+        "CU-21",
+        "CU-23",
+        "CU-24",
+        "AP-03"
+      ],
+      "depends_on": [
+        "MOV-05"
+      ],
+      "actions": [
+        "Restablecer red original y Actualizar; esperar condición hasta120s conservando IDs.",
+        "Consultar acuses/pruebas y estados A/C1; repetir Actualizar y comparar contadores/versiones."
+      ],
+      "assertions": [
+        "MULTI Entregado con prueba validada; INTENTO/RETORNO NoEntregado; sin pendientes inesperados.",
+        "Mismos IDs/secuencias sin duplicar entregas,intentos/evidencias; B/C2 siguen aislados."
+      ],
+      "outputs": [
+        "synced_core"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 120,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "CIE-01",
+      "title": "Decisiones de reprogramación y devolución",
+      "track": "principal",
+      "actor": "dispatcherA1",
+      "surface": "backoffice:/deposito",
+      "requirements": [
+        "CU-11",
+        "CU-21",
+        "CU-22",
+        "AP-01",
+        "AP-04"
+      ],
+      "depends_on": [
+        "MOV-06"
+      ],
+      "actions": [
+        "Reprogramar INTENTO con versión vigente respetando intervalo/plazos; registrar fecha elegible.",
+        "Iniciar devolución RETORNO; revisar custodia. Si reprogramación aún no es elegible, mostrar rechazo y esperar la condición sin cambiar reloj."
+      ],
+      "assertions": [
+        "INTENTO Reprogramado (o rama bloqueada por intervalo explícito), RETORNO EnDevolucion; custodia R1.",
+        "No equivale a solicitud pública ni recepción; no asignar nuevo custodio antes de retorno."
+      ],
+      "outputs": [
+        "return_decisions"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "CIE-02",
+      "title": "Rendición y cierre",
+      "track": "principal",
+      "actor": "driverR1",
+      "surface": "android:Rendir bultos en depósito; Terminar jornada",
+      "requirements": [
+        "CU-22",
+        "CU-24",
+        "NFR-11"
+      ],
+      "depends_on": [
+        "CIE-01"
+      ],
+      "actions": [
+        "Declarar regreso simulado; rendir únicamente INTENTO/RETORNO, con desbloqueo si Release lo exige.",
+        "Terminar jornada; si queda pendiente usar Actualizar sin crear otro cierre.",
+        "Consultar flota antes de retorno/liberación."
+      ],
+      "assertions": [
+        "PendienteDeposito para rendidos; MULTI entregado no se rinde.",
+        "Finalizada confirmada, GPS detenido; cierre no recibe ni libera recursos."
+      ],
+      "outputs": [
+        "journey_closed"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "CIE-03",
+      "title": "Recibir retorno y liberar flota",
+      "track": "principal",
+      "actor": "dispatcherA1",
+      "surface": "backoffice:/deposito; /flota",
+      "requirements": [
+        "CU-06",
+        "CU-11",
+        "CU-22",
+        "AP-01",
+        "AP-04"
+      ],
+      "depends_on": [
+        "CIE-02"
+      ],
+      "actions": [
+        "Persona constata recepción de INTENTO/RETORNO por circuito de retorno, no primera recepción CU-10.",
+        "Constatar retorno/requisitos pendientes en /flota y liberar recursos.",
+        "Reabrir estados en A/C1 y comparar cargos históricos."
+      ],
+      "assertions": [
+        "RETORNO Devuelto; INTENTO Reprogramado con custodia Deposito y reglas vigentes para nueva asignación.",
+        "MULTI Entregado; R1/V1 disponibles solo tras constataciones. Cargo anterior se conserva."
+      ],
+      "outputs": [
+        "core_final"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "EXT-01",
+      "title": "Cambio en caliente",
+      "track": "extension",
+      "actor": "adminA",
+      "surface": "backoffice:/tarifas; /reglas-operativas; commerce:/envios/crear",
+      "requirements": [
+        "CU-03",
+        "CU-04",
+        "CU-09",
+        "NFR-06"
+      ],
+      "depends_on": [
+        "MOV-06"
+      ],
+      "actions": [
+        "Crear HISTORIA-ANTES con v1; publicar v2 base Estandar120 y firma adicional para nuevos envíos.",
+        "Crear HISTORIA-DESPUES y comparar. En otra creación cotizar antes de publicar y confirmar con publicación obsoleta."
+      ],
+      "assertions": [
+        "MULTI conserva115 UYU/reglas v1; nuevo multibulto v2 cuesta135 y exige firma.",
+        "Cotización obsoleta rechaza sin alta parcial, conservando formulario."
+      ],
+      "outputs": [
+        "version_comparison"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "EXT-02",
+      "title": "Conflicto de sincronización",
+      "track": "extension",
+      "actor": "driverR2+dispatcherA2",
+      "surface": "android; backoffice:/deposito",
+      "requirements": [
+        "CU-24",
+        "CU-11",
+        "NFR-04"
+      ],
+      "depends_on": [
+        "CFG-06"
+      ],
+      "actions": [
+        "Preparar CONFLICTO en ruta R2/V2 aparte; recibir,despachar,cargar y confirmar salida.",
+        "Android sin red registra intento Ausente. A2 cancela el envío por comando autorizado con Android aún offline.",
+        "Reconectar/Actualizar y repetir mismo sobre; registrar resolución explícita y completar retorno de bultos."
+      ],
+      "assertions": [
+        "Versión antigua produce Conflicto estable; intento no reactiva Cancelado.",
+        "Hecho/evidencia/custodia se conservan; no borrar cola ni sobrescribir versión.",
+        "EntregaFisica concurrente con cancelación tiene conciliación especial: no usarla como negativo genérico."
+      ],
+      "outputs": [
+        "sync_conflict"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "EXT-03",
+      "title": "Prueba incompleta y recuperación",
+      "track": "extension",
+      "actor": "driverR2",
+      "surface": "android:Detalle de parada PRUEBA",
+      "requirements": [
+        "CU-20",
+        "CU-11"
+      ],
+      "depends_on": [
+        "CFG-06"
+      ],
+      "actions": [
+        "Preparar PRUEBA en ruta aparte con nombre+foto; confirmar hecho físico omitiendo foto y sincronizar.",
+        "Capturar foto válida y Completar entrega antes del cierre."
+      ],
+      "assertions": [
+        "EntregaPendienteValidacion conserva hecho físico; solo con evidencia válida llega a Entregado.",
+        "PNG/JPEG truncado se prueba solo por HTTP en fixture aislada."
+      ],
+      "outputs": [
+        "proof_recovery"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "EXT-04",
+      "title": "Cancelación pública",
+      "track": "extension",
+      "actor": "recipient",
+      "surface": "tracking; buzón de prueba remoto",
+      "requirements": [
+        "CU-11",
+        "CU-25",
+        "CU-05",
+        "NFR-08"
+      ],
+      "depends_on": [
+        "WEB-04"
+      ],
+      "actions": [
+        "Usar CANCELACION independiente y correo de prueba autorizado; pedir código,ver correo con marca A y confirmar.",
+        "Repetir confirmación y probar que enlace de lectura solo no autoriza cancelar."
+      ],
+      "assertions": [
+        "Una sola cancelación; código/estado/token validados; entrega física ya realizada no se cancela.",
+        "Ese correo no acredita avisos CU-27. Sin enlace remoto legítimo, esta rama queda bloqueada."
+      ],
+      "outputs": [
+        "public_cancel"
+      ],
+      "availability": "parcial",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "EXT-05",
+      "title": "Push de reasignación",
+      "track": "extension",
+      "actor": "driverR2+dispatcherA2",
+      "surface": "android:Avisos; backoffice:/deposito",
+      "requirements": [
+        "OPT-09",
+        "NFR-11"
+      ],
+      "depends_on": [
+        "CFG-06"
+      ],
+      "actions": [
+        "Preparar envío antes de salida, instalación FID/permiso y Firebase autorizado; cerrar proceso sin force-stop Android.",
+        "A2 reasigna; observar notificación,abrir,desbloquear,consultar vigencia y confirmar."
+      ],
+      "assertions": [
+        "Registrar aceptación FCM,recepción,apertura y confirmación por separado.",
+        "Custodio original se mantiene hasta recepción; push no modifica estado por sí solo.",
+        "NoSend/transporte simulado valida contrato, no push real."
+      ],
+      "outputs": [
+        "push_result"
+      ],
+      "availability": "externo",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "TEC-01",
+      "title": "Historia y estados inmutables",
+      "track": "tecnico",
+      "actor": "agente",
+      "surface": "fixture aislada PostgreSQL/API",
+      "requirements": [
+        "CU-11",
+        "CU-12",
+        "NFR-04",
+        "NFR-15"
+      ],
+      "depends_on": [
+        "PRE-01"
+      ],
+      "actions": [
+        "Ejecutar EnvioEventsHttpTests, EnvioHistoryMigrationTests y ShipmentStatePolicySqlTests en fixtures propias.",
+        "Comparar eventos y probar UPDATE/DELETE rechazados solo en fixture."
+      ],
+      "assertions": [
+        "Actor/origen/tiempo/GPS donde aplica y append-only; transiciones ilegales rechazadas.",
+        "No hay visor general de historia en UI: se identifica evidencia técnica separada."
+      ],
+      "outputs": [
+        "history_evidence"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "TEC-02",
+      "title": "Observabilidad y caché",
+      "track": "tecnico",
+      "actor": "coordinador",
+      "surface": "monitor/Grafana; API salud",
+      "requirements": [
+        "NFR-07",
+        "NFR-08",
+        "NFR-12",
+        "NFR-13"
+      ],
+      "depends_on": [
+        "WEB-01"
+      ],
+      "actions": [
+        "Abrir panel del rango temporal de demo: latencia,errores,cola,sync,caché y trace_id sanitizado.",
+        "Repetir lecturas autorizadas de marca/tarifa publicada y observar miss/hit e invalidación al publicar en tenant de demo."
+      ],
+      "assertions": [
+        "Dos perfiles:marca TTL15min y tarifa TTL6h; sin mezcla tenants.",
+        "Métricas observadas no acreditan tablero de negocio SignalR ni webhooks ausentes."
+      ],
+      "outputs": [
+        "observability_evidence"
+      ],
+      "availability": "implementado",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "TEC-03",
+      "title": "CI,cobertura y E2E",
+      "track": "tecnico",
+      "actor": "coordinador",
+      "surface": "artefactos CI por SHA",
+      "requirements": [
+        "OPT-07",
+        "OPT-08",
+        "NFR-01",
+        "NFR-02",
+        "NFR-15"
+      ],
+      "depends_on": [
+        "PRE-01"
+      ],
+      "actions": [
+        "Abrir run y artefactos correspondientes al SHA demostrado; guardar URL/fecha/commit.",
+        "Verificar cobertura >70% separada dominio/aplicación,denominador y exclusiones; listar tests y Skip.",
+        "Reutilizar suites de automatizacion.md; Mobile Core no ejecuta Android."
+      ],
+      "assertions": [
+        "Resultados vinculados al código; flags ausentes no cuentan como casos aprobados.",
+        "workflow.json es especificación para agentes, no runner ya integrado a CI."
+      ],
+      "outputs": [
+        "ci_evidence"
+      ],
+      "availability": "externo",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "TEC-04",
+      "title": "Nube,balanceo y carga",
+      "track": "tecnico",
+      "actor": "coordinador",
+      "surface": "GCP/IaC/OPT06 por release",
+      "requirements": [
+        "NFR-13",
+        "NFR-14",
+        "OPT-06"
+      ],
+      "depends_on": [
+        "PRE-01"
+      ],
+      "actions": [
+        "Consultar manifiesto desplegado,URLs y apagado automático; develop local no cambia VMs/APK.",
+        "Mostrar evidencia dos API/continuidad; no cortar el entorno compartido durante demo.",
+        "Abrir artefacto OPT06 con SLO previos,concurrencia,sync simultánea,errores,p95,drenaje/costo.",
+        "Reconstrucción IaC solo en entorno efímero autorizado o mostrar ensayo previo."
+      ],
+      "assertions": [
+        "Release y mediciones identificadas; success de Actions exige inspeccionar escenario/SLO/resultado.",
+        "Cero tráfico o harness sintético no acredita capacidad remota. No destruir persistencia de demo."
+      ],
+      "outputs": [
+        "remote_evidence"
+      ],
+      "availability": "externo",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "GAP-01",
+      "title": "Historial y ventana públicos",
+      "track": "brecha",
+      "actor": "coordinador",
+      "surface": "SeguimientoEstadoResponse; Tracking",
+      "requirements": [
+        "CU-25",
+        "AP-07"
+      ],
+      "depends_on": [
+        "PRE-01"
+      ],
+      "actions": [
+        "Inspeccionar contrato y consumidor: solo estado/marca.",
+        "Registrar además restricción de recuperar enlace en API Production."
+      ],
+      "assertions": [
+        "Parcial por historial/ventana ausentes; enlace remoto es bloqueo adicional de acceso al recorrido."
+      ],
+      "outputs": [],
+      "availability": "brecha",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "GAP-02",
+      "title": "Reprogramación pública",
+      "track": "brecha",
+      "actor": "coordinador",
+      "surface": "Tracking; RutasController.Reprogramar",
+      "requirements": [
+        "CU-26"
+      ],
+      "depends_on": [
+        "PRE-01"
+      ],
+      "actions": [
+        "Contrastar pantalla anónima con POST /api/envios/{id}/reprogramacion protegido por envios.gestionar."
+      ],
+      "assertions": [
+        "No existe solicitud del destinatario; reprogramación operativa no acredita CU-26."
+      ],
+      "outputs": [],
+      "availability": "brecha",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "GAP-03",
+      "title": "Avisos y suscripciones",
+      "track": "brecha",
+      "actor": "coordinador",
+      "surface": "Worker/Outbox; Commerce navegación",
+      "requirements": [
+        "CU-27",
+        "CU-28",
+        "AP-05",
+        "NFR-09"
+      ],
+      "depends_on": [
+        "PRE-01"
+      ],
+      "actions": [
+        "Inventariar ausencia de mensajes de estado a destinatario y suscripción/webhooks de comercio.",
+        "Registrar pendiente escenario PDF9.3 receptor caído/recuperación."
+      ],
+      "assertions": [
+        "No implementados; correo de contraseña/cancelación no los sustituye."
+      ],
+      "outputs": [],
+      "availability": "brecha",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "GAP-04",
+      "title": "Tablero y liquidaciones",
+      "track": "brecha",
+      "actor": "coordinador",
+      "surface": "API/Worker; navegación Backoffice/Commerce",
+      "requirements": [
+        "CU-29",
+        "CU-30",
+        "AP-06",
+        "AP-09",
+        "NFR-10"
+      ],
+      "depends_on": [
+        "PRE-01"
+      ],
+      "actions": [
+        "Constatar ausencia de hub/riesgo,reportes/cuenta corriente/liquidación y cierre diario agregado."
+      ],
+      "assertions": [
+        "Bloqueados; /flota,Grafana,cargo individual y cierre móvil tienen otros alcances."
+      ],
+      "outputs": [],
+      "availability": "brecha",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "GAP-05",
+      "title": "Incidencias/devoluciones completas",
+      "track": "brecha",
+      "actor": "coordinador",
+      "surface": "backoffice:/deposito; commerce:/envios",
+      "requirements": [
+        "AP-01",
+        "AP-04"
+      ],
+      "depends_on": [
+        "PRE-01"
+      ],
+      "actions": [
+        "Distinguir decisiones operativas/incidencias de cierre y consulta C1 de gestión general de incidencias/devoluciones."
+      ],
+      "assertions": [
+        "Capacidades parciales; se muestra lo existente y se registra el resto."
+      ],
+      "outputs": [],
+      "availability": "brecha",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    },
+    {
+      "id": "GAP-06",
+      "title": "Kafka y NoSQL seleccionados",
+      "track": "brecha",
+      "actor": "coordinador",
+      "surface": "KafkaEnvioCreadoPublisher; PasswordRecoveryMongoConsumer",
+      "requirements": [
+        "OPT-03",
+        "OPT-05"
+      ],
+      "depends_on": [
+        "PRE-01"
+      ],
+      "actions": [
+        "Inventariar mensajes/consumidores/replay y API documental disponible."
+      ],
+      "assertions": [
+        "Kafka/Mongo presentes no acreditan flota multi-consumidor/replay ni historia analítica de envíos filtrada/paginada."
+      ],
+      "outputs": [],
+      "availability": "brecha",
+      "timeout_seconds": 60,
+      "preconditions": [
+        "Dependencias satisfechas con evidencia; resultados bloqueados no habilitan acciones dependientes.",
+        "Usar solo datos de run_id y sesiones separadas por actor.",
+        "Hechos físicos automatizados únicamente como simulación declarada en fixture/tenant exclusivo del run_id; hardware real se acredita por separado."
+      ],
+      "evidence": [
+        "Captura/resultado con referencia del run_id y hora UTC.",
+        "Lectura persistida/acuse HTTP sanitizado cuando exista; evidencias privadas con tokens fuera de informes."
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "CU-01",
+      "title": "Comercios y usuarios",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 4",
+      "steps": [
+        "CFG-01"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-02",
+      "title": "Zonas y franjas",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 5",
+      "steps": [
+        "CFG-02"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-03",
+      "title": "Tarifas",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 6",
+      "steps": [
+        "CFG-03",
+        "EXT-01"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-04",
+      "title": "Reglas",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 7",
+      "steps": [
+        "CFG-04",
+        "EXT-01"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-05",
+      "title": "Identidad visual",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 8",
+      "steps": [
+        "CFG-05",
+        "EXT-04"
+      ],
+      "availability": "parcial"
+    },
+    {
+      "id": "CU-06",
+      "title": "Flota",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 9",
+      "steps": [
+        "CFG-06",
+        "RUT-04",
+        "CIE-03"
+      ],
+      "availability": "parcial"
+    },
+    {
+      "id": "CU-07",
+      "title": "Alta individual/CSV/API",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 10",
+      "steps": [
+        "WEB-01",
+        "WEB-02",
+        "WEB-03"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-08",
+      "title": "Bultos",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 11",
+      "steps": [
+        "WEB-01",
+        "WEB-02",
+        "WEB-04"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-09",
+      "title": "Precio",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 12",
+      "steps": [
+        "WEB-01",
+        "WEB-02",
+        "EXT-01"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-10",
+      "title": "Recepción",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 13",
+      "steps": [
+        "DEP-01",
+        "DEP-02"
+      ],
+      "availability": "parcial"
+    },
+    {
+      "id": "CU-11",
+      "title": "Estados",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 14",
+      "steps": [
+        "DEP-01",
+        "RUT-04",
+        "MOV-02",
+        "MOV-04",
+        "MOV-06",
+        "CIE-01",
+        "CIE-03",
+        "EXT-02",
+        "EXT-03",
+        "EXT-04",
+        "TEC-01"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-12",
+      "title": "Historia",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 15",
+      "steps": [
+        "DEP-01",
+        "MOV-06",
+        "TEC-01"
+      ],
+      "availability": "parcial"
+    },
+    {
+      "id": "CU-13",
+      "title": "Rutas",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 16",
+      "steps": [
+        "RUT-03"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-14",
+      "title": "Restricciones",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 17",
+      "steps": [
+        "CFG-06",
+        "RUT-01",
+        "RUT-03"
+      ],
+      "availability": "parcial"
+    },
+    {
+      "id": "CU-15",
+      "title": "Exclusión",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 18",
+      "steps": [
+        "RUT-02"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-16",
+      "title": "Orden",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 19",
+      "steps": [
+        "RUT-03"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-17",
+      "title": "Despacho",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 20",
+      "steps": [
+        "RUT-04"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-18",
+      "title": "Descarga offline",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 21",
+      "steps": [
+        "MOV-01",
+        "MOV-03"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-19",
+      "title": "Escaneo carga",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 22",
+      "steps": [
+        "MOV-02"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-20",
+      "title": "Entrega",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 23",
+      "steps": [
+        "MOV-04",
+        "MOV-06",
+        "EXT-03"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-21",
+      "title": "Intento fallido",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 24",
+      "steps": [
+        "MOV-05",
+        "MOV-06",
+        "CIE-01"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-22",
+      "title": "Rendición/devolución",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 25",
+      "steps": [
+        "CIE-01",
+        "CIE-02",
+        "CIE-03"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-23",
+      "title": "Posición",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 26",
+      "steps": [
+        "MOV-01",
+        "MOV-06"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-24",
+      "title": "Sincronización/conflictos",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 27",
+      "steps": [
+        "MOV-03",
+        "MOV-04",
+        "MOV-05",
+        "MOV-06",
+        "CIE-02",
+        "EXT-02"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "CU-25",
+      "title": "Seguimiento",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 28",
+      "steps": [
+        "WEB-04",
+        "EXT-04",
+        "GAP-01"
+      ],
+      "availability": "parcial"
+    },
+    {
+      "id": "CU-26",
+      "title": "Reprogramación pública",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 29",
+      "steps": [
+        "GAP-02"
+      ],
+      "availability": "brecha"
+    },
+    {
+      "id": "CU-27",
+      "title": "Avisos destinatario",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 30",
+      "steps": [
+        "GAP-03"
+      ],
+      "availability": "brecha"
+    },
+    {
+      "id": "CU-28",
+      "title": "Webhooks",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 31",
+      "steps": [
+        "GAP-03"
+      ],
+      "availability": "brecha"
+    },
+    {
+      "id": "CU-29",
+      "title": "Tablero vivo",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 32",
+      "steps": [
+        "GAP-04"
+      ],
+      "availability": "brecha"
+    },
+    {
+      "id": "CU-30",
+      "title": "Reportes/liquidación",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: CU obligatorios, fila 33",
+      "steps": [
+        "GAP-04"
+      ],
+      "availability": "brecha"
+    },
+    {
+      "id": "AP-01",
+      "title": "Incidencias",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Alcance aplicaciones, fila 4",
+      "steps": [
+        "DEP-02",
+        "CIE-01",
+        "CIE-03",
+        "GAP-05"
+      ],
+      "availability": "parcial"
+    },
+    {
+      "id": "AP-02",
+      "title": "Etiquetas",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Alcance aplicaciones, fila 5",
+      "steps": [
+        "WEB-04"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "AP-03",
+      "title": "Consulta propia",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Alcance aplicaciones, fila 6",
+      "steps": [
+        "WEB-01",
+        "WEB-04",
+        "MOV-06"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "AP-04",
+      "title": "Devoluciones comercio",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Alcance aplicaciones, fila 7",
+      "steps": [
+        "CIE-01",
+        "CIE-03",
+        "GAP-05"
+      ],
+      "availability": "parcial"
+    },
+    {
+      "id": "AP-05",
+      "title": "Suscripción avisos",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Alcance aplicaciones, fila 8",
+      "steps": [
+        "GAP-03"
+      ],
+      "availability": "brecha"
+    },
+    {
+      "id": "AP-06",
+      "title": "Cuenta corriente",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Alcance aplicaciones, fila 9",
+      "steps": [
+        "GAP-04"
+      ],
+      "availability": "brecha"
+    },
+    {
+      "id": "AP-07",
+      "title": "Ventana estimada",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Alcance aplicaciones, fila 10",
+      "steps": [
+        "GAP-01"
+      ],
+      "availability": "brecha"
+    },
+    {
+      "id": "AP-08",
+      "title": "Navegación paradas",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Alcance aplicaciones, fila 11",
+      "steps": [
+        "MOV-01"
+      ],
+      "availability": "implementado_pendiente_ensayo"
+    },
+    {
+      "id": "AP-09",
+      "title": "Cierre diario",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Alcance aplicaciones, fila 12",
+      "steps": [
+        "GAP-04"
+      ],
+      "availability": "brecha"
+    },
+    {
+      "id": "NFR-01",
+      "title": "Arquitectura",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 4",
+      "steps": [
+        "PRE-01",
+        "TEC-03"
+      ],
+      "availability": "requiere_evidencia"
+    },
+    {
+      "id": "NFR-02",
+      "title": "Web",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 5",
+      "steps": [
+        "CFG-05",
+        "WEB-01",
+        "TEC-03"
+      ],
+      "availability": "requiere_evidencia"
+    },
+    {
+      "id": "NFR-03",
+      "title": "Seguridad",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 6",
+      "steps": [
+        "PRE-01",
+        "CFG-01",
+        "WEB-03"
+      ],
+      "availability": "requiere_evidencia"
+    },
+    {
+      "id": "NFR-04",
+      "title": "Persistencia",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 7",
+      "steps": [
+        "PRE-01",
+        "CFG-06",
+        "RUT-01",
+        "RUT-02",
+        "EXT-02",
+        "TEC-01"
+      ],
+      "availability": "requiere_evidencia"
+    },
+    {
+      "id": "NFR-05",
+      "title": "Multitenancy",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 8",
+      "steps": [
+        "CFG-01",
+        "CFG-02",
+        "CFG-05",
+        "RUT-02"
+      ],
+      "availability": "requiere_evidencia"
+    },
+    {
+      "id": "NFR-06",
+      "title": "Configurabilidad",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 9",
+      "steps": [
+        "CFG-02",
+        "CFG-03",
+        "CFG-04",
+        "EXT-01"
+      ],
+      "availability": "requiere_evidencia"
+    },
+    {
+      "id": "NFR-07",
+      "title": "Caché",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 10",
+      "steps": [
+        "TEC-02"
+      ],
+      "availability": "requiere_evidencia"
+    },
+    {
+      "id": "NFR-08",
+      "title": "Mensajería",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 11",
+      "steps": [
+        "WEB-04",
+        "EXT-04",
+        "TEC-02"
+      ],
+      "availability": "requiere_evidencia"
+    },
+    {
+      "id": "NFR-09",
+      "title": "Avisos comercio",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 12",
+      "steps": [
+        "GAP-03"
+      ],
+      "availability": "brecha"
+    },
+    {
+      "id": "NFR-10",
+      "title": "Tiempo real",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 13",
+      "steps": [
+        "GAP-04"
+      ],
+      "availability": "brecha"
+    },
+    {
+      "id": "NFR-11",
+      "title": "MAUI",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 14",
+      "steps": [
+        "PRE-01",
+        "CFG-04",
+        "MOV-01",
+        "MOV-03",
+        "CIE-02",
+        "EXT-05"
+      ],
+      "availability": "requiere_evidencia"
+    },
+    {
+      "id": "NFR-12",
+      "title": "Observabilidad",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 15",
+      "steps": [
+        "TEC-02"
+      ],
+      "availability": "requiere_evidencia"
+    },
+    {
+      "id": "NFR-13",
+      "title": "Escalabilidad",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 16",
+      "steps": [
+        "PRE-01",
+        "TEC-02",
+        "TEC-04"
+      ],
+      "availability": "requiere_evidencia"
+    },
+    {
+      "id": "NFR-14",
+      "title": "Nube/IaC",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 17",
+      "steps": [
+        "PRE-01",
+        "TEC-04"
+      ],
+      "availability": "requiere_evidencia"
+    },
+    {
+      "id": "NFR-15",
+      "title": "Calidad",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: No funcionales, fila 18",
+      "steps": [
+        "TEC-01",
+        "TEC-03"
+      ],
+      "availability": "requiere_evidencia"
+    },
+    {
+      "id": "OPT-01",
+      "title": "Seguimiento independiente",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 4",
+      "steps": [],
+      "availability": "no_seleccionado",
+      "selected": false
+    },
+    {
+      "id": "OPT-02",
+      "title": "gRPC",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 5",
+      "steps": [],
+      "availability": "no_seleccionado",
+      "selected": false
+    },
+    {
+      "id": "OPT-03",
+      "title": "Kafka/flota",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 6",
+      "steps": [
+        "GAP-06"
+      ],
+      "availability": "parcial",
+      "selected": true
+    },
+    {
+      "id": "OPT-04",
+      "title": "Autoescalado",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 7",
+      "steps": [],
+      "availability": "no_seleccionado",
+      "selected": false
+    },
+    {
+      "id": "OPT-05",
+      "title": "NoSQL",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 8",
+      "steps": [
+        "GAP-06"
+      ],
+      "availability": "parcial",
+      "selected": true
+    },
+    {
+      "id": "OPT-06",
+      "title": "Carga",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 9",
+      "steps": [
+        "TEC-04"
+      ],
+      "availability": "requiere_evidencia",
+      "selected": true
+    },
+    {
+      "id": "OPT-07",
+      "title": "Cobertura",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 10",
+      "steps": [
+        "TEC-03"
+      ],
+      "availability": "requiere_evidencia",
+      "selected": true
+    },
+    {
+      "id": "OPT-08",
+      "title": "E2E",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 11",
+      "steps": [
+        "TEC-03"
+      ],
+      "availability": "requiere_evidencia",
+      "selected": true
+    },
+    {
+      "id": "OPT-09",
+      "title": "Push",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 12",
+      "steps": [
+        "EXT-05"
+      ],
+      "availability": "requiere_evidencia",
+      "selected": true
+    },
+    {
+      "id": "OPT-10",
+      "title": "Geocercas",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 13",
+      "steps": [],
+      "availability": "no_seleccionado",
+      "selected": false
+    },
+    {
+      "id": "OPT-11",
+      "title": "Bluetooth",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 14",
+      "steps": [],
+      "availability": "no_seleccionado",
+      "selected": false
+    },
+    {
+      "id": "OPT-12",
+      "title": "Optimización",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 15",
+      "steps": [],
+      "availability": "no_seleccionado",
+      "selected": false
+    },
+    {
+      "id": "OPT-13",
+      "title": "API pública",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 16",
+      "steps": [],
+      "availability": "no_seleccionado",
+      "selected": false
+    },
+    {
+      "id": "OPT-14",
+      "title": "Flags",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 17",
+      "steps": [],
+      "availability": "no_seleccionado",
+      "selected": false
+    },
+    {
+      "id": "OPT-15",
+      "title": "Resiliencia",
+      "source": "docs/alcance/Calcs/Casos de Uso - Responsables.xlsm :: Opcionales, fila 18",
+      "steps": [],
+      "availability": "no_seleccionado",
+      "selected": false
+    }
+  ],
+  "environment": "Remoto GCP; navegadores Windows y app Android target GcpDemo. Sin gateway local/adb reverse."
+}

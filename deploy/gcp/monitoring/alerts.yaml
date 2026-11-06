@@ -1,6 +1,6 @@
 groups:
   - name: nexoruta-service-health
-    interval: 15s
+    interval: 30s
     rules:
       - alert: NexoRutaServiceUnavailable
         expr: |

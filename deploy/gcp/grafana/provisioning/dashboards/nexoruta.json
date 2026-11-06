@@ -1,7 +1,7 @@
 {
   "description": "Dashboard compartido local/GCP para servicios, contenedores, aplicación, infraestructura, logs y trazas.",
   "editable": false,
-  "id": 254541098643456,
+  "id": null,
   "links": [],
   "panels": [
     {
@@ -108,6 +108,63 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Cantidad estimada de peticiones HTTP recibidas por cada servicio en una ventana móvil de cinco minutos. Incluye todos los métodos, rutas y estados HTTP; suma los nodos seleccionados y contempla reinicios de los contadores. Los servicios sin métricas HTTP no generan una serie.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "lineWidth": 2
+          },
+          "noValue": "Sin datos",
+          "unit": "short",
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "id": 1030,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "round(sum by (service_name) (increase(http_server_request_duration_seconds_count{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
+          "instant": false,
+          "legendFormat": "{{service_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Peticiones HTTP por servicio · últimos 5 min",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "description": "Media de duración de las solicitudes HTTP del API, en segundos.",
       "fieldConfig": {
         "defaults": {
@@ -125,7 +182,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 12
+        "y": 18
       },
       "id": 17,
       "options": {
@@ -179,7 +236,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 12
+        "y": 18
       },
       "id": 18,
       "options": {
@@ -233,7 +290,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 12
+        "y": 18
       },
       "id": 19,
       "options": {
@@ -283,7 +340,7 @@
         "h": 6,
         "w": 6,
         "x": 0,
-        "y": 18
+        "y": 24
       },
       "id": 20,
       "options": {
@@ -335,7 +392,7 @@
         "h": 6,
         "w": 6,
         "x": 6,
-        "y": 18
+        "y": 24
       },
       "id": 21,
       "options": {
@@ -387,7 +444,7 @@
         "h": 6,
         "w": 6,
         "x": 12,
-        "y": 18
+        "y": 24
       },
       "id": 22,
       "options": {
@@ -439,7 +496,7 @@
         "h": 6,
         "w": 6,
         "x": 18,
-        "y": 18
+        "y": 24
       },
       "id": 23,
       "options": {
@@ -513,7 +570,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 24,
+        "y": 30,
         "w": 12,
         "h": 8
       },
@@ -566,7 +623,7 @@
         "h": 6,
         "w": 4,
         "x": 12,
-        "y": 24
+        "y": 30
       },
       "id": 26,
       "options": {
@@ -617,7 +674,7 @@
         "h": 6,
         "w": 4,
         "x": 16,
-        "y": 24
+        "y": 30
       },
       "id": 27,
       "options": {
@@ -664,7 +721,7 @@
         "h": 6,
         "w": 4,
         "x": 20,
-        "y": 24
+        "y": 30
       },
       "id": 28,
       "options": {
@@ -728,7 +785,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 32,
+        "y": 38,
         "w": 24,
         "h": 8
       },
@@ -771,7 +828,7 @@
       "description": "Eventos JSON de la aplicación con correlación y acceso a la traza cuando se propagó trace_id.",
       "gridPos": {
         "x": 0,
-        "y": 40,
+        "y": 46,
         "w": 24,
         "h": 14
       },
@@ -808,7 +865,7 @@
       "description": "Salida stdout/stderr de cada servicio del proyecto Compose, incluidos aplicación, base de datos, colas y observabilidad.",
       "gridPos": {
         "x": 0,
-        "y": 54,
+        "y": 60,
         "w": 24,
         "h": 12
       },
@@ -857,7 +914,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 66,
+        "y": 72,
         "w": 24,
         "h": 7
       },
@@ -903,7 +960,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 73,
+        "y": 79,
         "w": 24,
         "h": 8
       },
@@ -938,7 +995,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 81
+        "y": 87
       },
       "id": 1010,
       "panels": [
@@ -964,7 +1021,7 @@
             "h": 6,
             "w": 6,
             "x": 0,
-            "y": 82
+            "y": 88
           },
           "id": 101,
           "options": {
@@ -1018,7 +1075,7 @@
             "h": 6,
             "w": 6,
             "x": 6,
-            "y": 82
+            "y": 88
           },
           "id": 102,
           "options": {
@@ -1074,7 +1131,7 @@
             "h": 6,
             "w": 6,
             "x": 12,
-            "y": 82
+            "y": 88
           },
           "id": 103,
           "options": {
@@ -1128,7 +1185,7 @@
             "h": 6,
             "w": 6,
             "x": 18,
-            "y": 82
+            "y": 88
           },
           "id": 104,
           "options": {
@@ -1182,7 +1239,7 @@
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 88
+            "y": 94
           },
           "id": 105,
           "options": {
@@ -1222,7 +1279,7 @@
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 94,
+        "y": 100,
         "w": 24,
         "h": 1
       },
@@ -1250,7 +1307,7 @@
             "h": 4,
             "w": 12,
             "x": 0,
-            "y": 95
+            "y": 101
           },
           "id": 2,
           "options": {
@@ -1321,7 +1378,7 @@
             "h": 4,
             "w": 12,
             "x": 12,
-            "y": 95
+            "y": 101
           },
           "id": 3,
           "options": {
@@ -1384,7 +1441,7 @@
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 99
+            "y": 105
           },
           "id": 5,
           "options": {
@@ -1446,7 +1503,7 @@
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 99
+            "y": 105
           },
           "id": 6,
           "options": {
@@ -1508,7 +1565,7 @@
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 99
+            "y": 105
           },
           "id": 7,
           "options": {
@@ -1570,7 +1627,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 106
+            "y": 112
           },
           "id": 8,
           "options": {
@@ -1632,7 +1689,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 106
+            "y": 112
           },
           "id": 9,
           "options": {
@@ -1694,7 +1751,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 113
+            "y": 119
           },
           "id": 10,
           "options": {
@@ -1756,7 +1813,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 113
+            "y": 119
           },
           "id": 11,
           "options": {
@@ -1818,7 +1875,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 120
+            "y": 126
           },
           "id": 13,
           "options": {
@@ -1880,7 +1937,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 120
+            "y": 126
           },
           "id": 14,
           "options": {
@@ -1943,7 +2000,7 @@
             "h": 5,
             "w": 12,
             "x": 0,
-            "y": 127
+            "y": 133
           },
           "id": 15,
           "options": {
@@ -1999,7 +2056,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 127
+            "y": 133
           },
           "id": 25,
           "options": {
@@ -2193,7 +2250,7 @@
     "to": "now"
   },
   "timezone": "America/Montevideo",
-  "title": "NexoRuta · Observabilidad",
-  "uid": "nexoruta-observabilidad",
+  "title": "NexoRuta · infraestructura y aplicación",
+  "uid": "nexoruta-demo",
   "version": 1
 }

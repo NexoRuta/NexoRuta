@@ -394,6 +394,22 @@ La identidad humana necesita OS Admin Login, acceso IAP y permiso actAs sobre la
 cuenta runtime. El deployer de GitHub ya recibe esos permisos para ejecutar el
 despliegue por IAP sin publicar el puerto SSH.
 
+Las conexiones SSH y SCP de los scripts registran la clave del runner con una
+vigencia de una hora. Los workflows de VM y carga eliminan su propia clave en un
+paso `always()`; si el runner desaparece antes, el vencimiento permite que OS Login
+la retire automáticamente. No se guardan claves privadas SSH en GitHub Secrets.
+
+Si un despliegue informa `Login profile size exceeds 32 KiB`, ejecutar
+`vm-controls.yml` con `operation=repair-ssh` en la rama correspondiente. Esta
+operación usa WIF con la identidad del deployer, comparte la cola de operaciones
+de VM y elimina únicamente claves sin vencimiento de antiguos runners hospedados
+(`runner@runnervm...` o `runner@fv-az...`). No inicia VMs ni modifica sesiones,
+perfiles POSIX u otras claves. Después se puede reintentar `start` o `update`.
+El bootstrap falla inmediatamente ante ese límite; los errores transitorios de
+conexión conservan sus reintentos. Si el perfil está lleno por claves con otros
+comentarios, revisarlas bajo la identidad afectada antes de retirar las que no
+se utilicen; `repair-ssh` no las borra.
+
 ```powershell
 python -m unittest discover -s scripts/gcp -p 'test_*.py' -v
 tofu fmt -check -recursive infra/gcp

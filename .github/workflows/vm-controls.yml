@@ -5,11 +5,11 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: 'On main, start/update use the main channel; on develop they build and deploy the pinned develop source set. Stop powers down the demo.'
+        description: 'Start/update deploy the selected channel. Stop powers down the demo. Repair-ssh removes obsolete CI keys without operating the VMs.'
         required: true
         default: start
         type: choice
-        options: [start, update, stop]
+        options: [start, update, stop, repair-ssh]
 
 permissions:
   contents: read
@@ -96,6 +96,7 @@ jobs:
     if: >-
       always() && github.event_name == 'workflow_dispatch' &&
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
+      (inputs.operation == 'start' || inputs.operation == 'update' || inputs.operation == 'stop') &&
       (github.ref == 'refs/heads/main' || inputs.operation == 'stop' || needs.publish_develop.result == 'success')
     needs: [publish_develop]
     runs-on: ubuntu-latest
@@ -150,6 +151,14 @@ jobs:
         with:
           tofu_version_file: .opentofu-version
           tofu_wrapper: false
+      - name: Apply remote bootstrap before deploying the demo
+        if: inputs.operation == 'start' || inputs.operation == 'update'
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          BOOTSTRAP_REPOSITORY_ID: ${{ github.repository_id }}
+          BOOTSTRAP_OWNER_ID: ${{ github.repository_owner_id }}
+        run: python3 scripts/gcp/bootstrap.py
       - name: Configure integrations from Compose and GitHub Secrets
         if: inputs.operation == 'start' || inputs.operation == 'update'
         env:
@@ -164,3 +173,48 @@ jobs:
           CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
           GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: python3 scripts/gcp/demo_session.py run
+      - name: Remove this runner's OS Login SSH key
+        if: always()
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: python3 scripts/gcp/ssh_keys.py cleanup
+
+  repair_ssh:
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.operation == 'repair-ssh' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: nexoruta-demo
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          version: "590.0.0"
+      - name: Remove obsolete keys from previous hosted runners
+        run: python3 scripts/gcp/ssh_keys.py repair
+      - name: Verify that OS Login accepts an expiring key
+        run: |
+          mkdir -p "$HOME/.ssh"
+          ssh-keygen -q -t rsa -b 3072 -N "" -f "$HOME/.ssh/google_compute_engine" \
+            -C "nexoruta-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gcloud compute os-login ssh-keys add --project="$GCP_PROJECT_ID" \
+            --key-file="$HOME/.ssh/google_compute_engine.pub" --ttl=1h --quiet > /dev/null
+      - name: Remove this runner's OS Login SSH key
+        if: always()
+        run: python3 scripts/gcp/ssh_keys.py cleanup

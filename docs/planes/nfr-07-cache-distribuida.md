@@ -143,7 +143,7 @@ Semántica obligatoria:
 - Una lectura elegible registra exactamente un resultado; detalle y simulación cuentan sus accesos al mismo caso `published_tariff`. No sumar otra decisión al seleccionar una tarifa dentro del snapshot. Las relecturas de coalescencia no suman nuevos hits/misses; sí operaciones. Un `set` fallido después de un miss registra un error de operación y no modifica el resultado original. Un operador/versión inexistente detectado antes del lookup no es miss de Redis.
 - Inicializar con cero las combinaciones conocidas necesarias para consultas y alertas. No confundir falta de tráfico con falta de telemetría.
 
-Actualizar el dashboard existente, manteniendo UID `nexoruta-observabilidad`, datasources y filtros de nodo/servicio. Agregar un filtro de caso y una fila de caché con hits/s, misses/s, porcentaje de hit, errores/bypass y latencia p95. Mostrar por separado ambos casos y un total ponderado. El ratio de una ventana se calcula a partir de contadores, **no promediando ratios de procesos**.
+Actualizar el dashboard existente, manteniendo el UID estable `nexoruta-demo`, datasources y filtros de nodo/servicio. Agregar un filtro de caso y una fila de caché con hits/s, misses/s, porcentaje de hit, errores/bypass y latencia p95. Mostrar por separado ambos casos y un total ponderado. El ratio de una ventana se calcula a partir de contadores, **no promediando ratios de procesos**.
 
 Ejemplo de porcentaje por caso; adaptar `$cache` al filtro y usar `100 *` para el porcentaje:
 
