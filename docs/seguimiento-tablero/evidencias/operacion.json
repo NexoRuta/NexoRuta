@@ -1,84 +1,123 @@
 {
-  "backendProductCommit": "cd8cdcbbaf1ac86ba940c30f88b2889bb17ad83d",
-  "frontend": "da7a04dd06e14701160c567c1a2566684a6d3ae5",
-  "trx": "_6b8acee13cf3_2026-11-06_21_55_30_net10.0.trx",
-  "finishedUtc": "2026-11-06T21:57:52.2890671+00:00",
+  "source": "Final GitHub CI TRX; each downloaded archive SHA-256 checked against GitHub artifact digest",
+  "backend": {
+    "sha": "655edd3a2f2e2326e7a9d99bb2a405b81ee7b6e8",
+    "mergeSha": "a7c1de8fae4859385082a2e7065704d3dc7d4fe6",
+    "run": 42306868322,
+    "url": "https://github.com/NexoRuta/NexoRuta-Backend/actions/runs/42306868322",
+    "pullRequest": "https://github.com/NexoRuta/NexoRuta-Backend/pull/49",
+    "conclusion": "success"
+  },
+  "frontend": {
+    "sha": "7ce3e969924e1157d2eaa80b5c933bea9560f5b0",
+    "mergeSha": "06b1ca380aea0ec68dbbaafff5de9a63a24d8f6b",
+    "run": 42306859258,
+    "url": "https://github.com/NexoRuta/NexoRuta-Frontend/actions/runs/42306859258",
+    "pullRequest": "https://github.com/NexoRuta/NexoRuta-Frontend/pull/51",
+    "conclusion": "success"
+  },
   "facts": [
-    {
-      "mailpitMessageId": "TGRhsG8YyAehpG7ARi3NuE",
-      "received": 1,
-      "smtpAttempts": 2,
-      "controlledSmtpFailureRecovered": true,
-      "duplicateMessageDidNotResend": true,
-      "operatorBrandAndOpaqueLinkVerified": true
-    },
-    {
-      "topic": "test-operational-ae7ad1ae9568459eae496b18ee39e9d5",
-      "firstGroups": [
-        "board-8264e7ec50e94893b812aef91794f587",
-        "history-a98fdfa3545c4343a880972d1d9ba0e4"
-      ],
-      "replayGroups": [
-        "board-45946c0f5ffd48139faaa8deea20323a",
-        "history-0125784877274451955aa1b36d194859"
-      ],
-      "uniqueEvents": 12,
-      "materializedRows": 9,
-      "identicalReplay": true,
-      "physicalPositionNeverRewinds": true,
-      "duplicatesCountOnce": true,
-      "documentaryConsumerRecoveredIndependently": true
-    }
-  ],
-  "results": [
-    {
-      "test": "NexoRuta.IntegrationTests.Operacion.OperationalMongoIsolationTests.RealDocumentQueriesIsolateOperatorAndCommerceAndDoNotCountReplayOrExpiredDocuments",
-      "outcome": "Passed",
-      "duration": "00:00:09.1019475"
-    },
     {
       "test": "NexoRuta.IntegrationTests.Operacion.RecipientMailpitTests.PersistedNoticeUsesRealMailpitAndRecoversThroughRabbitRetryWithoutLogicalDuplicates",
       "outcome": "Passed",
-      "duration": "00:00:24.8922470"
-    },
-    {
-      "test": "NexoRuta.IntegrationTests.Operacion.OperationalSignalRTests.TwoRealKestrelApisShareTenantScopedPhotographsAndReconnectWithoutRewinding",
-      "outcome": "Passed",
-      "duration": "00:00:07.0701548"
-    },
-    {
-      "test": "NexoRuta.IntegrationTests.Operacion.OperationalBrowserTests.RealTrackingRequestsAndBackofficeUseRestrictedApiAndPreservePhysicalCustody",
-      "outcome": "Passed",
-      "duration": "00:00:19.4861760"
-    },
-    {
-      "test": "NexoRuta.IntegrationTests.Operacion.OperationalBrowserTests.AnonymousTrackingPaginatesRealParcelsAndKeepsKeyboardFocusAtMobileWidth",
-      "outcome": "Passed",
-      "duration": "00:00:04.9751104"
-    },
-    {
-      "test": "NexoRuta.IntegrationTests.Operacion.OperationalBootstrapTests.PopulatedUpgradeBuildsReplaySourcesWithoutChangingCanonicalFactsOrSendingOldNotices",
-      "outcome": "Passed",
-      "duration": "00:00:03.1648994"
-    },
-    {
-      "test": "NexoRuta.IntegrationTests.Operacion.OperationalSignalRTests.PublicContractPublishesHistoryParcelsAndNullableEstimate",
-      "outcome": "Passed",
-      "duration": "00:00:03.9429983"
+      "facts": {
+        "mailpitMessageId": "imXDd66ZLkPJDzW46svGFM",
+        "received": 1,
+        "smtpAttempts": 2,
+        "controlledSmtpFailureRecovered": true,
+        "duplicateMessageDidNotResend": true,
+        "operatorBrandAndOpaqueLinkVerified": true
+      }
     },
     {
       "test": "NexoRuta.IntegrationTests.Operacion.OperationalProjectionTests.IndependentConsumersDeduplicateLatePositionsAndReplayIntoIsolatedDestinations",
       "outcome": "Passed",
-      "duration": "00:00:29.7693905"
+      "facts": {
+        "topic": "test-operational-15fee6a6e40846a9980a32627beaa4e6",
+        "firstGroups": [
+          "board-d21720282a8c4cf190e3a48a3b4414e6",
+          "history-b191733c53574a96b78d91ac26c11508"
+        ],
+        "replayGroups": [
+          "board-3c6979e7882d4f5ea50c043786b492f1",
+          "history-ef89933655f84b05a3ffabfa742b9fa3"
+        ],
+        "uniqueEvents": 12,
+        "materializedRows": 9,
+        "identicalReplay": true,
+        "physicalPositionNeverRewinds": true,
+        "duplicatesCountOnce": true,
+        "documentaryConsumerRecoveredIndependently": true
+      }
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalSignalRTests.TwoRealKestrelApisShareTenantScopedPhotographsAndReconnectWithoutRewinding",
+      "outcome": "Passed",
+      "facts": {
+        "apiInstances": 2,
+        "failovers": 1,
+        "webSocketsWithoutNegotiation": true,
+        "reconnectOnSurvivingApi": true,
+        "tenantsIsolated": true,
+        "outboxLagDetected": true,
+        "revision": 4
+      }
     }
   ],
-  "runtime": {
-    "localKernel": "6.18.57",
-    "mongoVersion": "8.0.34",
-    "mongoDigest": "sha256:b9924c330a8bbc5800fe9c69f04a84e221eca7b28fd049a0354147d9908fa142",
-    "postgres": "18/PostGIS 3.6",
-    "kafka": "7.9.0",
-    "mailpit": "1.27.10",
-    "rabbitmq": "4-management"
-  }
+  "results": [
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalBootstrapTests.PopulatedUpgradeBuildsReplaySourcesWithoutChangingCanonicalFactsOrSendingOldNotices",
+      "outcome": "Passed",
+      "duration": "00:00:03.2650149",
+      "trx": "integration/shard-0/integration-shard-0.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.RecipientMailpitTests.PersistedNoticeUsesRealMailpitAndRecoversThroughRabbitRetryWithoutLogicalDuplicates",
+      "outcome": "Passed",
+      "duration": "00:00:14.4040536",
+      "trx": "integration/shard-0/integration-shard-0.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalProjectionTests.IndependentConsumersDeduplicateLatePositionsAndReplayIntoIsolatedDestinations",
+      "outcome": "Passed",
+      "duration": "00:00:27.2830101",
+      "trx": "integration/shard-1/integration-shard-1.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalSignalRTests.TwoRealKestrelApisShareTenantScopedPhotographsAndReconnectWithoutRewinding",
+      "outcome": "Passed",
+      "duration": "00:00:02.7674211",
+      "trx": "integration/shard-1/integration-shard-1.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalSignalRTests.PublicContractPublishesHistoryParcelsAndNullableEstimate",
+      "outcome": "Passed",
+      "duration": "00:00:02.3992896",
+      "trx": "integration/shard-1/integration-shard-1.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalMongoIsolationTests.RealDocumentQueriesIsolateOperatorAndCommerceAndDoNotCountReplayOrExpiredDocuments",
+      "outcome": "Passed",
+      "duration": "00:00:14.6495160",
+      "trx": "integration/shard-2/integration-shard-2.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalBrowserTests.RealTrackingRequestsAndBackofficeUseRestrictedApiAndPreservePhysicalCustody",
+      "outcome": "Passed",
+      "duration": "00:00:17.6855916",
+      "trx": "integration/shard-2/integration-shard-2.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalBrowserTests.AnonymousTrackingPaginatesRealParcelsAndKeepsKeyboardFocusAtMobileWidth",
+      "outcome": "Passed",
+      "duration": "00:00:05.2477576",
+      "trx": "integration/shard-2/integration-shard-2.trx"
+    }
+  ],
+  "limits": [
+    "Synthetic disposable infrastructure only",
+    "No Android native visual validation",
+    "No real VM/database, deployment or IaC execution",
+    "Root integrated CI pending explicit clarification of the no-IaC instruction"
+  ]
 }

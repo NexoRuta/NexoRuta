@@ -1,0 +1,20 @@
+{
+  "metric": "source line coverage; union across suites",
+  "threshold": "strictly greater than 70% per layer",
+  "exclusions": "No custom exclusions; collector defaults only",
+  "reports": 8,
+  "layers": {
+    "NexoRuta.Domain": {
+      "covered": 1880,
+      "total": 2038,
+      "percent": 92.24730127576055,
+      "passes": true
+    },
+    "NexoRuta.Application": {
+      "covered": 1576,
+      "total": 1673,
+      "percent": 94.20203227734609,
+      "passes": true
+    }
+  }
+}
