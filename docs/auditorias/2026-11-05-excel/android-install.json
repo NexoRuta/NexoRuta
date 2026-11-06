@@ -1,0 +1,8 @@
+{
+  "apk": "C:\\Users\\Josec\\AppData\\Local\\NexoRuta\\auditoria-excel-20261105\\android-build\\bin\\NexoRuta.Mobile\\debug_net10.0-android_android-x64\\uy.nexoruta.repartidor-Signed.apk",
+  "signerSha256": "41ff9ffbcad5c0ac6edfd2a9d6d42e9b8e801b8678da375d6012b465a67463c7",
+  "result": "Performing Incremental Install\nPerforming Streamed Install\nSuccess\n",
+  "versionName": "1.0",
+  "versionCode": 1,
+  "sourceSha": "683766d6d8cd6c1bd9ce45bb12f6581ddb19b98c"
+}

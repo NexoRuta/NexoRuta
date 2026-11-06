@@ -1,0 +1,52 @@
+[
+  {
+    "step": "architecture",
+    "command": "dotnet test tests/NexoRuta.ArchitectureTests/NexoRuta.ArchitectureTests.csproj -c Release --artifacts-path /tmp/audit/backend/.artifacts --nologo",
+    "source": "ephemeral source copy; readonly host mount",
+    "exit": 0,
+    "seconds": 60.2,
+    "tail": [
+      "/tmp/audit/backend/src/NexoRuta.Infrastructure/NexoRuta.Infrastructure.csproj : warning NU1510: PackageReference System.Security.Cryptography.Xml will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item. [/tmp/audit/backend/tests/NexoRuta.ArchitectureTests/NexoRuta.ArchitectureTests.csproj]",
+      "  Restored /tmp/audit/backend/src/NexoRuta.Application/NexoRuta.Application.csproj (in 4.58 sec).",
+      "  Restored /tmp/audit/backend/src/NexoRuta.Domain/NexoRuta.Domain.csproj (in 4.58 sec).",
+      "  Restored /tmp/audit/backend/tests/NexoRuta.ArchitectureTests/NexoRuta.ArchitectureTests.csproj (in 6.9 sec).",
+      "  Restored /tmp/audit/backend/src/NexoRuta.Api/NexoRuta.Api.csproj (in 6.91 sec).",
+      "  Restored /tmp/audit/backend/src/NexoRuta.Infrastructure/NexoRuta.Infrastructure.csproj (in 6.91 sec).",
+      "/tmp/audit/backend/src/NexoRuta.Infrastructure/NexoRuta.Infrastructure.csproj : warning NU1510: PackageReference System.Security.Cryptography.Xml will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.",
+      "  NexoRuta.Domain -> /tmp/audit/backend/.artifacts/bin/NexoRuta.Domain/release/NexoRuta.Domain.dll",
+      "  NexoRuta.Application -> /tmp/audit/backend/.artifacts/bin/NexoRuta.Application/release/NexoRuta.Application.dll",
+      "  NexoRuta.Infrastructure -> /tmp/audit/backend/.artifacts/bin/NexoRuta.Infrastructure/release/NexoRuta.Infrastructure.dll",
+      "  NexoRuta.Api -> /tmp/audit/backend/.artifacts/bin/NexoRuta.Api/release/NexoRuta.Api.dll",
+      "  NexoRuta.ArchitectureTests -> /tmp/audit/backend/.artifacts/bin/NexoRuta.ArchitectureTests/release/NexoRuta.ArchitectureTests.dll",
+      "Test run for /tmp/audit/backend/.artifacts/bin/NexoRuta.ArchitectureTests/release/NexoRuta.ArchitectureTests.dll (.NETCoreApp,Version=v10.0)",
+      "A total of 1 test files matched the specified pattern.",
+      "",
+      "Passed!  - Failed:     0, Passed:     4, Skipped:     0, Total:     4, Duration: 628 ms - NexoRuta.ArchitectureTests.dll (net10.0)"
+    ]
+  },
+  {
+    "step": "integration-bounded",
+    "command": "dotnet test tests/NexoRuta.IntegrationTests/NexoRuta.IntegrationTests.csproj -c Release --artifacts-path /tmp/audit/backend/.artifacts --nologo --filter \"FullyQualifiedName~C31_EntregaParcial|FullyQualifiedName~H1H2_SegundaVisita\" --blame-hang-timeout 2m",
+    "source": "ephemeral source copy; readonly host mount",
+    "exit": 0,
+    "seconds": 157.8,
+    "tail": [
+      "  Restored /tmp/audit/backend/src/NexoRuta.Worker/NexoRuta.Worker.csproj (in 13.34 sec).",
+      "  Restored /tmp/audit/backend/tests/NexoRuta.IntegrationTests/NexoRuta.IntegrationTests.csproj (in 13.38 sec).",
+      "/tmp/audit/backend/src/NexoRuta.Infrastructure/NexoRuta.Infrastructure.csproj : warning NU1510: PackageReference System.Security.Cryptography.Xml will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.",
+      "  NexoRuta.Domain -> /tmp/audit/backend/.artifacts/bin/NexoRuta.Domain/release/NexoRuta.Domain.dll",
+      "  NexoRuta.Application -> /tmp/audit/backend/.artifacts/bin/NexoRuta.Application/release/NexoRuta.Application.dll",
+      "  NexoRuta.Infrastructure -> /tmp/audit/backend/.artifacts/bin/NexoRuta.Infrastructure/release/NexoRuta.Infrastructure.dll",
+      "  NexoRuta.Worker -> /tmp/audit/backend/.artifacts/bin/NexoRuta.Worker/release/NexoRuta.Worker.dll",
+      "  NexoRuta.Api -> /tmp/audit/backend/.artifacts/bin/NexoRuta.Api/release/NexoRuta.Api.dll",
+      "/tmp/audit/backend/tests/NexoRuta.IntegrationTests/Reparto/OcupacionFlotaHttpTests.Transicion.cs(73,27): warning EF1003: Method 'ExecuteSqlRawAsync' inserts concatenated strings directly into the SQL, without any protection against SQL injection. Consider using 'ExecuteSqlAsync' instead, which protects against SQL injection, or make sure that the value is sanitized and suppress the warning. [/tmp/audit/backend/tests/NexoRuta.IntegrationTests/NexoRuta.IntegrationTests.csproj]",
+      "/tmp/audit/backend/tests/NexoRuta.IntegrationTests/Envios/GeocodificacionFullStackBrowserTests.cs(152,13): warning xUnit2031: Do not use a Where clause to filter before calling Assert.Single. Use the overload of Assert.Single that accepts a filtering function. (https://xunit.net/xunit.analyzers/rules/xUnit2031) [/tmp/audit/backend/tests/NexoRuta.IntegrationTests/NexoRuta.IntegrationTests.csproj]",
+      "  NexoRuta.IntegrationTests -> /tmp/audit/backend/.artifacts/bin/NexoRuta.IntegrationTests/release/NexoRuta.IntegrationTests.dll",
+      "Test run for /tmp/audit/backend/.artifacts/bin/NexoRuta.IntegrationTests/release/NexoRuta.IntegrationTests.dll (.NETCoreApp,Version=v10.0)",
+      "A total of 1 test files matched the specified pattern.",
+      "Data collector 'Blame' message: All tests finished running, Sequence file will not be generated.",
+      "",
+      "Passed!  - Failed:     0, Passed:     6, Skipped:     0, Total:     6, Duration: 1 m - NexoRuta.IntegrationTests.dll (net10.0)"
+    ]
+  }
+]

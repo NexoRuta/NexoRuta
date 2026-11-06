@@ -1,0 +1,48 @@
+{
+  "utc": "2026-11-05T18:46:38.283484+00:00",
+  "classification": "necessary environment preparation, not product fix",
+  "cause": "API mandatory Reparto:EvidenciasEncryptionKey absent; evidence stored AES-GCM in PostgreSQL, not filesystem",
+  "preRefreshEvidenceRows": 0,
+  "beforeFixEvidenceRows": 0,
+  "provisionedFirstDedicatedKey": true,
+  "keyPrivateFile": ".local/auditoria-excel-20261105/evidence-key-private.json",
+  "keyProperty": "Reparto__EvidenciasEncryptionKey",
+  "decodedKeyBytes": 32,
+  "distinctFromSeguimientoKey": true,
+  "existingSeguimientoKeyUnchanged": true,
+  "sameImageId": true,
+  "recreateCommand": [
+    "docker",
+    "compose",
+    "<unchanged effective layers + updated ignored override>",
+    "--profile",
+    "kafka",
+    "up",
+    "-d",
+    "--no-deps",
+    "--no-build",
+    "api"
+  ],
+  "exit": 0,
+  "seconds": 2.92,
+  "beforeHttp": {
+    "traceId": "99184556d994e199f8c98a40f2dbdc37",
+    "path": "/api/mobile/jornadas/01a1ad04-7dd7-7965-afe0-cf8598600800/evidencias/f2b641b8-3d2c-42ab-8a32-659afbf14e1f",
+    "status": 503
+  },
+  "retry": {
+    "path": "/api/mobile/jornadas/01a1ad04-7dd7-7965-afe0-cf8598600800/evidencias/f2b641b8-3d2c-42ab-8a32-659afbf14e1f",
+    "status": 204,
+    "sameArchivoId": true,
+    "sameRequestBody": true,
+    "source": "http-evidence.json archived requests",
+    "observedUtc": "2026-11-05T18:47:48.972830+00:00"
+  },
+  "databaseStorage": {
+    "totalEvidenceRows": 4,
+    "allNonce12": true,
+    "allTag16": true,
+    "allCiphertextNonempty": true,
+    "sameFileRowCount": 1
+  }
+}

@@ -1,0 +1,198 @@
+{
+  "utc": "2026-11-05T18:34:28.968648+00:00",
+  "http": [
+    {
+      "base": "http://127.0.0.1:5000",
+      "path": "/health/live",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:5000",
+      "path": "/health/ready",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:5000",
+      "path": "/openapi/v1.json",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:5000",
+      "path": "/api/envios",
+      "method": "GET",
+      "status": 401
+    },
+    {
+      "base": "http://127.0.0.1:5000",
+      "path": "/api/auth/login",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:5000",
+      "path": "/api/auth/login",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:5000",
+      "path": "/api/envios",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:5000",
+      "path": "/api/reparto/flota",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:5000",
+      "path": "/api/reparto/vehiculos",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:5000",
+      "path": "/api/auth/login",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:5000",
+      "path": "/api/operadores",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "base": "https://localhost:5843",
+      "path": "/health/ready",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:5101",
+      "path": "/ingresar",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:5102",
+      "path": "/ingresar",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:5103",
+      "path": "/",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:5104",
+      "path": "/ingresar",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:8025",
+      "path": "/",
+      "method": "GET",
+      "status": 200
+    }
+  ],
+  "auth": [
+    {
+      "accountKey": "NEXORUTA_ADMIN_MAIL",
+      "status": 200
+    },
+    {
+      "accountKey": "NEXORUTA_OPERADOR_MAIL",
+      "status": 200
+    },
+    {
+      "accountKey": "NEXORUTA_COMERCIO_MAIL",
+      "status": 200
+    }
+  ],
+  "blockers": [],
+  "database": {
+    "serverVersion": "PostgreSQL 18.6 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+    "database": "nexoruta",
+    "roles": [
+      {
+        "name": "nexoruta_api_runtime",
+        "super": false,
+        "bypassRls": false,
+        "createDb": false,
+        "createRole": false
+      },
+      {
+        "name": "nexoruta_worker_runtime",
+        "super": false,
+        "bypassRls": false,
+        "createDb": false,
+        "createRole": false
+      },
+      {
+        "name": "nexoruta_bootstrap_runtime",
+        "super": false,
+        "bypassRls": false,
+        "createDb": false,
+        "createRole": false
+      }
+    ],
+    "forcedRlsTables": 60,
+    "runtimeConnections": [
+      {
+        "user": "nexoruta_worker_runtime",
+        "application": "",
+        "state": "idle"
+      },
+      {
+        "user": "nexoruta_worker_runtime",
+        "application": "",
+        "state": "idle"
+      },
+      {
+        "user": "nexoruta_worker_runtime",
+        "application": "",
+        "state": "idle"
+      },
+      {
+        "user": "nexoruta_worker_runtime",
+        "application": "",
+        "state": "idle"
+      },
+      {
+        "user": "nexoruta_worker_runtime",
+        "application": "",
+        "state": "idle"
+      },
+      {
+        "user": "nexoruta_worker_runtime",
+        "application": "",
+        "state": "idle"
+      },
+      {
+        "user": "nexoruta_api_runtime",
+        "application": "",
+        "state": "idle"
+      }
+    ]
+  },
+  "safety": {
+    "Geocoding__MapboxTemporal__Habilitado": "true",
+    "Geocoding__Geoapify__PermitirLlamadasReales": "false",
+    "RoutingGeoapify__PermitirLlamadasReales": "false",
+    "DatabaseInitialization__ApplyMigrations": "false",
+    "DatabaseInitialization__SeedData": "false",
+    "PlatformInitialization__Enabled": "false",
+    "smtpTarget": "mailpit:1025",
+    "gatewayCertificateValidated": true
+  },
+  "passed": true
+}

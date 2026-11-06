@@ -1,0 +1,45 @@
+[
+  {
+    "step": "migrations",
+    "arguments": [
+      "--profile",
+      "rls-admin",
+      "run",
+      "--rm",
+      "--no-deps",
+      "rls-migrator"
+    ],
+    "exit": 0,
+    "seconds": 8.26
+  },
+  {
+    "step": "department-catalog-import",
+    "arguments": [
+      "--profile",
+      "rls-admin",
+      "run",
+      "--rm",
+      "--no-deps",
+      "--entrypoint",
+      "dotnet",
+      "rls-migrator",
+      "NexoRuta.Api.dll",
+      "department-catalog-import"
+    ],
+    "exit": 0,
+    "seconds": 7.72
+  },
+  {
+    "step": "restricted-role-provision",
+    "arguments": [
+      "--profile",
+      "rls-admin",
+      "run",
+      "--rm",
+      "--no-deps",
+      "rls-role-provisioner"
+    ],
+    "exit": 0,
+    "seconds": 2.22
+  }
+]

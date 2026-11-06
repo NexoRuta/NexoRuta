@@ -1,0 +1,941 @@
+{
+  "utc": "2026-11-05T18:47:03.673998+00:00",
+  "scratch": "C:\\Users\\Josec\\AppData\\Local\\Temp\\nexoruta-preservation-a111794078d941f79507877ac1cdd1ad",
+  "scope": "read-only independent preservation; no restoration, migration or UI actions",
+  "backup": {
+    "bytes": 9801507,
+    "sha256": "6ef860484cc794cf643325b2e40de6a90b32cd0e91f94e80b757e3ef89a56e99",
+    "listExit": 0,
+    "decodeExit": 0,
+    "dataBlocks": 70
+  },
+  "historicalSnapshotComparison": {
+    "tables": 70,
+    "unchanged": 69,
+    "changed": [
+      "__EFMigrationsHistory"
+    ]
+  },
+  "currentOriginalRows": {
+    "tables": {
+      "AccesosPlataforma": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 1,
+        "currentOriginalCount": 1
+      },
+      "AccesosUsuario": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 12,
+        "currentOriginalCount": 12
+      },
+      "AjustesTarifario": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 3,
+        "currentOriginalCount": 3
+      },
+      "AspNetUserClaims": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 0,
+        "currentOriginalCount": 0,
+        "observedTotalRows": 0,
+        "comparison": "Empty original table; current rows are additions, not original-row loss or modification."
+      },
+      "AspNetUserLogins": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 0,
+        "currentOriginalCount": 0,
+        "observedTotalRows": 0,
+        "comparison": "Empty original table; current rows are additions, not original-row loss or modification."
+      },
+      "AspNetUserTokens": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 0,
+        "currentOriginalCount": 0,
+        "observedTotalRows": 0,
+        "comparison": "Empty original table; current rows are additions, not original-row loss or modification."
+      },
+      "AvisosReparto": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 2,
+        "currentOriginalCount": 2
+      },
+      "BasesOperativas": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 1,
+        "currentOriginalCount": 1
+      },
+      "Bultos": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 53,
+        "currentOriginalCount": 53
+      },
+      "CambiosEstadoOrganizacion": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 2,
+        "currentOriginalCount": 2
+      },
+      "CancelacionesEnvio": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 9,
+        "currentOriginalCount": 9
+      },
+      "CodigosCancelacionPublica": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 1,
+        "currentOriginalCount": 1
+      },
+      "Comercios": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 1,
+        "currentOriginalCount": 1
+      },
+      "ConfiguracionesReparto": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 1,
+        "currentOriginalCount": 1
+      },
+      "ConfirmacionesExtravioEnvio": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 0,
+        "currentOriginalCount": 0,
+        "observedTotalRows": 0,
+        "comparison": "Empty original table; current rows are additions, not original-row loss or modification."
+      },
+      "DecisionesDevolucionEnvio": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 0,
+        "currentOriginalCount": 0,
+        "observedTotalRows": 0,
+        "comparison": "Empty original table; current rows are additions, not original-row loss or modification."
+      },
+      "DepartamentosReferencia": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 19,
+        "currentOriginalCount": 19
+      },
+      "Destinatarios": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 45,
+        "currentOriginalCount": 45
+      },
+      "Direcciones": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 45,
+        "currentOriginalCount": 45
+      },
+      "EjecucionSeedDemo": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 0,
+        "currentOriginalCount": 0,
+        "observedTotalRows": 0,
+        "comparison": "Empty original table; current rows are additions, not original-row loss or modification."
+      },
+      "EnlacesSeguimiento": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 45,
+        "currentOriginalCount": 45
+      },
+      "EntregasPush": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 0,
+        "currentOriginalCount": 0,
+        "observedTotalRows": 0,
+        "comparison": "Empty original table; current rows are additions, not original-row loss or modification."
+      },
+      "EntregasSeguimiento": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 45,
+        "currentOriginalCount": 45
+      },
+      "EnvioEventos": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 78,
+        "currentOriginalCount": 78
+      },
+      "Envios": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 45,
+        "currentOriginalCount": 45
+      },
+      "EstimacionesRuta": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 3,
+        "currentOriginalCount": 3
+      },
+      "EvidenciasReparto": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 0,
+        "currentOriginalCount": 0,
+        "observedTotalRows": 4,
+        "comparison": "Empty original table; current rows are additions, not original-row loss or modification."
+      },
+      "FranjasEntrega": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 4,
+        "currentOriginalCount": 4
+      },
+      "HechosFlota": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 11,
+        "currentOriginalCount": 11
+      },
+      "HojasRuta": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 10,
+        "currentOriginalCount": 10
+      },
+      "IdentidadesEnvioImportado": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 18,
+        "currentOriginalCount": 18
+      },
+      "InstalacionesMoviles": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 0,
+        "currentOriginalCount": 0,
+        "observedTotalRows": 0,
+        "comparison": "Empty original table; current rows are additions, not original-row loss or modification."
+      },
+      "LegacyRolesCu01": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 0,
+        "currentOriginalCount": 0,
+        "observedTotalRows": 0,
+        "comparison": "Empty original table; current rows are additions, not original-row loss or modification."
+      },
+      "LegacyRolesPermisosCu01": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 0,
+        "currentOriginalCount": 0,
+        "observedTotalRows": 0,
+        "comparison": "Empty original table; current rows are additions, not original-row loss or modification."
+      },
+      "MotivosNoEntregaVersion": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 4,
+        "currentOriginalCount": 4
+      },
+      "OcupacionesRuta": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 6,
+        "currentOriginalCount": 6
+      },
+      "OperacionesJornada": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 2119,
+        "currentOriginalCount": 2119
+      },
+      "Operadores": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 4,
+        "currentOriginalCount": 4
+      },
+      "OutboxMessages": {
+        "sameAsBefore": false,
+        "originalIdFiltered": true,
+        "beforeCount": 113,
+        "currentOriginalCount": 113
+      },
+      "ParadasRuta": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 10,
+        "currentOriginalCount": 10
+      },
+      "PerfilesVialesVehiculo": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 0,
+        "currentOriginalCount": 0,
+        "observedTotalRows": 0,
+        "comparison": "Empty original table; current rows are additions, not original-row loss or modification."
+      },
+      "Permisos": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 7,
+        "currentOriginalCount": 7
+      },
+      "ProcessedMessages": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 45,
+        "currentOriginalCount": 45
+      },
+      "PruebasEntrega": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 1,
+        "currentOriginalCount": 1,
+        "comparison": "Original pre-migration natural key OperadorId/EnvioId/RutaId, because new PK adds BultoId."
+      },
+      "RecepcionesBulto": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 5,
+        "currentOriginalCount": 5
+      },
+      "ReglasOperativasOperador": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 3,
+        "currentOriginalCount": 3
+      },
+      "Repartidores": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 5,
+        "currentOriginalCount": 5
+      },
+      "RequisitosPruebaEntrega": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 6,
+        "currentOriginalCount": 6
+      },
+      "Roles": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 13,
+        "currentOriginalCount": 13
+      },
+      "RolesPermisos": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 47,
+        "currentOriginalCount": 47
+      },
+      "RolesPlataforma": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 1,
+        "currentOriginalCount": 1
+      },
+      "RolesPlataformaPermisos": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 1,
+        "currentOriginalCount": 1
+      },
+      "SesionesMoviles": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 24,
+        "currentOriginalCount": 24
+      },
+      "SolicitudesBajaOrganizacion": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 1,
+        "currentOriginalCount": 1
+      },
+      "SolicitudesReactivacionOrganizacion": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 1,
+        "currentOriginalCount": 1
+      },
+      "TarifariosOperador": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 2,
+        "currentOriginalCount": 2
+      },
+      "TarifasEnvio": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 12,
+        "currentOriginalCount": 12
+      },
+      "TarifasZonaModalidad": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 4,
+        "currentOriginalCount": 4
+      },
+      "TokensRenovacionMoviles": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 109,
+        "currentOriginalCount": 109
+      },
+      "UsoGeocodificacion": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 8,
+        "currentOriginalCount": 8
+      },
+      "UsoRoutingDiario": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 0,
+        "currentOriginalCount": 0,
+        "observedTotalRows": 0,
+        "comparison": "Empty original table; current rows are additions, not original-row loss or modification."
+      },
+      "Usuarios": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 14,
+        "currentOriginalCount": 14
+      },
+      "Vehiculos": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 3,
+        "currentOriginalCount": 3
+      },
+      "VersionesIdentidadVisualOperador": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 3,
+        "currentOriginalCount": 3
+      },
+      "VersionesReglasOperativas": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 4,
+        "currentOriginalCount": 4
+      },
+      "VersionesTarifario": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 3,
+        "currentOriginalCount": 3
+      },
+      "ZonasCobertura": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 6,
+        "currentOriginalCount": 6
+      },
+      "ZonasCoberturaRevisiones": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 13,
+        "currentOriginalCount": 13
+      },
+      "__EFMigrationsHistory": {
+        "sameAsBefore": true,
+        "originalIdFiltered": true,
+        "beforeCount": 74,
+        "currentOriginalCount": 74
+      },
+      "spatial_ref_sys": {
+        "sameAsBefore": true,
+        "originalIdFiltered": false,
+        "beforeCount": 8500,
+        "currentOriginalCount": 8500
+      }
+    },
+    "changedTables": [
+      "OutboxMessages"
+    ]
+  },
+  "changedOriginalFields": {
+    "OutboxMessages": {
+      "changedRows": 2,
+      "columns": [
+        "Estado",
+        "Intentos",
+        "PublicadoEnUtc"
+      ]
+    }
+  },
+  "roles": [
+    {
+      "name": "nexoruta_api_runtime",
+      "super": false,
+      "bypassRls": false,
+      "createDb": false,
+      "createRole": false
+    },
+    {
+      "name": "nexoruta_worker_runtime",
+      "super": false,
+      "bypassRls": false,
+      "createDb": false,
+      "createRole": false
+    },
+    {
+      "name": "nexoruta_bootstrap_runtime",
+      "super": false,
+      "bypassRls": false,
+      "createDb": false,
+      "createRole": false
+    }
+  ],
+  "forcedRls": 60,
+  "migrations": [
+    "20261008015409_InitialShipmentMonitoring",
+    "20261008163520_OperatorUserAccess",
+    "20261008180729_AccountOwnerAndShipmentOperator",
+    "20261008231255_ShipmentCommerce",
+    "20261010220552_AddEnlacesSeguimiento",
+    "20261011022107_AddOutboxMessages",
+    "20261011024703_AddOutboxProcessingLease",
+    "20261011030115_AddProcessedMessages",
+    "20261011030600_AddEntregasSeguimiento",
+    "20261012144342_AddRolesPermisos",
+    "20261012230124_AddUsuarioPasswordHash",
+    "20261013010505_NormalizeCu01Initialization",
+    "20261015060015_AddEstadoActivoAcceso",
+    "20261015212134_AddVersionSesionAcceso",
+    "20261016021011_ProtectSystemAdministratorRoles",
+    "20261016035056_AddPlatformAdministration",
+    "20261016045116_AddPlatformRolePermissions",
+    "20261016194611_EstablishOrganizationOwnership",
+    "20261016202513_UpdateOrganizationNameConcurrency",
+    "20261016215624_AddOrganizationSuspensionAndCancellation",
+    "20261017032009_AddOrganizationReactivationRequests",
+    "20261017035519_AddUsuarioEmailConcurrency",
+    "20261017182259_AddMobileRefreshSessions",
+    "20261017182354_AddIdentityUserStore",
+    "20261017185711_AddCourierProfiles",
+    "20261017191056_AddDeliveryPoliciesAndVehicles",
+    "20261017193103_AddRoutesCustodyAndDestinations",
+    "20261017201732_EnablePostgreSqlRls",
+    "20261017202024_AddCourierOperationsAndRemoteNotifications",
+    "20261018190518_AddUsuarioCredentialVersion",
+    "20261018203028_AddPasswordRecoverySecurityOutbox",
+    "20261019010048_AddCoverageZonesAndDeliverySlots",
+    "20261019152350_AddTarifarioOperador",
+    "20261019183155_BindMobileSessionsToCredentialVersion",
+    "20261019183455_IntegrateMobileRuntimePermissions",
+    "20261019185305_IntegratePushOutboxDispatch",
+    "20261019223054_AddAuthenticatedShipmentCancellation",
+    "20261019225246_AddRecipientEmail",
+    "20261019225313_RequireRecipientEmail",
+    "20261019230046_AddPublicShipmentCancellation",
+    "20261019235212_AddReglasOperativas",
+    "20261020021506_FixOperationalRulesChildGuard",
+    "20261020222152_AuthorizeShipmentDestinationConfirmation",
+    "20261020223833_PinGuardFunctionSearchPaths",
+    "20261020224947_RecordClosingIncidents",
+    "20261020232808_BindShipmentToPublishedOperationalRules",
+    "20261020234154_RemoveDuplicateCourierRules",
+    "20261022015742_AddOperatorVisualIdentity",
+    "20261022174800_ScopeOrganizationAccessReturningPolicy",
+    "20261023014518_AllowEmbeddedDepartmentZoneProvenance",
+    "20261024120000_EnforceCancellationTerminalState",
+    "20261024130000_AddShipmentImportIdentity",
+    "20261025005447_OrderImportLocksByEffectiveKey",
+    "20261025010937_HistoricalImportOperatorCatalog",
+    "20261025222429_AddCanonicalShipmentHistory",
+    "20261025233714_AddProofValidationDeadline",
+    "20261025234203_PersistShipmentProofDeadline",
+    "20261026123301_DecisionOperativaDevolucion",
+    "20261027020542_ConfirmOperationalShipmentLoss",
+    "20261028010000_EnforceShipmentTransitionMatrix",
+    "20261028120000_AllowPendingDestinationConfirmationAfterReceipt",
+    "20261029064445_AddDemoSeedStateAndShipmentDate",
+    "20261029120000_AddRouteResourceReservationState",
+    "20261030120000_ListImportedShipmentReferences",
+    "20261101184716_StageFleetOccupations",
+    "20261101185119_EnforceFleetOccupationExclusivity",
+    "20261101203256_AddOperationalBaseAndTemporalPlan",
+    "20261101213104_AddRoadEstimationHistory",
+    "20261102000000_LimitGeocodingConsumption",
+    "20261102010000_ConfirmSelectedDestinationAddress",
+    "20261102020000_AdmitMultipleParcels",
+    "20261102030000_ApplyShipmentTariffs",
+    "20261102170000_ExposeCommerceCoverage",
+    "20261103000000_AddDepotParcelReceipts",
+    "20261105060707_ParcelResultsAndHomePickups",
+    "20261105061008_ExplicitVisitOutcome",
+    "20261105061723_RegisterCommerceNoticeContract",
+    "20261105063923_SnapshotParcelsPerVisit",
+    "20261105180000_IndependentParcelProofDeadlines"
+  ],
+  "protectedRoutes": [
+    {
+      "id": "01a1a9cf-3b9f-7771-ad5b-c4f76ca835b6",
+      "date": "2026-11-09",
+      "state": "Planificada"
+    },
+    {
+      "id": "01a1aa09-9b84-7f67-9fc4-14fef5a82376",
+      "date": "2026-11-05",
+      "state": "Finalizada"
+    }
+  ],
+  "rootSha": "4e5c233dc751736ed59cc234582f157f5c9c278a",
+  "gitlinks": [
+    "160000 commit 09538d989399b511473ad5af063754ea76d554a6\tbackend",
+    "160000 commit d328e98c27db7c5cef018ab3492c54fc563eed49\tfrontend",
+    "160000 commit 683766d6d8cd6c1bd9ce45bb12f6581ddb19b98c\tmobile"
+  ],
+  "sourceWorktrees": {
+    "backend": [],
+    "frontend": [],
+    "mobile": []
+  },
+  "rootStatus": [
+    " M \"docs/alcance/Calcs/Casos de Uso - Responsables.xlsm\"",
+    "?? docs/auditorias/2026-11-05-excel/"
+  ],
+  "excelSha256": "8de7fcf3c84c113788b71a89e5e51cc852aafd0e690a0d35f4b944e855220cf4",
+  "containers": [
+    {
+      "name": "nexoruta-api",
+      "image": "nexoruta-api:audit-20261105",
+      "imageId": "sha256:b4906c9016dc1f60dcf2b29d8e6ab8b69550637d4e2047c3a49b4a3787a4cc83",
+      "running": true,
+      "health": "healthy",
+      "mountVolumes": [
+        "nexoruta_api_dataprotection_keys"
+      ]
+    },
+    {
+      "name": "nexoruta-tracking",
+      "image": "mcr.microsoft.com/dotnet/sdk:10.0",
+      "imageId": "sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317",
+      "running": true,
+      "health": null,
+      "mountVolumes": []
+    },
+    {
+      "name": "nexoruta-backoffice",
+      "image": "mcr.microsoft.com/dotnet/sdk:10.0",
+      "imageId": "sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317",
+      "running": true,
+      "health": null,
+      "mountVolumes": []
+    },
+    {
+      "name": "nexoruta-commerce",
+      "image": "mcr.microsoft.com/dotnet/sdk:10.0",
+      "imageId": "sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317",
+      "running": true,
+      "health": null,
+      "mountVolumes": []
+    },
+    {
+      "name": "nexoruta-admin",
+      "image": "mcr.microsoft.com/dotnet/sdk:10.0",
+      "imageId": "sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317",
+      "running": true,
+      "health": null,
+      "mountVolumes": []
+    },
+    {
+      "name": "nexoruta-worker",
+      "image": "nexoruta-worker:audit-20261105",
+      "imageId": "sha256:f77d78ee8474a70db82a5e164997aee2a00da4b49119775726bc47e1d73f2e0b",
+      "running": true,
+      "health": "healthy",
+      "mountVolumes": [
+        "nexoruta_api_dataprotection_keys"
+      ]
+    },
+    {
+      "name": "nexoruta-worker-kafka",
+      "image": "nexoruta-worker:audit-20261105",
+      "imageId": "sha256:f77d78ee8474a70db82a5e164997aee2a00da4b49119775726bc47e1d73f2e0b",
+      "running": true,
+      "health": "healthy",
+      "mountVolumes": []
+    },
+    {
+      "name": "nexoruta-worker-push",
+      "image": "nexoruta-worker:audit-20261105",
+      "imageId": "sha256:f77d78ee8474a70db82a5e164997aee2a00da4b49119775726bc47e1d73f2e0b",
+      "running": true,
+      "health": "healthy",
+      "mountVolumes": [
+        "nexoruta_api_dataprotection_keys"
+      ]
+    },
+    {
+      "name": "nexoruta-mobile-gateway",
+      "image": "nginx:1.28-alpine",
+      "imageId": "sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236",
+      "running": true,
+      "health": null,
+      "mountVolumes": []
+    },
+    {
+      "name": "nexoruta-postgres",
+      "image": "postgis/postgis:18-3.6-alpine",
+      "imageId": "sha256:ad015443d6eb80b539cc1c3125a43904e7cd82feba0a6257cf41bd7fd6174a0e",
+      "running": true,
+      "health": "healthy",
+      "mountVolumes": [
+        "nexoruta_postgres_data"
+      ]
+    },
+    {
+      "name": "nexoruta-mongodb",
+      "image": "mongo:8.0",
+      "imageId": "sha256:4a4ab5d4834207389e0d7270fac988e21ffedccecba77991a552f755df229907",
+      "running": true,
+      "health": "healthy",
+      "mountVolumes": [
+        "nexoruta_mongodb_data",
+        "1ef77c1117c04193efc6871b44ef4be5b1ba53c47c858ed936b263c96b21dddd"
+      ]
+    },
+    {
+      "name": "nexoruta-redis",
+      "image": "redis:8-alpine",
+      "imageId": "sha256:d146f83b1e0f02fc27c26a50cee39338c736674c5959db84363e6ae3cd9e02d2",
+      "running": true,
+      "health": "healthy",
+      "mountVolumes": [
+        "nexoruta_redis_data"
+      ]
+    },
+    {
+      "name": "nexoruta-mailpit-1",
+      "image": "axllent/mailpit:v1.31.5",
+      "imageId": "sha256:94f6b70c1436defae6799d9ac7ff0eeff9540465b842026d5cdb018f1c0234ea",
+      "running": true,
+      "health": "healthy",
+      "mountVolumes": []
+    },
+    {
+      "name": "nexoruta-rabbitmq",
+      "image": "rabbitmq:4-management",
+      "imageId": "sha256:8dd6e3570ddaa2ef82a6c3a8950e79c1f73893adfbdddbc374fc1f1ac8a0f5dd",
+      "running": true,
+      "health": "healthy",
+      "mountVolumes": [
+        "nexoruta_rabbitmq_data"
+      ]
+    },
+    {
+      "name": "nexoruta-dashboard",
+      "image": "mcr.microsoft.com/dotnet/aspire-dashboard:latest",
+      "imageId": "sha256:064b50d557fcaffd10f06bf79ba4069bd50994a84034f1a0fc35c165500482d7",
+      "running": true,
+      "health": null,
+      "mountVolumes": []
+    },
+    {
+      "name": "nexoruta-kafka",
+      "image": "confluentinc/cp-kafka:7.9.10",
+      "imageId": "sha256:07c3d60362e67c296f7f34b690b1240e5ecdcde4a84f5e73cab320fb4041f58c",
+      "running": true,
+      "health": "healthy",
+      "mountVolumes": [
+        "0d4a02a3292a076494a85067730f0370961be5b6f07af2eaeb430044642ac61c",
+        "nexoruta_kafka_data"
+      ]
+    }
+  ],
+  "http": [
+    {
+      "url": "http://127.0.0.1:5000/health/ready",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5000/api/envios",
+      "status": 401
+    },
+    {
+      "url": "https://localhost:5843/health/ready",
+      "status": 200
+    }
+  ],
+  "configMatchesBackup": {
+    ".env": true,
+    "ca.crt": true,
+    "server.crt": true,
+    "server.key": true
+  },
+  "androidHistoricalFiles": {
+    "initialCount": 6,
+    "finalCount": 6,
+    "sameEvidence": true
+  },
+  "androidCurrentPackage": [
+    "versionCode=1 minSdk=30 targetSdk=36",
+    "versionName=1.0",
+    "lastUpdateTime=2026-11-05 18:36:15"
+  ],
+  "androidCurrentFiles": [
+    {
+      "path": "files/operacion/F2C1021A0E1CDBD23FAE02ADBBFDF3D06CF38819467A66ABA0C1F975AA05F645/operacion.sqlite",
+      "sameSize": true,
+      "sameSha256": true
+    },
+    {
+      "path": "files/operacion/7051CC9FDCD4E940D79B116266838AF8D1064AC0A5052C7BE61B48055ABAB8D0/operacion.sqlite",
+      "sameSize": true,
+      "sameSha256": true
+    },
+    {
+      "path": "files/operacion/4637E6329B19F27E166670B525F4A673A492BB5A3491A28AEBDF1BCB24A8D172/operacion.sqlite",
+      "sameSize": true,
+      "sameSha256": true
+    },
+    {
+      "path": "files/operacion/A8BF69DA2E10E602C500535FC5EF1377F23F9BA69206E354CDBAE4435660ED71/operacion.sqlite",
+      "sameSize": true,
+      "sameSha256": true
+    },
+    {
+      "path": "shared_prefs/uy.nexoruta.repartidor.microsoft.maui.essentials.preferences.xml",
+      "sameSize": true,
+      "sameSha256": true
+    },
+    {
+      "path": "shared_prefs/mapbox_settings.xml",
+      "sameSize": true,
+      "sameSha256": true
+    }
+  ],
+  "androidUid": "package:uy.nexoruta.repartidor uid:10217",
+  "androidCurrentSigner": "41ff9ffbcad5c0ac6edfd2a9d6d42e9b8e801b8678da375d6012b465a67463c7",
+  "apiDataProtectionKeys": [
+    {
+      "name": "./key-153eb4e1-f971-4ed4-85e3-c95455b98c1b.xml",
+      "unchanged": true
+    }
+  ],
+  "evidenceKeyIndependent": {
+    "utc": "2026-11-05T18:47:40.357455+00:00",
+    "configuredMatchesPersistentFile": true,
+    "decodedBytes": 32,
+    "distinctFromTracking": true,
+    "trackingMatchesExistingEnv": true,
+    "apiImage": "sha256:b4906c9016dc1f60dcf2b29d8e6ab8b69550637d4e2047c3a49b4a3787a4cc83",
+    "health": "healthy"
+  },
+  "verdict": "Preservation verified within stated read-only scope; two original outbox rows advanced processing metadata; functional/visual acceptance remains separate.",
+  "kafkaSupplement": {
+    "utc": "2026-11-05T18:54:42.720372+00:00",
+    "historicalExistingDescriptorComparison": "Writer-observed equality only; original descriptor text was not persisted, so independent historical equality cannot be established.",
+    "topics": [
+      "__consumer_offsets",
+      "nexoruta.comercios.v2",
+      "nexoruta.envios.creados.v1",
+      "nexoruta.password-recovery.requested.v1"
+    ],
+    "topicAdditionsRelativeToSavedList": [
+      "nexoruta.comercios.v2"
+    ],
+    "missingOldTopics": [],
+    "currentDescriptors": {
+      "__consumer_offsets": "Topic: __consumer_offsets\tTopicId: _Gi3GMlSRDCBRWOyGydTLg\tPartitionCount: 50\tReplicationFactor: 1\tConfigs: compression.type=producer,min.insync.replicas=1,cleanup.policy=compact,segment.bytes=104857600\n\tTopic: __consumer_offsets\tPartition: 0\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 1\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 2\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 3\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 4\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 5\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 6\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 7\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 8\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 9\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 10\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 11\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 12\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 13\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 14\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 15\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 16\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 17\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 18\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 19\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 20\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 21\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 22\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 23\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 24\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 25\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 26\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 27\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 28\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 29\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 30\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 31\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 32\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 33\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 34\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 35\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 36\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 37\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 38\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 39\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 40\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 41\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 42\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 43\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 44\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 45\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 46\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 47\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 48\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: __consumer_offsets\tPartition: 49\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr:",
+      "nexoruta.comercios.v2": "Topic: nexoruta.comercios.v2\tTopicId: g4Rzo0NnSfSYfbrRK6KTmA\tPartitionCount: 3\tReplicationFactor: 1\tConfigs: min.insync.replicas=1,retention.ms=604800000\n\tTopic: nexoruta.comercios.v2\tPartition: 0\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: nexoruta.comercios.v2\tPartition: 1\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: nexoruta.comercios.v2\tPartition: 2\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr:",
+      "nexoruta.envios.creados.v1": "Topic: nexoruta.envios.creados.v1\tTopicId: WKzd5G-sTrGEg84tHzlz3g\tPartitionCount: 3\tReplicationFactor: 1\tConfigs: min.insync.replicas=1,retention.ms=604800000\n\tTopic: nexoruta.envios.creados.v1\tPartition: 0\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: nexoruta.envios.creados.v1\tPartition: 1\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr: \n\tTopic: nexoruta.envios.creados.v1\tPartition: 2\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr:",
+      "nexoruta.password-recovery.requested.v1": "Topic: nexoruta.password-recovery.requested.v1\tTopicId: wfZ4wKZVSEibsBZ3A0-Vyw\tPartitionCount: 1\tReplicationFactor: 1\tConfigs: min.insync.replicas=1,retention.ms=2592000000\n\tTopic: nexoruta.password-recovery.requested.v1\tPartition: 0\tLeader: 1\tReplicas: 1\tIsr: 1\tElr: \tLastKnownElr:"
+    },
+    "sourceContractMatches": true,
+    "sourceInitializerDeclared": true,
+    "containers": {
+      "nexoruta-api": {
+        "id": "7db5847399544a9abdc9565a9845ecfefe7505403a5a8abbb0f8d5f43b3b0915",
+        "startedAt": "2026-11-05T18:46:37.891940233Z",
+        "imageId": "sha256:b4906c9016dc1f60dcf2b29d8e6ab8b69550637d4e2047c3a49b4a3787a4cc83",
+        "health": "healthy"
+      },
+      "nexoruta-postgres": {
+        "id": "abc5124763ecce770ac418bc1a654a2fba8657237431a3017a0ea89b92436976",
+        "startedAt": "2026-11-05T18:21:27.598632137Z",
+        "imageId": "sha256:ad015443d6eb80b539cc1c3125a43904e7cd82feba0a6257cf41bd7fd6174a0e",
+        "health": "healthy"
+      },
+      "nexoruta-kafka": {
+        "id": "e1a82ac9d035f21f7b0fd99500c38f90ddd19a41e15982672aa0b0286db61d8c",
+        "startedAt": "2026-11-05T18:21:27.578863298Z",
+        "imageId": "sha256:07c3d60362e67c296f7f34b690b1240e5ecdcde4a84f5e73cab320fb4041f58c",
+        "health": "healthy"
+      }
+    },
+    "keys": {
+      "evidenceMatchesPersisted": true,
+      "evidenceBytes": 32,
+      "distinctFromTracking": true,
+      "trackingPresentInOriginalEnvironment": true
+    },
+    "configMatchesBackup": {
+      ".env": true,
+      "ca.crt": true,
+      "server.crt": true,
+      "server.key": true
+    },
+    "dataProtectionKeysUnchanged": [
+      true
+    ],
+    "http": [
+      {
+        "url": "http://127.0.0.1:5000/health/ready",
+        "status": 200
+      },
+      {
+        "url": "https://localhost:5843/health/ready",
+        "status": 200
+      }
+    ],
+    "sourceWorktrees": {
+      "backend": [],
+      "frontend": [],
+      "mobile": []
+    },
+    "excelSha256": "8de7fcf3c84c113788b71a89e5e51cc852aafd0e690a0d35f4b944e855220cf4",
+    "syntheticMessageDelivery": {
+      "outbox": [
+        {
+          "id": "f3360063-62ba-4a00-9e5e-575c56b84d36",
+          "state": "Publicado",
+          "error": null,
+          "published": "2026-11-05T18:52:55.486777+00:00"
+        },
+        {
+          "id": "ac038763-d368-4df5-b665-58ba16e198ae",
+          "state": "Publicado",
+          "error": null,
+          "published": "2026-11-05T18:52:57.607284+00:00"
+        },
+        {
+          "id": "12387404-c40a-448e-8e51-1531b489ef9e",
+          "state": "Publicado",
+          "error": null,
+          "published": "2026-11-05T18:52:57.654152+00:00"
+        }
+      ],
+      "matchingInboxRows": 3,
+      "matchingInboxUniqueEvents": 3
+    }
+  }
+}

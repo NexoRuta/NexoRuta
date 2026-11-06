@@ -1,0 +1,35 @@
+{
+  "identical": true,
+  "files": [
+    {
+      "path": "files/operacion/F2C1021A0E1CDBD23FAE02ADBBFDF3D06CF38819467A66ABA0C1F975AA05F645/operacion.sqlite",
+      "size": 65536,
+      "sha256": "f1eb2be2ae9327a75a0cca6ebd80c3b3451823dd987001e3a676fda41590c8c1"
+    },
+    {
+      "path": "files/operacion/7051CC9FDCD4E940D79B116266838AF8D1064AC0A5052C7BE61B48055ABAB8D0/operacion.sqlite",
+      "size": 2859008,
+      "sha256": "14a3510086042053edb45f4d734cc55a83186b7dc379a5b7159fe08c8f81c183"
+    },
+    {
+      "path": "files/operacion/4637E6329B19F27E166670B525F4A673A492BB5A3491A28AEBDF1BCB24A8D172/operacion.sqlite",
+      "size": 65536,
+      "sha256": "5b89cd7ae71c0219544f97d5d44c018b5bbe25bf15dccdda9b8925f09ce475c6"
+    },
+    {
+      "path": "files/operacion/A8BF69DA2E10E602C500535FC5EF1377F23F9BA69206E354CDBAE4435660ED71/operacion.sqlite",
+      "size": 98304,
+      "sha256": "affcb2e1fb5fd9cf20ffa5eb7f1062ab20b6b17ef07f4ce8cc9c408edbd4d74e"
+    },
+    {
+      "path": "shared_prefs/uy.nexoruta.repartidor.microsoft.maui.essentials.preferences.xml",
+      "size": 2818,
+      "sha256": "94b392486ce8695a89982b49f365396049312133e7bd221adfa045ed60e76836"
+    },
+    {
+      "path": "shared_prefs/mapbox_settings.xml",
+      "size": 169,
+      "sha256": "2ecf3a0b3655ba4892af92a6fd90f8ffef6bd23832806effb5ac69b40e3c3f87"
+    }
+  ]
+}

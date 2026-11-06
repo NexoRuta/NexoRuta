@@ -1,0 +1,366 @@
+{
+  "utc": "2026-11-05T18:39:30.658511+00:00",
+  "services": [
+    {
+      "name": "nexoruta-api",
+      "image": "nexoruta-api:audit-20261105",
+      "imageId": "sha256:b4906c9016dc1f60dcf2b29d8e6ab8b69550637d4e2047c3a49b4a3787a4cc83",
+      "state": "running",
+      "health": "healthy",
+      "ports": {
+        "8080/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "5000"
+          }
+        ]
+      },
+      "mounts": [
+        {
+          "type": "volume",
+          "volume": "nexoruta_api_dataprotection_keys",
+          "destination": "/var/nexoruta/data-protection-keys"
+        }
+      ]
+    },
+    {
+      "name": "nexoruta-worker",
+      "image": "nexoruta-worker:audit-20261105",
+      "imageId": "sha256:f77d78ee8474a70db82a5e164997aee2a00da4b49119775726bc47e1d73f2e0b",
+      "state": "running",
+      "health": "healthy",
+      "ports": {
+        "8080/tcp": null
+      },
+      "mounts": [
+        {
+          "type": "volume",
+          "volume": "nexoruta_api_dataprotection_keys",
+          "destination": "/var/nexoruta/data-protection-keys"
+        }
+      ]
+    },
+    {
+      "name": "nexoruta-worker-kafka",
+      "image": "nexoruta-worker:audit-20261105",
+      "imageId": "sha256:f77d78ee8474a70db82a5e164997aee2a00da4b49119775726bc47e1d73f2e0b",
+      "state": "running",
+      "health": "healthy",
+      "ports": {
+        "8080/tcp": null
+      },
+      "mounts": []
+    },
+    {
+      "name": "nexoruta-worker-push",
+      "image": "nexoruta-worker:audit-20261105",
+      "imageId": "sha256:f77d78ee8474a70db82a5e164997aee2a00da4b49119775726bc47e1d73f2e0b",
+      "state": "running",
+      "health": "healthy",
+      "ports": {
+        "8080/tcp": null
+      },
+      "mounts": [
+        {
+          "type": "volume",
+          "volume": "nexoruta_api_dataprotection_keys",
+          "destination": "/var/nexoruta/data-protection-keys"
+        }
+      ]
+    },
+    {
+      "name": "nexoruta-postgres",
+      "image": "postgis/postgis:18-3.6-alpine",
+      "imageId": "sha256:ad015443d6eb80b539cc1c3125a43904e7cd82feba0a6257cf41bd7fd6174a0e",
+      "state": "running",
+      "health": "healthy",
+      "ports": {
+        "5432/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "55433"
+          }
+        ]
+      },
+      "mounts": [
+        {
+          "type": "volume",
+          "volume": "nexoruta_postgres_data",
+          "destination": "/var/lib/postgresql"
+        }
+      ]
+    },
+    {
+      "name": "nexoruta-backoffice",
+      "image": "mcr.microsoft.com/dotnet/sdk:10.0",
+      "imageId": "sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317",
+      "state": "running",
+      "health": null,
+      "ports": {
+        "8080/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "5101"
+          }
+        ]
+      },
+      "mounts": [
+        {
+          "type": "bind",
+          "volume": null,
+          "destination": "/workspace"
+        },
+        {
+          "type": "bind",
+          "volume": null,
+          "destination": "/backend/src/ZonasCobertura/Data/departamentos-uruguay.geojson"
+        }
+      ]
+    },
+    {
+      "name": "nexoruta-commerce",
+      "image": "mcr.microsoft.com/dotnet/sdk:10.0",
+      "imageId": "sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317",
+      "state": "running",
+      "health": null,
+      "ports": {
+        "8080/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "5102"
+          }
+        ]
+      },
+      "mounts": [
+        {
+          "type": "bind",
+          "volume": null,
+          "destination": "/workspace"
+        }
+      ]
+    },
+    {
+      "name": "nexoruta-admin",
+      "image": "mcr.microsoft.com/dotnet/sdk:10.0",
+      "imageId": "sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317",
+      "state": "running",
+      "health": null,
+      "ports": {
+        "8080/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "5104"
+          }
+        ]
+      },
+      "mounts": [
+        {
+          "type": "bind",
+          "volume": null,
+          "destination": "/workspace"
+        }
+      ]
+    },
+    {
+      "name": "nexoruta-tracking",
+      "image": "mcr.microsoft.com/dotnet/sdk:10.0",
+      "imageId": "sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317",
+      "state": "running",
+      "health": null,
+      "ports": {
+        "8080/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "5103"
+          }
+        ]
+      },
+      "mounts": [
+        {
+          "type": "bind",
+          "volume": null,
+          "destination": "/workspace"
+        }
+      ]
+    },
+    {
+      "name": "nexoruta-mobile-gateway",
+      "image": "nginx:1.28-alpine",
+      "imageId": "sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236",
+      "state": "running",
+      "health": null,
+      "ports": {
+        "443/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "5843"
+          }
+        ],
+        "80/tcp": null
+      },
+      "mounts": [
+        {
+          "type": "bind",
+          "volume": null,
+          "destination": "/certs/server.crt"
+        },
+        {
+          "type": "bind",
+          "volume": null,
+          "destination": "/certs/server.key"
+        },
+        {
+          "type": "bind",
+          "volume": null,
+          "destination": "/etc/nginx/nginx.conf"
+        }
+      ]
+    },
+    {
+      "name": "nexoruta-mailpit-1",
+      "image": "axllent/mailpit:v1.31.5",
+      "imageId": "sha256:94f6b70c1436defae6799d9ac7ff0eeff9540465b842026d5cdb018f1c0234ea",
+      "state": "running",
+      "health": "healthy",
+      "ports": {
+        "1025/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "1025"
+          }
+        ],
+        "1110/tcp": null,
+        "8025/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "8025"
+          }
+        ]
+      },
+      "mounts": []
+    },
+    {
+      "name": "nexoruta-redis",
+      "image": "redis:8-alpine",
+      "imageId": "sha256:d146f83b1e0f02fc27c26a50cee39338c736674c5959db84363e6ae3cd9e02d2",
+      "state": "running",
+      "health": "healthy",
+      "ports": {
+        "6379/tcp": null
+      },
+      "mounts": [
+        {
+          "type": "volume",
+          "volume": "nexoruta_redis_data",
+          "destination": "/data"
+        }
+      ]
+    },
+    {
+      "name": "nexoruta-rabbitmq",
+      "image": "rabbitmq:4-management",
+      "imageId": "sha256:8dd6e3570ddaa2ef82a6c3a8950e79c1f73893adfbdddbc374fc1f1ac8a0f5dd",
+      "state": "running",
+      "health": "healthy",
+      "ports": {
+        "15671/tcp": null,
+        "15672/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "15672"
+          }
+        ],
+        "15691/tcp": null,
+        "15692/tcp": null,
+        "25672/tcp": null,
+        "4369/tcp": null,
+        "5671/tcp": null,
+        "5672/tcp": null
+      },
+      "mounts": [
+        {
+          "type": "volume",
+          "volume": "nexoruta_rabbitmq_data",
+          "destination": "/var/lib/rabbitmq"
+        }
+      ]
+    },
+    {
+      "name": "nexoruta-kafka",
+      "image": "confluentinc/cp-kafka:7.9.10",
+      "imageId": "sha256:07c3d60362e67c296f7f34b690b1240e5ecdcde4a84f5e73cab320fb4041f58c",
+      "state": "running",
+      "health": "healthy",
+      "ports": {
+        "9092/tcp": null
+      },
+      "mounts": [
+        {
+          "type": "volume",
+          "volume": "0d4a02a3292a076494a85067730f0370961be5b6f07af2eaeb430044642ac61c",
+          "destination": "/etc/kafka/secrets"
+        },
+        {
+          "type": "volume",
+          "volume": "nexoruta_kafka_data",
+          "destination": "/var/lib/kafka/data"
+        }
+      ]
+    },
+    {
+      "name": "nexoruta-mongodb",
+      "image": "mongo:8.0",
+      "imageId": "sha256:4a4ab5d4834207389e0d7270fac988e21ffedccecba77991a552f755df229907",
+      "state": "running",
+      "health": "healthy",
+      "ports": {
+        "27017/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "27017"
+          }
+        ]
+      },
+      "mounts": [
+        {
+          "type": "volume",
+          "volume": "1ef77c1117c04193efc6871b44ef4be5b1ba53c47c858ed936b263c96b21dddd",
+          "destination": "/data/configdb"
+        },
+        {
+          "type": "volume",
+          "volume": "nexoruta_mongodb_data",
+          "destination": "/data/db"
+        }
+      ]
+    },
+    {
+      "name": "nexoruta-dashboard",
+      "image": "mcr.microsoft.com/dotnet/aspire-dashboard:latest",
+      "imageId": "sha256:064b50d557fcaffd10f06bf79ba4069bd50994a84034f1a0fc35c165500482d7",
+      "state": "running",
+      "health": null,
+      "ports": {
+        "18888/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "18888"
+          }
+        ],
+        "18889/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "4317"
+          }
+        ],
+        "18890/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "4318"
+          }
+        ]
+      },
+      "mounts": []
+    }
+  ]
+}

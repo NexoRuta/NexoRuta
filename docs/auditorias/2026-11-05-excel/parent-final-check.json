@@ -1,0 +1,7 @@
+{
+  "http://127.0.0.1:5000/health/ready": 200,
+  "https://localhost:5843/health/ready": 200,
+  "excelSha256": "8de7fcf3c84c113788b71a89e5e51cc852aafd0e690a0d35f4b944e855220cf4",
+  "matrixRows": 104,
+  "methods": "HTTP and hash/readback only; not visual"
+}

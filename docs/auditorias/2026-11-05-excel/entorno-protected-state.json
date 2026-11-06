@@ -1,0 +1,19 @@
+{
+  "routes": [
+    {
+      "routeId": "01a1a9cf-3b9f-7771-ad5b-c4f76ca835b6",
+      "date": "2026-11-09",
+      "state": "Planificada",
+      "reservationActive": true,
+      "ended": false
+    },
+    {
+      "routeId": "01a1aa09-9b84-7f67-9fc4-14fef5a82376",
+      "date": "2026-11-05",
+      "state": "Finalizada",
+      "reservationActive": false,
+      "ended": true
+    }
+  ],
+  "fleetReservationRows": 6
+}

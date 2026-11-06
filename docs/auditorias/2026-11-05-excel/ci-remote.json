@@ -1,0 +1,101 @@
+﻿{
+  "schema_version": 1,
+  "checked_at_utc": "2026-11-05 19:01:54 UTC",
+  "authorization": "Read existing GitHub CI on exact integrated SHAs only. No dispatch, rerun, remote infrastructure operation, credential inspection or auth modification.",
+  "gh_cli": {
+    "available_on_path": false,
+    "standard_paths_found": [],
+    "error": "CommandNotFoundException"
+  },
+  "method": {
+    "workflow_query": "github_fetch_commit_workflow_runs, exact SHA, pull_request-filtered, first page",
+    "status_query": "github_get_commit_combined_status, exact SHA",
+    "queries": 8,
+    "external_evidence": true,
+    "newly_executed_tests": false,
+    "workflow_mutations": false
+  },
+  "repositories": [
+    {
+      "repository": "NexoRuta/NexoRuta",
+      "sha": "4e5c233dc751736ed59cc234582f157f5c9c278a",
+      "pull_request_workflow_runs": [],
+      "commit_statuses": [],
+      "run_url": null,
+      "workflow": null,
+      "run_date": null,
+      "conclusion": null,
+      "jobs": null,
+      "artifacts": null,
+      "verification": "No verificado",
+      "limitation": "Workflow-run connector filters pull_request and first page. Empty statuses are not evidence that all check-runs or other workflow event types are absent.",
+      "commit_url": "https://github.com/NexoRuta/NexoRuta/commit/4e5c233dc751736ed59cc234582f157f5c9c278a"
+    },
+    {
+      "repository": "NexoRuta/NexoRuta-Backend",
+      "sha": "09538d989399b511473ad5af063754ea76d554a6",
+      "pull_request_workflow_runs": [],
+      "commit_statuses": [],
+      "run_url": null,
+      "workflow": null,
+      "run_date": null,
+      "conclusion": null,
+      "jobs": null,
+      "artifacts": null,
+      "verification": "No verificado",
+      "limitation": "Workflow-run connector filters pull_request and first page. Empty statuses are not evidence that all check-runs or other workflow event types are absent.",
+      "commit_url": "https://github.com/NexoRuta/NexoRuta-Backend/commit/09538d989399b511473ad5af063754ea76d554a6"
+    },
+    {
+      "repository": "NexoRuta/NexoRuta-Frontend",
+      "sha": "d328e98c27db7c5cef018ab3492c54fc563eed49",
+      "pull_request_workflow_runs": [],
+      "commit_statuses": [],
+      "run_url": null,
+      "workflow": null,
+      "run_date": null,
+      "conclusion": null,
+      "jobs": null,
+      "artifacts": null,
+      "verification": "No verificado",
+      "limitation": "Workflow-run connector filters pull_request and first page. Empty statuses are not evidence that all check-runs or other workflow event types are absent.",
+      "commit_url": "https://github.com/NexoRuta/NexoRuta-Frontend/commit/d328e98c27db7c5cef018ab3492c54fc563eed49"
+    },
+    {
+      "repository": "NexoRuta/NexoRuta-Mobile",
+      "sha": "683766d6d8cd6c1bd9ce45bb12f6581ddb19b98c",
+      "pull_request_workflow_runs": [],
+      "commit_statuses": [],
+      "run_url": null,
+      "workflow": null,
+      "run_date": null,
+      "conclusion": null,
+      "jobs": null,
+      "artifacts": null,
+      "verification": "No verificado",
+      "limitation": "Workflow-run connector filters pull_request and first page. Empty statuses are not evidence that all check-runs or other workflow event types are absent.",
+      "commit_url": "https://github.com/NexoRuta/NexoRuta-Mobile/commit/683766d6d8cd6c1bd9ce45bb12f6581ddb19b98c"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "OPT08",
+      "verification": "No verificado",
+      "finding": "No actual current pipeline run/job evidence available from these exact-SHA queries. Source workflow integration exists, but does not prove the E2E opted-in/browser flows ran. Local portable test omissions cannot be resolved by these responses.",
+      "recommendation": "Do not credit E2E optional until an exact-candidate run URL and successful critical E2E job/test artifact, including opt-in status, are inspected."
+    },
+    {
+      "id": "NFR15",
+      "verification": "No verificado",
+      "finding": "No current remote run/job conclusions available. Local336 unit+4 architecture+224 mobile tests are distinct evidence, not proof all applicable suites ran in pipeline.",
+      "recommendation": "Require exact-candidate pipeline job evidence covering unit/integration/architecture/isolation and explain every skipped applicable suite."
+    },
+    {
+      "id": "OPT07",
+      "verification": "No verificado",
+      "finding": "No workflow run ID available, so no coverage artifact could be queried. This is not evidence that coverage artifacts do not exist.",
+      "recommendation": "Do not credit >70% coverage without exact run artifact/report for Domain and Application and pipeline publication."
+    }
+  ],
+  "next_action": "Provide a known exact-candidate GitHub Actions run URL/ID or a read-only method that lists all event types/check-runs; inspect its jobs/artifacts. Do not rerun automatically."
+}

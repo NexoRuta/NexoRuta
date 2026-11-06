@@ -1,0 +1,63 @@
+{
+  "rows": 104,
+  "sourceUnchanged": true,
+  "selectedPoints": 14,
+  "accreditedPoints": 0,
+  "summary": {
+    "CU": {
+      "implementation": {
+        "Parcial": 5,
+        "Completa": 22,
+        "Ausente": 3
+      },
+      "verification": {
+        "No verificado": 22,
+        "Comprobado": 1,
+        "Bloqueado": 7
+      }
+    },
+    "AP": {
+      "implementation": {
+        "Parcial": 2,
+        "Completa": 3,
+        "Ausente": 4
+      },
+      "verification": {
+        "No verificado": 8,
+        "Bloqueado": 1
+      }
+    },
+    "D": {
+      "implementation": {
+        "Completa": 14,
+        "Parcial": 8,
+        "Ausente": 2
+      },
+      "verification": {
+        "No verificado": 24
+      }
+    },
+    "NFR": {
+      "implementation": {
+        "Completa": 4,
+        "Parcial": 9,
+        "Ausente": 2
+      },
+      "verification": {
+        "Comprobado": 2,
+        "No verificado": 12,
+        "Bloqueado": 1
+      }
+    },
+    "OPT": {
+      "implementation": {
+        "Ausente": 7,
+        "Parcial": 7,
+        "Completa": 1
+      },
+      "verification": {
+        "No verificado": 15
+      }
+    }
+  }
+}

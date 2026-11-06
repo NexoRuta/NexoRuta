@@ -1,0 +1,19 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "<readonly mounts>",
+    "sdk:10.0",
+    "dotnet",
+    "build",
+    "NexoRuta.sln",
+    "-c",
+    "Release",
+    "--artifacts-path",
+    "/tmp/audit-artifacts",
+    "--nologo"
+  ],
+  "exit": 0,
+  "seconds": 44.12
+}

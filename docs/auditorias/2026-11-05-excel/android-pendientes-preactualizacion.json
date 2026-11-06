@@ -1,0 +1,18 @@
+{
+  "summary": [
+    {
+      "id": "01a1aa09-9b84-7f85-b6ae-fd736d59dd16",
+      "route_id": "01a1aa09-9b84-7f67-9fc4-14fef5a82376",
+      "date": "2026-11-05",
+      "route_state": "Despachada",
+      "local_closed": "True",
+      "local_pending": "False"
+    }
+  ],
+  "diagnostics": [
+    "11-05 18:31:55.612  3402  3402 I NexoRuta.Session: local_work.pending=False",
+    "11-05 18:31:55.615  3402  3402 I NexoRuta.Session: session.local_tokens_present=true",
+    "11-05 18:31:56.427  3402  3402 I NexoRuta.Session: local_work.journey.id=01a1aa09-9b84-7f85-b6ae-fd736d59dd16;route_id=01a1aa09-9b84-7f67-9fc4-14fef5a82376;date=2026-11-05;route_state=Despachada;local_closed=True;local_pending=False"
+  ],
+  "network": "offline, no adb reverse"
+}
