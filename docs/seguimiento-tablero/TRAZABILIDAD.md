@@ -14,6 +14,24 @@ Fuentes: `docs/alcance/Laboratorio__NET_2026.pdf`, planilla original `docs/alcan
 | CU-27 | Aviso por resultado canónico confirmado, outbox y RabbitMQ; estado de envío e identidad visual; enlace original cifrado recuperado por el worker | `RecipientMailpitTests`, fallo SMTP real en loopback y reintento |
 | OPT-07 | Cobertura de líneas por capa, unión de suites; control estricto >70%, artefactos y resumen de CI | `scripts/coverage/report.py`, job `Backend coverage / Domain and Application >70%` |
 
+```mermaid
+flowchart TD
+    T[PostgreSQL: resultado confirmado e historial canónico] --> O[Outbox transaccional]
+    O --> K[Kafka: hechos operativos v1]
+    K --> B[Grupo board: idempotencia y orden]
+    K --> H[Grupo history: idempotencia y retención]
+    B --> P[Proyección operativa PostgreSQL]
+    H --> M[Historial y analítica MongoDB]
+    P --> A[API 1 y API 2: RLS y fotografía consistente]
+    A --> S[SignalR de negocio y puente Backoffice]
+    S --> D[Tablero]
+    M --> Q[API documental: operador y comercio]
+    O --> R[RabbitMQ: trabajos y reintentos]
+    R --> W[Worker SMTP independiente]
+    W --> E[Mailpit: aviso con enlace público legítimo]
+    T --> U[Lectura pública acotada por token opaco]
+```
+
 ## Semántica y preservación
 
 PostgreSQL conserva transacciones, controles de dominio, custodia, RLS e historial canónico inmutable. Ningún consumidor cambia el envío, la ruta, la custodia o las versiones de bulto. Rendir, recibir físicamente y liberar un vehículo continúan siendo hechos distintos. El detalle público de bultos tiene páginas de 1–200 y offset máximo 10000, ordenadas por ordinal estable sin IDs ni códigos internos. En retiros, el estado público deriva de la custodia aceptada: pendiente de retiro, retirado, en depósito y entregado al comercio. El contador de entregados refiere al destinatario en entregas y al comercio en retiros; rendir no lo convierte en recibido en depósito. La solicitud pública registra intención; aprobarla reutiliza `ReprogramarAsync`, que exige el estado, la versión, los intentos y las reglas capturadas. No asigna una nueva ruta ni recibe carga. Planificar la visita posterior mantiene sus validaciones de elegibilidad y custodia.
