@@ -6,13 +6,13 @@
       "path": "backend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Backend.git",
       "branch": "fix/entregaparcial",
-      "commit": "74e2c0265657cacb3b8b8c981c13eb7489d3df18"
+      "commit": "bd407e94ea636253f89335c1b043e57cc817e6cc"
     },
     {
       "path": "frontend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Frontend.git",
       "branch": "codex/repair-entregaparcial",
-      "commit": "55b0c953881974b591db3bae0ca558d3e104a68f"
+      "commit": "bae070083ec81519f4ad40726fc1667839b7ea53"
     },
     {
       "path": "mobile",

@@ -13,7 +13,7 @@ no se hizo force-push ni se accedió a la VM/base real.
   proyectos net10.0. CI restaura portable → Android arm64, compila APK, restaura
   x64 y vuelve a portable, exigiendo cero cambios de locks.
 - Backend/navegador: el companion 5528cd9 no implementaba las rutas y el flujo
-  esperados por las pruebas. Se fija el SHA integrado inmutable c7b69ba. Las
+  esperados por las pruebas. Se reemplaza por un SHA compatible e inmutable, derivado del integrado c7b69ba. Las
   cuatro pruebas CommerceCsvImportKestrelTests aprobaron con ese companion,
   conservando conflictos/reintentos y sin aumentar esperas. También se activan
   las pruebas optativas de navegador y se selecciona su configuración Release.
@@ -21,7 +21,11 @@ no se hizo force-push ni se accedió a la VM/base real.
   reabrir el panel rápidamente. Se enfoca primero el contenedor y luego el control
   inicial; se exige foco dentro del panel antes de Escape. Las 516 pruebas de
   Frontend aprobaron localmente sin omisiones, incluidas las cinco optativas.
-  CI de Frontend y CI integrado ahora las ejecutan. Se revisaron capturas de
+  CI de Frontend y CI integrado ahora las ejecutan. La admisión optativa también
+  espera la identidad del operador y confirma el cambio del correo antes de seguir:
+  no escribe durante la deshabilitación temporal del formulario y exige conservar
+  ese correo después de la validación. El fallo se observó al ampliar CI; no se
+  alteraron campos obligatorios, esperas máximas ni el flujo del producto. Se revisaron capturas de
   Backoffice a 1440 y 320 px; la automatización también cubre 768/390, teclado,
   duplicados, error y reintento. No es una validación visual Android.
 - Históricos: las fixtures bajaban desde el esquema actual, atravesando
@@ -81,8 +85,8 @@ los cambios posteriores de develop en documentación, infraestructura y scripts.
 
 Orden: Frontend#49 ya integrada → Frontend#50, Backend#48 y Mobile#22 → principal#73.
 Las tres correcciones hijas pueden integrarse independientemente tras aprobar
-sus checks; principal#73 depende de las tres. Backend CI conserva su companion
-inmutable c7b69ba, compatible; el CI integrado verifica además el SHA de Frontend#50.
+sus checks; principal#73 depende de las tres. Backend CI y el CI integrado fijan el mismo companion inmutable de Frontend#50,
+con las correcciones de foco y sincronización de la admisión.
 Los gitlinks publicados exactos y sus repositorios están en
 scripts/cloud/checkpoint.json y en el árbol Git de este commit. La integración
 principal debe esperar los checks de los hijos y del conjunto. Las PR contienen
