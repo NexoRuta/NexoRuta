@@ -9,7 +9,8 @@ no se hizo force-push ni se accedió a la VM/base real.
 
 - Mobile: el build x64 del emulador contaminaba los locks compartidos sin RID.
   Selección por RID en todo el grafo; locks portables, arm64 y x64 versionados;
-  locked-mode también en helpers locales. Android no impone su framework a los
+  locked-mode también en helpers locales y selección idéntica en release-dev,
+  sin ejecutar la publicación. Android no impone su framework a los
   proyectos net10.0. CI restaura portable → Android arm64, compila APK, restaura
   x64 y vuelve a portable, exigiendo cero cambios de locks.
 - Backend/navegador: el companion 5528cd9 no implementaba las rutas y el flujo

@@ -18,7 +18,7 @@
       "path": "mobile",
       "repository": "https://github.com/NexoRuta/NexoRuta-Mobile.git",
       "branch": "fix/entregaparcial",
-      "commit": "dc2669632ee3b8585de889f375d08aa003f24b24"
+      "commit": "f2b3db412ce23b0b36215fd301f6d3d3d6959252"
     }
   ],
   "initialRequiredCommit": "8991321593f9092e18aac83d6a9a11df4c388cb3"
