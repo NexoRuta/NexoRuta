@@ -137,6 +137,7 @@ class VmDeploymentTests(unittest.TestCase):
                 self.assertIn("~nexoruta:nexoruta-gcp-demo:cache:v1:*", acl)
                 self.assertIn("-@all", acl)
                 self.assertIn("+expire", acl)
+                self.assertIn("+unlink", acl)
                 self.assertNotIn(identity["password"], acl)
                 self.assertNotIn("flushdb", acl.lower())
 
