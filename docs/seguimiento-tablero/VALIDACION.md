@@ -41,8 +41,12 @@ La medición inicial cubrió 336 unitarias aprobadas y 712 integraciones: 700 ap
 
 La corrida local completa anterior se interrumpió tras fallos de aserciones ya actualizadas y falta de disco temporal de Docker VFS; **no cuenta como aprobada**. Los pipelines posteriores ejecutan el inventario exhaustivo en tres shards y publican TRX/Cobertura. Las ejecuciones canceladas o fallidas no se cuentan como verdes.
 
-## Principal y límite de autorización
+## Integración del principal
 
-La PR del principal no se abrió: [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml), job `infrastructure`, dispara `tofu fmt`, `tofu init -backend=false` y `tofu validate`. La base actual no coincide con la última combinación integrada publicada y, además, el cambio de runner exige esa validación. La instrucción de no ejecutar IaC se mantiene; está pendiente la aclaración solicitada al usuario sobre autorizar exclusivamente esas validaciones estáticas. La rama `feature/seguimiento-tablero-eventos` deja los gitlinks de los hijos ya integrados y el conjunto [revisable](https://github.com/NexoRuta/NexoRuta/compare/develop...feature/seguimiento-tablero-eventos) sin disparar ese workflow. Por ello no se declara aprobado el CI integrado del principal ni integrado su cambio a `develop`. No se omitieron protecciones de ramas.
+El usuario aclaró el alcance y autorizó las validaciones del CI existente: `tofu fmt -check`, `tofu init -backend=false -input=false -lockfile=readonly`, `tofu validate` y pruebas con infraestructura sintética y efímera. El bloqueo anterior de autorización queda resuelto. Siguen prohibidos `apply`, `destroy`, `import`, acceso o modificaciones del estado remoto, despliegues y operaciones sobre la VM/base real.
+
+El workflow [Integrated CI](../../.github/workflows/ci.yml) usa permisos `contents: read` y el entorno `nexoruta-ci` para las PR, sin autenticación de despliegue ni permiso OIDC. El job `infrastructure` inicializa los módulos con backend deshabilitado y valida su configuración; `cloudsql` verifica PostgreSQL efímero, no una instancia real. Los workflows de publicación y operación no se disparan al abrir esta PR ni al integrar con `develop`.
+
+La rama `feature/seguimiento-tablero-eventos` conserva los gitlinks publicados de ambos hijos ya integrados y Mobile sin cambios. La consulta remota previa a la PR confirmó `develop` del principal en `25ffb1d8a7f34bb17623a99357d0b7b743ba8404`, antecesor del candidato, sin avances concurrentes. Se abrirá la PR hacia `develop` y se registrarán aquí sus resultados reales; no se declara aprobado un CI pendiente ni se omiten protecciones de ramas.
 
 El guion está en [DEMOSTRACION.md](DEMOSTRACION.md). CU-28 y los demás puntos expresamente fuera de alcance conservan su implementación actual; Kafka interno y correos no se acreditan como webhooks HTTP salientes.
