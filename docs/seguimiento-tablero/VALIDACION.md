@@ -47,6 +47,25 @@ El usuario aclaró el alcance y autorizó las validaciones del CI existente: `to
 
 El workflow [Integrated CI](../../.github/workflows/ci.yml) usa permisos `contents: read` y el entorno `nexoruta-ci` para las PR, sin autenticación de despliegue ni permiso OIDC. El job `infrastructure` inicializa los módulos con backend deshabilitado y valida su configuración; `cloudsql` verifica PostgreSQL efímero, no una instancia real. Los workflows de publicación y operación no se disparan al abrir esta PR ni al integrar con `develop`.
 
-La rama `feature/seguimiento-tablero-eventos` conserva los gitlinks publicados de ambos hijos ya integrados y Mobile sin cambios. La consulta remota previa a la PR confirmó `develop` del principal en `25ffb1d8a7f34bb17623a99357d0b7b743ba8404`, antecesor del candidato, sin avances concurrentes. Se abrirá la PR hacia `develop` y se registrarán aquí sus resultados reales; no se declara aprobado un CI pendiente ni se omiten protecciones de ramas.
+La [PR principal #74](https://github.com/NexoRuta/NexoRuta/pull/74) apunta a `develop` y conserva los gitlinks publicados de ambos hijos ya integrados y Mobile sin cambios. La consulta remota confirmó la base en `25ffb1d8a7f34bb17623a99357d0b7b743ba8404`, antecesor del candidato, sin avances concurrentes.
+
+El [CI integrado completo 42333366312](https://github.com/NexoRuta/NexoRuta/actions/runs/42333366312) terminó con **success** sobre el head `15aef02f9393f128f6f67c5edbd53061b95b1cb6`. GitHub ejecutó el checkout de merge sintético `ef9f184c461a6d210802e2ce5924837cf7992744`, con los tres gitlinks de la tabla anterior. El plan activó todas las validaciones y los doce jobs terminaron aprobados, sin jobs omitidos.
+
+| Validación integrada | Resultado real |
+|---|---|
+| Backend unitarias / arquitectura | 346 / 4 aprobadas |
+| Backend integración | 720 casos únicos aprobados: 241/219/260; preflight crítico repetido aparte |
+| Frontend, API del conjunto y contrato OpenAPI en vivo | 518 aprobadas |
+| Mobile portable | 235 aprobadas: Core 36, Api 63, Storage 35, Application 101 |
+| Android, Mobile sin modificaciones | APK Release arm64, restore x64 y portable antes/después; lockfiles sin diferencias |
+| Infraestructura | 221 pruebas Python, fmt/init/validate de ambos módulos, compose, shell y actionlint aprobados |
+| Runner k6 real | Aprobado contra servicios controlados; contexto `controlled-no-cloud`, sin carga sobre una instalación real |
+| PostgreSQL efímero | Cadena de migraciones con NOSUPERUSER/CREATEROLE/CREATEDB, atributos de roles y aislamiento de hosting aprobados |
+
+Los TRX anteriores no contienen pruebas fallidas ni omitidas. [ci-integrado.json](evidencias/ci-integrado.json) conserva el plan completo, head y merge sintético, jobs, contadores TRX y hashes de artefactos verificados. Incluye los hechos del replay Kafka/MongoDB, SignalR sobre dos API y Mailpit de esta misma ejecución integrada. [k6-controlado.json](evidencias/k6-controlado.json) conserva el resultado del runner; sus métricas describen el entorno controlado, no capacidad productiva. Los artefactos de pruebas/APK tienen retención de 14 días; el artefacto k6, 7 días. El binario Android no se descargó localmente y no se realizó revisión visual nativa.
+
+Los comandos OpenTofu reales se limitaron a los autorizados. Las trazas de acciones administrativas de las pruebas Python son simulaciones con comandos reemplazados por mocks; no ejecutaron apply ni operaron recursos. No se accedió al estado remoto ni se utilizaron credenciales de despliegue.
+
+El commit que guarda este informe solo agrega documentación y evidencia; no cambia fuentes, workflow ni gitlinks respecto de la ejecución citada. Los [checks de la PR sobre el candidato final](https://github.com/NexoRuta/NexoRuta/pull/74/checks) son la condición adicional para integrar: se espera su cierre completo en verde y el cumplimiento de las protecciones de GitHub, sin bypass. La cobertura por capa continúa referenciada al gate independiente de los hijos, cuyos árboles permanecen idénticos.
 
 El guion está en [DEMOSTRACION.md](DEMOSTRACION.md). CU-28 y los demás puntos expresamente fuera de alcance conservan su implementación actual; Kafka interno y correos no se acreditan como webhooks HTTP salientes.

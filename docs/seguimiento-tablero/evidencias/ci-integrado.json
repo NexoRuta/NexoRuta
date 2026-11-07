@@ -1,0 +1,561 @@
+{
+  "pullRequest": "https://github.com/NexoRuta/NexoRuta/pull/74",
+  "runId": 42333366312,
+  "url": "https://github.com/NexoRuta/NexoRuta/actions/runs/42333366312",
+  "headSha": "15aef02f9393f128f6f67c5edbd53061b95b1cb6",
+  "plan": {
+    "android_input_sha256": "ad395b2b4645898a9c977138ed6958aa1eee8e4b80b4390a04935c5b518e43b5",
+    "baseline": {
+      "android_input_sha256": null,
+      "android_verified_mobile_sha": null,
+      "integration_tag": null,
+      "release": null,
+      "root_sha": "25ffb1d8a7f34bb17623a99357d0b7b743ba8404",
+      "sources": {
+        "backend": "96ee1c72b50a11749d1eb95b147e473350b5a081",
+        "frontend": "bae070083ec81519f4ad40726fc1667839b7ea53",
+        "mobile": "f2b3db412ce23b0b36215fd301f6d3d3d6959252"
+      }
+    },
+    "bundle_required": true,
+    "cloudsql": {
+      "reason": "database or infrastructure inputs changed",
+      "run": true
+    },
+    "component_paths": {
+      "backend": [],
+      "frontend": [],
+      "mobile": []
+    },
+    "components": {
+      "backend": {
+        "reason": "backend source changed",
+        "run": true
+      },
+      "frontend": {
+        "reason": "frontend source changed",
+        "run": true
+      },
+      "mobile_android": {
+        "reason": "mobile app build inputs changed",
+        "run": true
+      },
+      "mobile_portable": {
+        "reason": "mobile source changed",
+        "run": true
+      }
+    },
+    "current": {
+      "root_sha": "ef9f184c461a6d210802e2ce5924837cf7992744",
+      "sources": {
+        "backend": "a7c1de8fae4859385082a2e7065704d3dc7d4fe6",
+        "frontend": "06b1ca380aea0ec68dbbaafff5de9a63a24d8f6b",
+        "mobile": "f2b3db412ce23b0b36215fd301f6d3d3d6959252"
+      }
+    },
+    "images": [
+      "api",
+      "worker",
+      "admin",
+      "backoffice",
+      "commerce",
+      "tracking"
+    ],
+    "infrastructure": {
+      "reason": "root build/deploy inputs changed",
+      "run": true
+    },
+    "publish_required": true,
+    "reason": "pull request base combination has no successful integrated baseline",
+    "root_paths": [],
+    "version": 1
+  },
+  "limits": {
+    "realOpenTofuCommands": [
+      "tofu fmt -check -recursive infra/gcp",
+      "tofu -chdir=infra/gcp/bootstrap init -backend=false -input=false -lockfile=readonly",
+      "tofu -chdir=infra/gcp/bootstrap validate",
+      "tofu -chdir=infra/gcp/demo init -backend=false -input=false -lockfile=readonly",
+      "tofu -chdir=infra/gcp/demo validate"
+    ],
+    "remoteStateAccess": false,
+    "deploymentCredentials": false,
+    "applyDestroyImport": false,
+    "deployment": false,
+    "realVmOrDatabaseOperations": false,
+    "androidNativeVisualReview": false
+  },
+  "conclusion": "success",
+  "jobs": [
+    {
+      "id": 128284669379,
+      "name": "source_policy",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128284699097,
+      "name": "sources",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128284767700,
+      "name": "mobile_android",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128284767727,
+      "name": "backend_integration (2)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128284767731,
+      "name": "mobile_portable",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128284767734,
+      "name": "backend_integration (0)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128284767744,
+      "name": "infrastructure",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128284767758,
+      "name": "frontend",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128284767775,
+      "name": "cloudsql",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128284767780,
+      "name": "backend_integration (1)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128284767800,
+      "name": "backend",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128288386861,
+      "name": "Integrated CI / result",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 13559176341,
+      "name": "backend-integration-shard-2",
+      "digest": "sha256:b36cadbe9e470002d3ddc73c10ddeb72491194cf95adf23be52e09b111be9418",
+      "expiresAt": "2026-11-21T03:33:20Z",
+      "sizeBytes": 355275
+    },
+    {
+      "id": 13559040013,
+      "name": "nexoruta-load-runtime-verification",
+      "digest": "sha256:5e724520e9b1f168c2e11be64ef7d22b8a130febab28c3e485652fb450ff6b39",
+      "expiresAt": "2026-11-14T03:22:21Z",
+      "sizeBytes": 891
+    },
+    {
+      "id": 13559015742,
+      "name": "backend-integration-shard-1",
+      "digest": "sha256:0f7dc637f0da99891cf1f108203e71144f987fdc859df49b76c3c7e00e5efb48",
+      "expiresAt": "2026-11-21T03:27:09Z",
+      "sizeBytes": 159366
+    },
+    {
+      "id": 13558610801,
+      "name": "mobile-portable-test-results",
+      "digest": "sha256:a8350faec042b7036167be819a7110ab32f813360099506b21eecefebbb6ec69",
+      "expiresAt": "2026-11-21T03:20:00Z",
+      "sizeBytes": 50669
+    },
+    {
+      "id": 13558587664,
+      "name": "backend-integration-shard-0",
+      "digest": "sha256:bb3ae7edd52eb8ef57cb8a63bdabcbd2971a5d9f07131ae67a426f7846a8a49a",
+      "expiresAt": "2026-11-21T03:26:29Z",
+      "sizeBytes": 381860
+    },
+    {
+      "id": 13558224619,
+      "name": "android-verification-f2b3db412ce23b0b36215fd301f6d3d3d6959252",
+      "digest": "sha256:b3cefc1039a6dcb979843d1eb8897ac2e1069979edc016938633e49f396c4f75",
+      "expiresAt": "2026-11-21T03:22:18Z",
+      "sizeBytes": 33926489
+    },
+    {
+      "id": 13558134515,
+      "name": "frontend-test-results",
+      "digest": "sha256:b57aaf9653f19a21bcaf5f4d091d9004589337e1ac62aabdc0fc55e1ee85340d",
+      "expiresAt": "2026-11-21T03:21:24Z",
+      "sizeBytes": 270350
+    },
+    {
+      "id": 13557519874,
+      "name": "backend-fast-test-results",
+      "digest": "sha256:3e0ba87d80cf8549284fcc37394606ba1e66e47e04cb5e27d7a8c77de78e2a46",
+      "expiresAt": "2026-11-21T03:19:41Z",
+      "sizeBytes": 85160
+    }
+  ],
+  "downloadedArtifacts": [
+    {
+      "file": "backend-fast.zip",
+      "sha256": "3e0ba87d80cf8549284fcc37394606ba1e66e47e04cb5e27d7a8c77de78e2a46"
+    },
+    {
+      "file": "backend-integration-shard-0.zip",
+      "sha256": "bb3ae7edd52eb8ef57cb8a63bdabcbd2971a5d9f07131ae67a426f7846a8a49a"
+    },
+    {
+      "file": "backend-integration-shard-1.zip",
+      "sha256": "0f7dc637f0da99891cf1f108203e71144f987fdc859df49b76c3c7e00e5efb48"
+    },
+    {
+      "file": "backend-integration-shard-2.zip",
+      "sha256": "b36cadbe9e470002d3ddc73c10ddeb72491194cf95adf23be52e09b111be9418"
+    },
+    {
+      "file": "frontend.zip",
+      "sha256": "b57aaf9653f19a21bcaf5f4d091d9004589337e1ac62aabdc0fc55e1ee85340d"
+    },
+    {
+      "file": "load-runtime.zip",
+      "sha256": "5e724520e9b1f168c2e11be64ef7d22b8a130febab28c3e485652fb450ff6b39"
+    },
+    {
+      "file": "mobile-portable.zip",
+      "sha256": "a8350faec042b7036167be819a7110ab32f813360099506b21eecefebbb6ec69"
+    }
+  ],
+  "trxReports": [
+    {
+      "archive": "backend-fast.zip",
+      "trx": "unit/_runnervmwuk1x_2026-11-07_03_19_37_net10.0.trx",
+      "counters": {
+        "total": "346",
+        "executed": "346",
+        "passed": "346",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-fast.zip",
+      "trx": "architecture/_runnervmwuk1x_2026-11-07_03_19_41_net10.0.trx",
+      "counters": {
+        "total": "4",
+        "executed": "4",
+        "passed": "4",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-integration-shard-0.zip",
+      "trx": "critical/critical-route-decision.trx",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-integration-shard-0.zip",
+      "trx": "shard-0/integration-shard-0.trx",
+      "counters": {
+        "total": "241",
+        "executed": "241",
+        "passed": "241",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-integration-shard-1.zip",
+      "trx": "shard-1/integration-shard-1.trx",
+      "counters": {
+        "total": "219",
+        "executed": "219",
+        "passed": "219",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-integration-shard-2.zip",
+      "trx": "shard-2/integration-shard-2.trx",
+      "counters": {
+        "total": "260",
+        "executed": "260",
+        "passed": "260",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "frontend.zip",
+      "trx": "_runnervmwuk1x_2026-11-07_03_20_16_net10.0.trx",
+      "counters": {
+        "total": "518",
+        "executed": "518",
+        "passed": "518",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "mobile-portable.zip",
+      "trx": "Api/_runnervmwuk1x_2026-11-07_03_19_07_net10.0.trx",
+      "counters": {
+        "total": "63",
+        "executed": "63",
+        "passed": "63",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "mobile-portable.zip",
+      "trx": "Core/_runnervmwuk1x_2026-11-07_03_19_03_net10.0.trx",
+      "counters": {
+        "total": "36",
+        "executed": "36",
+        "passed": "36",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "mobile-portable.zip",
+      "trx": "Application/_runnervmwuk1x_2026-11-07_03_19_18_net10.0.trx",
+      "counters": {
+        "total": "101",
+        "executed": "101",
+        "passed": "101",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "mobile-portable.zip",
+      "trx": "Storage/_runnervmwuk1x_2026-11-07_03_19_11_net10.0.trx",
+      "counters": {
+        "total": "35",
+        "executed": "35",
+        "passed": "35",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    }
+  ],
+  "counts": {
+    "backendUnit": 346,
+    "backendArchitecture": 4,
+    "backendIntegrationUnique": 720,
+    "criticalDecisionRepeatedPreflight": 1,
+    "frontend": 518,
+    "mobilePortable": 235,
+    "infrastructurePython": 221,
+    "failed": 0,
+    "notExecuted": 0
+  },
+  "operationalFacts": [
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.RecipientMailpitTests.PersistedNoticeUsesRealMailpitAndRecoversThroughRabbitRetryWithoutLogicalDuplicates",
+      "outcome": "Passed",
+      "facts": {
+        "mailpitMessageId": "9342xVTWT8FFJnpLCxVkyU",
+        "received": 1,
+        "smtpAttempts": 2,
+        "controlledSmtpFailureRecovered": true,
+        "duplicateMessageDidNotResend": true,
+        "operatorBrandAndOpaqueLinkVerified": true
+      }
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalProjectionTests.IndependentConsumersDeduplicateLatePositionsAndReplayIntoIsolatedDestinations",
+      "outcome": "Passed",
+      "facts": {
+        "topic": "test-operational-6a49990a90de4f0bb97a0dd7ceaef10f",
+        "firstGroups": [
+          "board-89b92cb2782b4695aaae3694c03b92be",
+          "history-51175582f351491a8109f7f4b3c6f24b"
+        ],
+        "replayGroups": [
+          "board-735d89cbef444de1b551177e5ec57fbf",
+          "history-13b0b9aa7582442297255a1ebeda6728"
+        ],
+        "uniqueEvents": 12,
+        "materializedRows": 9,
+        "identicalReplay": true,
+        "physicalPositionNeverRewinds": true,
+        "duplicatesCountOnce": true,
+        "documentaryConsumerRecoveredIndependently": true
+      }
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalSignalRTests.TwoRealKestrelApisShareTenantScopedPhotographsAndReconnectWithoutRewinding",
+      "outcome": "Passed",
+      "facts": {
+        "apiInstances": 2,
+        "failovers": 1,
+        "webSocketsWithoutNegotiation": true,
+        "reconnectOnSurvivingApi": true,
+        "tenantsIsolated": true,
+        "outboxLagDetected": true,
+        "revision": 4
+      }
+    }
+  ],
+  "notes": [
+    "Tested checkout is the GitHub synthetic PR merge in plan.current.root_sha; headSha identifies the feature commit.",
+    "Android verification is build/restore/lockfile validation, not a native visual review.",
+    "Unit tests mock administrative actions; their apply/VM traces are not real OpenTofu/deployment operations.",
+    "Android binary artifact metadata retained; binary archive not downloaded locally.",
+    "Coverage remains the independently gated child CI report; gitlinks and Domain/Application trees unchanged."
+  ]
+}
