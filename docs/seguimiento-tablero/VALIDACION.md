@@ -10,7 +10,7 @@ Gitlinks publicados del conjunto:
 
 | Repositorio | Commit publicado / gitlink |
 |---|---|
-| Backend, candidato #52 pendiente de merge | `58b04e6cd545ea7ecc0a6914fba24a89ae293272` |
+| Backend, merge #52 en develop | `6306f6ebbe7539acb34073aa97f45c218b42a0b7` |
 | Frontend | `06b1ca380aea0ec68dbbaafff5de9a63a24d8f6b` |
 | Mobile, sin cambios | `f2b3db412ce23b0b36215fd301f6d3d3d6959252` |
 
@@ -20,12 +20,12 @@ Los merges iniciales Backend `a7c1de8fae4859385082a2e7065704d3dc7d4fe6` y Fronte
 
 Métrica: líneas de fuente ejecutables, unión por archivo/línea de unitarias e integración, por capa. El control es estrictamente **>70% en cada capa**, sin exclusiones personalizadas. No hay atributos de exclusión añadidos en Domain/Application. Los valores y fallos/omitidas iniciales están publicados en `backend/docs/seguimiento-tablero/evidencias/`.
 
-| Capa | Inicial | Final CI sobre 655edd3 | >70% |
+| Capa | Inicial | Final CI sobre 58b04e6 | >70% |
 |---|---:|---:|---|
 | Domain | 1880/2038 — 92,25% | 1880/2038 — 92,25% | Aprobado |
 | Application | 1543/1638 — 94,20% | 1576/1673 — 94,20% | Aprobado |
 
-La medición inicial cubrió 336 unitarias aprobadas y 712 integraciones: 700 aprobadas, 7 fallidas y 5 omitidas; esa ejecución inicial no fue verde. Sus métricas se publicaron antes de cambiar el producto. El informe final es la unión por archivo/línea de ocho reportes Cobertura del CI, sin contar dos veces una línea por ejecutarse en varias suites: [JSON](evidencias/cobertura-final/summary.json) y [resumen](evidencias/cobertura-final/summary.md). El gate falla con 70% exacto, con una capa ausente o con reportes insuficientes. La cobertura de Mobile no se mezcla con Backend; no se midió cobertura adicional de Mobile.
+La medición inicial cubrió 336 unitarias aprobadas y 712 integraciones: 700 aprobadas, 7 fallidas y 5 omitidas; esa ejecución inicial no fue verde. Sus métricas se publicaron antes de cambiar el producto. El informe final es la unión por archivo/línea de ocho reportes Cobertura del [CI de Backend #52](https://github.com/NexoRuta/NexoRuta-Backend/actions/runs/42337501810), sin contar dos veces una línea por ejecutarse en varias suites: [JSON](evidencias/cobertura-final/summary.json) y [resumen](evidencias/cobertura-final/summary.md). El gate falla con 70% exacto, con una capa ausente o con reportes insuficientes. La cobertura de Mobile no se mezcla con Backend; no se midió cobertura adicional de Mobile.
 
 ## Evidencias locales
 
@@ -51,7 +51,7 @@ La [PR principal #74](https://github.com/NexoRuta/NexoRuta/pull/74) apunta a `de
 
 El [CI integrado completo 42333366312](https://github.com/NexoRuta/NexoRuta/actions/runs/42333366312) terminó con **success** sobre el head `15aef02f9393f128f6f67c5edbd53061b95b1cb6`. GitHub ejecutó el checkout de merge sintético `ef9f184c461a6d210802e2ce5924837cf7992744`, con Backend `a7c1de8fae4859385082a2e7065704d3dc7d4fe6`, Frontend `06b1ca380aea0ec68dbbaafff5de9a63a24d8f6b` y Mobile `f2b3db412ce23b0b36215fd301f6d3d3d6959252`. El plan activó todas las validaciones y los doce jobs terminaron aprobados, sin jobs omitidos.
 
-| Validación integrada | Resultado real |
+| Primera validación integrada, anterior a #52 | Resultado real |
 |---|---|
 | Backend unitarias / arquitectura | 346 / 4 aprobadas |
 | Backend integración | 720 casos únicos aprobados: 241/219/260; preflight crítico repetido aparte |
@@ -70,7 +70,13 @@ El commit `99aa4af9bfd03068805ca364194a2112e1de3da3` agregó únicamente este in
 
 Se reprodujo la causa con Kafka real: antes de consumir el primer registro, `Position` permanece sin inicializar; el consumidor omitía el latido de las particiones vacías y la proyección podía quedar atrasada indefinidamente. La [corrección Backend #52](https://github.com/NexoRuta/NexoRuta-Backend/pull/52) usa los watermarks del broker para demostrar que una partición está vacía. Al reiniciar un grupo con registros retenidos y posición desconocida consulta su offset confirmado; sin confirmación válida conserva un atraso positivo. No modifica ni reinicia offsets, ni relaja los contadores de frontera o la frescura de 15 segundos.
 
-El usuario autorizó expresamente la excepción necesaria: integrar esa corrección y actualizar únicamente el gitlink Backend, preservando Frontend y Mobile exactos. La prueba nueva falla contra el código anterior; su extensión de reinicio también detectó el caso de posición desconocida con offset confirmado. La validación local final aprobó cuatro escenarios sin omitidas: particiones vacías/primer evento/reinicio sin reprocesamiento, E2E completo, paginación pública y replay independiente. Una corrida local intermedia falló por datos de fixture y disposición del worktree; no se cuenta como aprobada. [particiones-vacias.json](evidencias/particiones-vacias.json) conserva esas ejecuciones y sus contadores. El [CI completo de Backend #52](https://github.com/NexoRuta/NexoRuta-Backend/actions/runs/42337501810) está en curso. El principal valida en paralelo el commit publicado `58b04e6cd545ea7ecc0a6914fba24a89ae293272`; antes de integrar se fijará el merge de Backend, con árbol idéntico al candidato aprobado, y se repetirá el CI del conjunto final. Las corridas anteriores canceladas por reemplazo del candidato no se cuentan como verdes.
+El usuario autorizó expresamente la excepción necesaria: integrar esa corrección y actualizar únicamente el gitlink Backend, preservando Frontend y Mobile exactos. La prueba nueva falla contra el código anterior; su extensión de reinicio también detectó el caso de posición desconocida con offset confirmado. La validación local final aprobó cuatro escenarios sin omitidas: particiones vacías/primer evento/reinicio sin reprocesamiento, E2E completo, paginación pública y replay independiente. Una corrida local intermedia falló por datos de fixture y disposición del worktree; no se cuenta como aprobada. [particiones-vacias.json](evidencias/particiones-vacias.json) conserva esas ejecuciones y sus contadores. Las corridas anteriores canceladas por reemplazo del candidato no se cuentan como verdes.
+
+El [CI completo de Backend #52](https://github.com/NexoRuta/NexoRuta-Backend/actions/runs/42337501810) terminó verde sobre `58b04e6cd545ea7ecc0a6914fba24a89ae293272`: 346 unitarias, 4 de arquitectura y 721 integraciones (289/179/253), sin omitidas. El gate independiente de ambas capas aprobó. La PR se integró mediante `6306f6ebbe7539acb34073aa97f45c218b42a0b7`; se comprobó que su árbol coincide exactamente con el candidato y que la base no había avanzado. [ci-backend-salud.json](evidencias/ci-backend-salud.json) conserva reportes, hashes y resultado de los siete jobs.
+
+El [CI integrado corregido 42337627628](https://github.com/NexoRuta/NexoRuta/actions/runs/42337627628) también terminó verde: head `1905fad4c814fd269b637b2ab578343fdf909f8b`, merge sintético `543a54965d6682b72d4ecb5b9a3adfaa1160955c` y Backend `58b04e6cd545ea7ecc0a6914fba24a89ae293272`. Sus doce jobs aprobaron, sin omitidos: 346 unitarias Backend, 4 arquitectura, 721 integraciones, 518 Frontend y 235 Mobile portable, además de Android, infraestructura y PostgreSQL efímero. [ci-integrado-corregido.json](evidencias/ci-integrado-corregido.json) conserva los nueve escenarios operativos aprobados, hechos Kafka/MongoDB/SignalR/Mailpit, plan, TRX y siete hashes de archivos descargados verificados contra GitHub.
+
+El conjunto final fija el merge Backend `6306f6e`, de árbol idéntico al `58b04e6` validado, y agrega únicamente este cierre documental respecto del código probado. Frontend y Mobile siguen exactos. Se vuelve a exigir el CI completo sobre ese último commit; no se reutiliza un check anterior para omitirlo.
 
 Los [checks de la PR sobre el candidato final](https://github.com/NexoRuta/NexoRuta/pull/74/checks) siguen siendo condición para integrar: se espera su cierre completo en verde y el cumplimiento de las protecciones de GitHub, sin bypass. Los resultados históricos anteriores identifican sus commits y no sustituyen la validación del conjunto corregido.
 

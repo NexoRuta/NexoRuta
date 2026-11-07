@@ -1,0 +1,596 @@
+{
+  "repository": "NexoRuta/NexoRuta",
+  "pullRequest": "https://github.com/NexoRuta/NexoRuta/pull/74",
+  "headSha": "1905fad4c814fd269b637b2ab578343fdf909f8b",
+  "runId": 42337627628,
+  "url": "https://github.com/NexoRuta/NexoRuta/actions/runs/42337627628",
+  "conclusion": "success",
+  "plan": {
+    "android_input_sha256": "ad395b2b4645898a9c977138ed6958aa1eee8e4b80b4390a04935c5b518e43b5",
+    "baseline": {
+      "android_input_sha256": null,
+      "android_verified_mobile_sha": null,
+      "integration_tag": null,
+      "release": null,
+      "root_sha": "25ffb1d8a7f34bb17623a99357d0b7b743ba8404",
+      "sources": {
+        "backend": "96ee1c72b50a11749d1eb95b147e473350b5a081",
+        "frontend": "bae070083ec81519f4ad40726fc1667839b7ea53",
+        "mobile": "f2b3db412ce23b0b36215fd301f6d3d3d6959252"
+      }
+    },
+    "bundle_required": true,
+    "cloudsql": {
+      "reason": "database or infrastructure inputs changed",
+      "run": true
+    },
+    "component_paths": {
+      "backend": [],
+      "frontend": [],
+      "mobile": []
+    },
+    "components": {
+      "backend": {
+        "reason": "backend source changed",
+        "run": true
+      },
+      "frontend": {
+        "reason": "frontend source changed",
+        "run": true
+      },
+      "mobile_android": {
+        "reason": "mobile app build inputs changed",
+        "run": true
+      },
+      "mobile_portable": {
+        "reason": "mobile source changed",
+        "run": true
+      }
+    },
+    "current": {
+      "root_sha": "543a54965d6682b72d4ecb5b9a3adfaa1160955c",
+      "sources": {
+        "backend": "58b04e6cd545ea7ecc0a6914fba24a89ae293272",
+        "frontend": "06b1ca380aea0ec68dbbaafff5de9a63a24d8f6b",
+        "mobile": "f2b3db412ce23b0b36215fd301f6d3d3d6959252"
+      }
+    },
+    "images": [
+      "api",
+      "worker",
+      "admin",
+      "backoffice",
+      "commerce",
+      "tracking"
+    ],
+    "infrastructure": {
+      "reason": "root build/deploy inputs changed",
+      "run": true
+    },
+    "publish_required": true,
+    "reason": "pull request base combination has no successful integrated baseline",
+    "root_paths": [],
+    "version": 1
+  },
+  "jobs": [
+    {
+      "id": 128298147377,
+      "name": "source_policy",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128298176498,
+      "name": "sources",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128298244503,
+      "name": "infrastructure",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128298244515,
+      "name": "mobile_android",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128298244518,
+      "name": "cloudsql",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128298244525,
+      "name": "backend",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128298244536,
+      "name": "backend_integration (1)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128298244542,
+      "name": "backend_integration (0)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128298244588,
+      "name": "mobile_portable",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128298244599,
+      "name": "frontend",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128298244628,
+      "name": "backend_integration (2)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128301469133,
+      "name": "Integrated CI / result",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 13560591320,
+      "name": "frontend-test-results",
+      "digest": "sha256:7f8905a25b4e3128dc8fa33c68d91e4572b69d202d1815e0d25303ab6726999b",
+      "expiresAt": "2026-11-21T04:19:12Z"
+    },
+    {
+      "id": 13560541200,
+      "name": "backend-fast-test-results",
+      "digest": "sha256:e1f875e9814409091c1bb018e98fc3a09ad750f2b98a75557cbb238ab9ba80a3",
+      "expiresAt": "2026-11-21T04:17:33Z"
+    },
+    {
+      "id": 13560492157,
+      "name": "mobile-portable-test-results",
+      "digest": "sha256:57f9c994926e3015d17e96bade0401281927123d293e7e5d2bcb8b38b60b56fd",
+      "expiresAt": "2026-11-21T04:17:59Z"
+    },
+    {
+      "id": 13560388678,
+      "name": "backend-integration-shard-2",
+      "digest": "sha256:8369d6c7b6dd6ff95dc3ff18cd96effb60f117ced2de6eb7af4946281ca7a9ec",
+      "expiresAt": "2026-11-21T04:27:16Z"
+    },
+    {
+      "id": 13560373393,
+      "name": "backend-integration-shard-1",
+      "digest": "sha256:97e320ddb054f45f3d0b6c88018f75456ddd4a7f5bebf9c39a8ae9064f18ae42",
+      "expiresAt": "2026-11-21T04:24:21Z"
+    },
+    {
+      "id": 13560249366,
+      "name": "backend-integration-shard-0",
+      "digest": "sha256:4905d9f32a7ac45d78dc47a29cb749c3866449ada03ac9a92bed7ce6c484a033",
+      "expiresAt": "2026-11-21T04:30:12Z"
+    },
+    {
+      "id": 13560236862,
+      "name": "nexoruta-load-runtime-verification",
+      "digest": "sha256:d46a37cf638eb05b949da15aa8827b4beea1d8bd5b56b1a5cabf459bdfb5a011",
+      "expiresAt": "2026-11-14T04:19:53Z"
+    },
+    {
+      "id": 13559853430,
+      "name": "android-verification-f2b3db412ce23b0b36215fd301f6d3d3d6959252",
+      "digest": "sha256:09a1325c7007eab5c3f8b3461012c29348d795a620ceef4d76c65bf6dd0d8120",
+      "expiresAt": "2026-11-21T04:19:18Z"
+    }
+  ],
+  "finalBackendMerge": "6306f6ebbe7539acb34073aa97f45c218b42a0b7",
+  "backendMergeTreeMatchesTestedCandidate": true,
+  "counts": {
+    "backendUnit": 346,
+    "backendArchitecture": 4,
+    "backendIntegrationUnique": 721,
+    "criticalDecisionRepeatedPreflight": 1,
+    "frontend": 518,
+    "mobilePortable": 235,
+    "infrastructurePython": 221,
+    "failed": 0,
+    "notExecuted": 0
+  },
+  "trxReports": [
+    {
+      "archive": "backend-fast-test-results.zip",
+      "trx": "unit/_runnervmwuk1x_2026-11-07_04_17_28_net10.0.trx",
+      "counters": {
+        "total": "346",
+        "executed": "346",
+        "passed": "346",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-fast-test-results.zip",
+      "trx": "architecture/_runnervmwuk1x_2026-11-07_04_17_32_net10.0.trx",
+      "counters": {
+        "total": "4",
+        "executed": "4",
+        "passed": "4",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-integration-shard-0.zip",
+      "trx": "critical/critical-route-decision.trx",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-integration-shard-0.zip",
+      "trx": "shard-0/integration-shard-0.trx",
+      "counters": {
+        "total": "289",
+        "executed": "289",
+        "passed": "289",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-integration-shard-1.zip",
+      "trx": "shard-1/integration-shard-1.trx",
+      "counters": {
+        "total": "179",
+        "executed": "179",
+        "passed": "179",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-integration-shard-2.zip",
+      "trx": "shard-2/integration-shard-2.trx",
+      "counters": {
+        "total": "253",
+        "executed": "253",
+        "passed": "253",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "frontend-test-results.zip",
+      "trx": "_runnervmwuk1x_2026-11-07_04_18_05_net10.0.trx",
+      "counters": {
+        "total": "518",
+        "executed": "518",
+        "passed": "518",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "mobile-portable-test-results.zip",
+      "trx": "Api/_runnervmwuk1x_2026-11-07_04_16_52_net10.0.trx",
+      "counters": {
+        "total": "63",
+        "executed": "63",
+        "passed": "63",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "mobile-portable-test-results.zip",
+      "trx": "Application/_runnervmwuk1x_2026-11-07_04_17_06_net10.0.trx",
+      "counters": {
+        "total": "101",
+        "executed": "101",
+        "passed": "101",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "mobile-portable-test-results.zip",
+      "trx": "Core/_runnervmwuk1x_2026-11-07_04_16_47_net10.0.trx",
+      "counters": {
+        "total": "36",
+        "executed": "36",
+        "passed": "36",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "mobile-portable-test-results.zip",
+      "trx": "Storage/_runnervmwuk1x_2026-11-07_04_16_56_net10.0.trx",
+      "counters": {
+        "total": "35",
+        "executed": "35",
+        "passed": "35",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    }
+  ],
+  "downloadedArtifacts": [
+    {
+      "file": "backend-fast-test-results.zip",
+      "sha256": "e1f875e9814409091c1bb018e98fc3a09ad750f2b98a75557cbb238ab9ba80a3"
+    },
+    {
+      "file": "backend-integration-shard-0.zip",
+      "sha256": "4905d9f32a7ac45d78dc47a29cb749c3866449ada03ac9a92bed7ce6c484a033"
+    },
+    {
+      "file": "backend-integration-shard-1.zip",
+      "sha256": "97e320ddb054f45f3d0b6c88018f75456ddd4a7f5bebf9c39a8ae9064f18ae42"
+    },
+    {
+      "file": "backend-integration-shard-2.zip",
+      "sha256": "8369d6c7b6dd6ff95dc3ff18cd96effb60f117ced2de6eb7af4946281ca7a9ec"
+    },
+    {
+      "file": "frontend-test-results.zip",
+      "sha256": "7f8905a25b4e3128dc8fa33c68d91e4572b69d202d1815e0d25303ab6726999b"
+    },
+    {
+      "file": "mobile-portable-test-results.zip",
+      "sha256": "57f9c994926e3015d17e96bade0401281927123d293e7e5d2bcb8b38b60b56fd"
+    },
+    {
+      "file": "nexoruta-load-runtime-verification.zip",
+      "sha256": "d46a37cf638eb05b949da15aa8827b4beea1d8bd5b56b1a5cabf459bdfb5a011"
+    }
+  ],
+  "operationalFacts": [
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalProjectionTests.IndependentConsumersDeduplicateLatePositionsAndReplayIntoIsolatedDestinations",
+      "outcome": "Passed",
+      "facts": {
+        "topic": "test-operational-d80e19147c3a41989b9673398960a901",
+        "firstGroups": [
+          "board-5334832cd504477298775513c8ec1eec",
+          "history-9814890749174f6ca4628382dcd59b34"
+        ],
+        "replayGroups": [
+          "board-811c3f4d896a43e7a5fd886a812727f5",
+          "history-71af9560bc554e9ca3bbcee9a7598325"
+        ],
+        "uniqueEvents": 12,
+        "materializedRows": 9,
+        "identicalReplay": true,
+        "physicalPositionNeverRewinds": true,
+        "duplicatesCountOnce": true,
+        "documentaryConsumerRecoveredIndependently": true
+      }
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalSignalRTests.TwoRealKestrelApisShareTenantScopedPhotographsAndReconnectWithoutRewinding",
+      "outcome": "Passed",
+      "facts": {
+        "apiInstances": 2,
+        "failovers": 1,
+        "webSocketsWithoutNegotiation": true,
+        "reconnectOnSurvivingApi": true,
+        "tenantsIsolated": true,
+        "outboxLagDetected": true,
+        "revision": 4
+      }
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.RecipientMailpitTests.PersistedNoticeUsesRealMailpitAndRecoversThroughRabbitRetryWithoutLogicalDuplicates",
+      "outcome": "Passed",
+      "facts": {
+        "mailpitMessageId": "7s8dbjhgBL4w5a52j6NgMD",
+        "received": 1,
+        "smtpAttempts": 2,
+        "controlledSmtpFailureRecovered": true,
+        "duplicateMessageDidNotResend": true,
+        "operatorBrandAndOpaqueLinkVerified": true
+      }
+    }
+  ],
+  "operationalResults": [
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalBootstrapTests.PopulatedUpgradeBuildsReplaySourcesWithoutChangingCanonicalFactsOrSendingOldNotices",
+      "outcome": "Passed",
+      "duration": "00:00:02.0782001",
+      "trx": "shard-0/integration-shard-0.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalProjectionTests.IndependentConsumersDeduplicateLatePositionsAndReplayIntoIsolatedDestinations",
+      "outcome": "Passed",
+      "duration": "00:00:28.2642992",
+      "trx": "shard-0/integration-shard-0.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalMongoIsolationTests.RealDocumentQueriesIsolateOperatorAndCommerceAndDoNotCountReplayOrExpiredDocuments",
+      "outcome": "Passed",
+      "duration": "00:00:14.7828460",
+      "trx": "shard-1/integration-shard-1.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalSignalRTests.TwoRealKestrelApisShareTenantScopedPhotographsAndReconnectWithoutRewinding",
+      "outcome": "Passed",
+      "duration": "00:00:02.5343328",
+      "trx": "shard-1/integration-shard-1.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalSignalRTests.PublicContractPublishesHistoryParcelsAndNullableEstimate",
+      "outcome": "Passed",
+      "duration": "00:00:02.0258376",
+      "trx": "shard-1/integration-shard-1.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalConsumerHealthTests.EmptyPartitionsReportHealthAndContinueAfterTheFirstRealEvent",
+      "outcome": "Passed",
+      "duration": "00:00:06.6089434",
+      "trx": "shard-2/integration-shard-2.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalBrowserTests.AnonymousTrackingPaginatesRealParcelsAndKeepsKeyboardFocusAtMobileWidth",
+      "outcome": "Passed",
+      "duration": "00:00:03.6666971",
+      "trx": "shard-2/integration-shard-2.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.RecipientMailpitTests.PersistedNoticeUsesRealMailpitAndRecoversThroughRabbitRetryWithoutLogicalDuplicates",
+      "outcome": "Passed",
+      "duration": "00:00:11.9851461",
+      "trx": "shard-2/integration-shard-2.trx"
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalBrowserTests.RealTrackingRequestsAndBackofficeUseRestrictedApiAndPreservePhysicalCustody",
+      "outcome": "Passed",
+      "duration": "00:00:19.7180245",
+      "trx": "shard-2/integration-shard-2.trx"
+    }
+  ],
+  "notes": [
+    "Android is build/restore/lockfile verification, not native visual review.",
+    "All services and data were disposable; static OpenTofu used backend=false and no deployment credentials.",
+    "Administrative commands in Python unit tests are mocks; no real apply/destroy/import or real VM/database operations.",
+    "The final root commit replaces the validated Backend feature SHA with its published merge of identical tree, and adds documentation/evidence. Its complete CI is required separately before merging."
+  ]
+}
