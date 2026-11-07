@@ -63,7 +63,7 @@ def generate_identity(dns_name):
                  "-addext", "keyUsage=critical,keyCertSign,cRLSign",
                  "-keyout", ca_key, "-out", ca_certificate)
         _openssl("req", "-new", "-newkey", "rsa:2048", "-nodes", "-sha256",
-                 "-subj", f"/CN={dns_name}", "-keyout", server_key, "-out", request)
+                 "-subj", "/CN=NexoRuta demo Redis", "-keyout", server_key, "-out", request)
         _openssl("x509", "-req", "-sha256", "-days", "365", "-in", request,
                  "-CA", ca_certificate, "-CAkey", ca_key, "-CAcreateserial",
                  "-extfile", extensions, "-out", server_certificate)
