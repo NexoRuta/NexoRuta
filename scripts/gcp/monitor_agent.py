@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import socket
+import ssl
 import subprocess
 import time
 import urllib.request
@@ -58,9 +59,15 @@ def read_config(path):
         addresses = [ipaddress.ip_address(entry[4][0]) for entry in socket.getaddrinfo(host, None)]
     if not addresses or any(not address.is_private for address in addresses):
         raise ValueError("Monitoring shared services must resolve to private addresses")
-    redis_host = ipaddress.ip_address(config["redis_host"])
-    if not redis_host.is_private or config["redis_port"] != 6378:
-        raise ValueError("Redis monitoring requires a private TLS endpoint on port 6378")
+    expected_redis = f"nexoruta-demo-b.{config['redis_zone']}.c.{config['project_id']}.internal"
+    if (config["redis_zone"] not in ("southamerica-west1-b", "southamerica-west1-c")
+            or config["redis_host"] != expected_redis or config["redis_port"] != 6378):
+        raise ValueError("Redis monitoring must use the configured VM B DNS endpoint on TLS port 6378")
+    redis_subnet = ipaddress.ip_network(config["redis_subnet_cidr"], strict=True)
+    redis_addresses = {ipaddress.ip_address(entry[4][0]) for entry in
+                       socket.getaddrinfo(config["redis_host"], config["redis_port"], type=socket.SOCK_STREAM)}
+    if not redis_addresses or any(address not in redis_subnet for address in redis_addresses):
+        raise ValueError("Redis monitoring DNS resolved outside the configured private subnet")
     for service, port in config.get("service_ports", {}).items():
         if service not in HTTP_PORTS or not isinstance(port, int) or not 1024 <= port <= 65535:
             raise ValueError("Invalid monitoring service port")
@@ -107,6 +114,61 @@ def rabbit_queues(output):
     return values
 
 
+def _redis_response(reader):
+    line = reader.readline(4096)
+    if not line.endswith(b"\r\n"):
+        raise ValueError("Malformed Redis response")
+    prefix, payload = line[:1], line[1:-2]
+    if prefix == b"-":
+        raise RuntimeError("Redis rejected an authenticated monitoring operation")
+    if prefix in (b"+", b":"):
+        return payload
+    if prefix != b"$":
+        raise ValueError("Unsupported Redis response")
+    length = int(payload)
+    if length < 0:
+        return None
+    if length > 1_048_576:
+        raise ValueError("Redis monitoring response exceeded its bound")
+    data = reader.read(length + 2)
+    if len(data) != length + 2 or not data.endswith(b"\r\n"):
+        raise ValueError("Truncated Redis response")
+    return data[:-2]
+
+
+def redis_command(connection, reader, *parts):
+    encoded = [part.encode("utf-8") if isinstance(part, str) else part for part in parts]
+    connection.sendall(b"*" + str(len(encoded)).encode() + b"\r\n" + b"".join(
+        b"$" + str(len(part)).encode() + b"\r\n" + part + b"\r\n" for part in encoded))
+    return _redis_response(reader)
+
+
+def redis_info_fields(payload):
+    if not isinstance(payload, bytes):
+        raise ValueError("Redis INFO response is unavailable")
+    fields = {}
+    for line in payload.decode("ascii", errors="strict").splitlines():
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        name, value = line.split(":", 1)
+        if name in {"used_memory", "used_memory_rss", "maxmemory", "evicted_keys", "connected_clients"}:
+            if not value.isdigit():
+                raise ValueError("Redis INFO contains an invalid numeric field")
+            fields[name] = int(value)
+    if set(fields) != {"used_memory", "used_memory_rss", "maxmemory", "evicted_keys", "connected_clients"}:
+        raise ValueError("Redis INFO is missing bounded memory or client fields")
+    return fields
+
+
+def docker_bytes(value):
+    match = re.fullmatch(r"\s*([0-9]+(?:\.[0-9]+)?)\s*(B|kB|MB|GB|KiB|MiB|GiB)\s*", value)
+    if not match:
+        raise ValueError("Docker reported an unsupported memory unit")
+    factors = {"B": 1, "kB": 1000, "MB": 1000**2, "GB": 1000**3,
+               "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}
+    return int(float(match[1]) * factors[match[2]])
+
+
 class Collector:
     def __init__(self, config):
         self.config = config
@@ -115,6 +177,8 @@ class Collector:
             "zone": metadata("instance/zone").rsplit("/", 1)[-1]}}
         self.runtime = None
         self.runtime_loaded = 0.0
+        self.redis_credentials = None
+        self.redis_credentials_loaded = 0.0
         self.samples = []
         self.containers = {}
 
@@ -137,7 +201,8 @@ class Collector:
 
     def collect_containers(self):
         identifiers = command("docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=" + PROJECT).split()
-        expected = APPLICATIONS + (INFRASTRUCTURE if self.config["node"] == "a" else ())
+        expected = (APPLICATIONS + (INFRASTRUCTURE if self.config["node"] == "a" else ())
+                    + (("redis",) if self.config["node"] == "b" else ()))
         self.containers = {}
         if identifiers:
             if len(identifiers) > 40:
@@ -173,11 +238,64 @@ class Collector:
                 healthy = False
             self.metric("service_up", int(healthy), service=service + "_tcp")
         try:
-            with socket.create_connection((self.config["redis_host"], self.config["redis_port"]), timeout=2):
-                redis_healthy = True
-        except OSError:
+            self.redis_exchange()
+            redis_healthy = True
+        except Exception:
             redis_healthy = False
         self.metric("service_up", int(redis_healthy), service="redis")
+
+    def redis_identity(self):
+        if self.redis_credentials is None or time.monotonic() - self.redis_credentials_loaded > 300:
+            self.redis_credentials = secret(self.config["project_id"], "nexoruta-demo-redis")
+            self.redis_credentials_loaded = time.monotonic()
+        identity = self.redis_credentials
+        if (not isinstance(identity, dict) or identity.get("dns_name") != self.config["redis_host"]
+                or not isinstance(identity.get("password"), str) or len(identity["password"]) < 48
+                or not isinstance(identity.get("ca_certificate"), str)):
+            raise ValueError("The Redis monitoring identity is invalid")
+        return identity
+
+    def redis_exchange(self, *commands):
+        identity = self.redis_identity()
+        context = ssl.create_default_context(cadata=identity["ca_certificate"])
+        context.check_hostname = True
+        context.verify_mode = ssl.CERT_REQUIRED
+        with socket.create_connection((self.config["redis_host"], self.config["redis_port"]), timeout=3) as raw:
+            raw.settimeout(3)
+            with context.wrap_socket(raw, server_hostname=self.config["redis_host"]) as connection:
+                with connection.makefile("rb") as reader:
+                    if redis_command(connection, reader, "AUTH", identity["password"]) != b"OK":
+                        raise RuntimeError("Redis authentication failed")
+                    if redis_command(connection, reader, "PING") != b"PONG":
+                        raise RuntimeError("Redis PING failed")
+                    return [redis_command(connection, reader, *parts) for parts in commands]
+
+    def collect_redis(self):
+        if self.config["node"] != "b":
+            return
+        values = redis_info_fields(self.redis_exchange(("INFO",))[0])
+        self.metric("redis_memory_used_bytes", values["used_memory"])
+        self.metric("redis_memory_rss_bytes", values["used_memory_rss"])
+        self.metric("redis_maxmemory_bytes", values["maxmemory"])
+        self.metric("redis_evicted_keys", values["evicted_keys"])
+        self.metric("redis_connected_clients", values["connected_clients"])
+
+        container = self.containers.get("redis")
+        if not container or not container.get("running"):
+            raise ValueError("The Redis container on node B is not running")
+        output = command("docker", "stats", "--no-stream", "--format",
+                         "{{.CPUPerc}}|{{.MemUsage}}|{{.PIDs}}", container["id"], timeout=10)
+        fields = output.split("|")
+        if len(fields) != 3 or not fields[0].endswith("%") or not fields[2].isdigit():
+            raise ValueError("Docker Redis resource statistics are malformed")
+        cpu_percent = float(fields[0][:-1])
+        used, separator, limit = fields[1].partition("/")
+        if not separator or not math.isfinite(cpu_percent) or cpu_percent < 0:
+            raise ValueError("Docker Redis resource statistics are invalid")
+        self.metric("redis_container_cpu_percent", cpu_percent)
+        self.metric("redis_container_memory_bytes", docker_bytes(used))
+        self.metric("redis_container_memory_limit_bytes", docker_bytes(limit))
+        self.metric("redis_container_pids", int(fields[2]))
 
     def collect_outbox(self):
         if self.runtime is None or time.monotonic() - self.runtime_loaded > 300:
@@ -233,6 +351,8 @@ class Collector:
         self.timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
         self.attempt("containers", self.collect_containers)
         self.attempt("services", self.probe_services)
+        if self.config["node"] == "b":
+            self.attempt("redis", self.collect_redis)
         if self.config["node"] == "a":
             self.attempt("outbox", self.collect_outbox)
             self.attempt("rabbitmq", self.collect_rabbit)

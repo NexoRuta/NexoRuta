@@ -86,6 +86,8 @@ def validate(job):
             errors.append("GCP_MANAGE_DNS")
         if (domain and not re.fullmatch(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}", domain)) or (manage_dns == "true" and not domain):
             errors.append("GCP_BASE_DOMAIN")
+    if job == "deploy" and os.environ.get("NEXORUTA_CACHE_ENABLED", "true").strip().lower() not in ("true", "false"):
+        errors.append("NEXORUTA_CACHE_ENABLED")
     if job == "deploy" and os.environ.get("DEMO_OPERATION") in ("start", "update"):
         try:
             monitor_settings()
@@ -109,6 +111,9 @@ def monitor_settings():
 
 def integrations():
     public = app_environment()
+    cache_enabled = os.environ.get("NEXORUTA_CACHE_ENABLED", "true").strip().lower()
+    if cache_enabled not in ("true", "false"):
+        raise ValueError("NEXORUTA_CACHE_ENABLED must be true or false")
     result = {
         "smtp_host": public["SMTP_HOST"],
         "smtp_port": public["SMTP_PORT"],
@@ -118,6 +123,7 @@ def integrations():
         "smtp_password": os.environ.get("SMTP_PASSWORD", ""),
         "geoapify_api_key": os.environ.get("GEOAPIFY_API_KEY", ""),
         "mapbox_public_token": public["MAPBOX_PUBLIC_TOKEN"],
+        "cache_enabled": cache_enabled,
     }
     for name, value in result.items():
         if any(character in value for character in ("\r", "\n", "\x00")):
@@ -136,6 +142,10 @@ def sync_integrations():
     settings = integrations()
     from hosting_identity import ensure
     ensure(os.environ["GCP_PROJECT_ID"])
+    if settings["cache_enabled"] == "true":
+        from redis_identity import ensure as ensure_redis_identity
+        ensure_redis_identity(os.environ["GCP_PROJECT_ID"],
+                              os.environ.get("GCP_SECONDARY_ZONE", "southamerica-west1-b"))
     # The VM reads this private secret with its own identity. No GitHub token or
     # GCP runner credential is copied to the VM or application containers.
     with tempfile.TemporaryDirectory(prefix="nexoruta-integrations-") as temp:

@@ -108,6 +108,7 @@ resource "google_secret_manager_secret_version" "runtime" {
     project_id       = var.project_id
     region           = local.region
     services_host    = "nexoruta-demo.${var.zone}.c.${var.project_id}.internal"
+    subnet_cidr      = google_compute_subnetwork.demo.ip_cidr_range
     frontend_ip      = google_compute_global_address.frontend.address
     nodes            = { a = { name = local.name, zone = var.zone }, b = { name = "${local.name}-b", zone = var.secondary_zone } }
     sql_connection   = google_sql_database_instance.demo.connection_name
@@ -117,11 +118,10 @@ resource "google_secret_manager_secret_version" "runtime" {
     organization_ids = { for key, item in random_uuid.organization : key => item.result }
     endpoints        = local.endpoints
     redis = {
-      host = google_redis_instance.cache.host
-      # Memorystore uses the TLS port rather than Redis's plaintext port.
-      port            = 6378
-      auth_string     = google_redis_instance.cache.auth_string
-      ca_certificates = [for certificate in google_redis_instance.cache.server_ca_certs : base64encode(certificate.cert)]
+      # Internal DNS is derived from the existing B VM inventory. This avoids
+      # a dependency cycle with the runtime secret that the VM itself consumes.
+      host = "nexoruta-demo-b.${var.secondary_zone}.c.${var.project_id}.internal"
+      port = 6378
     }
     registry = "${local.region}-docker.pkg.dev/${var.project_id}/nexoruta"
   })

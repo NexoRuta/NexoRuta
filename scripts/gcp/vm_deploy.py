@@ -11,10 +11,13 @@ import math
 import os
 from pathlib import Path
 import re
+import secrets
 import shutil
 import selectors
 import socket
+import ssl
 import subprocess
+import sys
 import tarfile
 import time
 import traceback
@@ -34,6 +37,10 @@ DIRECT_PORTS = {"api": 18080, "admin": 18081, "backoffice": 18082,
                 "commerce": 18083, "tracking": 18084, "monitor": 13000}
 MIGRATION_LOCK = 74200344171234
 OPS_AGENT_CONFIG = Path("/etc/google-cloud-ops-agent/config.yaml")
+REDIS_RUNTIME_COMMANDS = (
+    "ping", "get", "set", "del", "hmget", "hmset", "hset", "pexpire", "eval", "evalsha",
+    "client|setname", "client|setinfo", "info", "command|info", "hello", "echo",
+)
 
 
 def measure(timings, phase, operation):
@@ -177,7 +184,7 @@ def bootstrap_config(runtime):
 
 
 def environment(runtime, integrations, images, mail_hash, hosting=None, node=None,
-                private_ip=None, release=None, docker_subnets=()):
+                private_ip=None, release=None, docker_subnets=(), redis_identity=None):
     passwords, keys, endpoints = runtime["passwords"], runtime["keys"], runtime["endpoints"]
     redis = runtime.get("redis")
     result = {
@@ -216,15 +223,25 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
             ipaddress.IPv4Address(address)
         if not re.fullmatch(r"[A-Za-z0-9.-]+", runtime["services_host"]):
             raise ValueError("Invalid private services host")
-        if (not isinstance(redis, dict) or not isinstance(redis.get("host"), str)
-                or not ipaddress.ip_address(redis["host"]).is_private
-                or not isinstance(redis.get("port"), int) or redis["port"] != 6378
-                or not isinstance(redis.get("auth_string"), str) or not redis["auth_string"]
-                or any(character in redis["auth_string"] for character in "\r\n\x00")
-                or not isinstance(redis.get("ca_certificates"), list)
-                or not 1 <= len(redis["ca_certificates"]) <= 4
-                or any(not isinstance(certificate, str) or not certificate for certificate in redis["ca_certificates"])):
-            raise ValueError("The shared Memorystore endpoint requires a private address, AUTH and TLS CA certificates")
+        cache_enabled = integrations.get("cache_enabled", "true")
+        if not isinstance(cache_enabled, str) or cache_enabled.strip().lower() not in ("true", "false"):
+            raise ValueError("The distributed-cache deployment flag must be true or false")
+        cache_enabled = cache_enabled.strip().lower()
+        expected_redis_host = redis_dns_name(runtime)
+        if (not isinstance(redis, dict) or redis.get("host") != expected_redis_host
+                or redis.get("port") != 6378):
+            raise ValueError("Redis must use the TLS endpoint derived from VM B")
+        if cache_enabled == "true" and (
+                not isinstance(redis_identity, dict)
+                or redis_identity.get("dns_name") != expected_redis_host
+                or not isinstance(redis_identity.get("password"), str)
+                or len(redis_identity["password"]) < 48
+                or any(character in redis_identity["password"] for character in "\r\n\x00")
+                or not isinstance(redis_identity.get("ca_certificate"), str)
+                or "-----BEGIN CERTIFICATE-----" not in redis_identity["ca_certificate"]):
+            raise ValueError("Enabled Redis requires an authenticated TLS identity derived from VM B")
+        redis_password = redis_identity["password"] if redis_identity else ""
+        redis_ca = redis_identity["ca_certificate"] if redis_identity else ""
         allowed_hosts = {urllib.parse.urlsplit(url).hostname for url in endpoints.values()}
         allowed_hosts.update((private_ip, "localhost", "127.0.0.1"))
         networks = [runtime["frontend_ip"] + "/32", *LOAD_BALANCER_PROXIES]
@@ -242,8 +259,12 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
         result.update({
             "NODE_NAME": node, "NODE_PRIVATE_IP": private_ip, "RELEASE_ID": release,
             "SERVICES_HOST": runtime["services_host"], "ALLOWED_HOSTS": ";".join(sorted(allowed_hosts)),
-            "REDIS_HOST": redis["host"], "REDIS_PORT": redis["port"], "REDIS_AUTH": redis["auth_string"],
-            "REDIS_CA_CERTIFICATES_BASE64_JSON": json.dumps(redis["ca_certificates"], separators=(",", ":")),
+            "NEXORUTA_CACHE_ENABLED": cache_enabled,
+            "REDIS_HOST": redis["host"], "REDIS_PORT": redis["port"], "REDIS_AUTH": redis_password,
+            "REDIS_CONFIG_DIR": str(BASE / "redis"),
+            "REDIS_CA_CERTIFICATES_BASE64_JSON": json.dumps(
+                [base64.b64encode(redis_ca.encode("ascii")).decode("ascii")] if redis_ca else [],
+                separators=(",", ":")),
             "TRUSTED_NETWORKS": ",".join(networks),
             "MONITOR_DB_PASSWORD": passwords["monitor"], "GRAFANA_DB_PASSWORD": passwords["grafana"],
             "GRAFANA_SECRET_KEY": hosting["grafana_secret_key"],
@@ -261,6 +282,140 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
         if result["SMTP_HOST"] == "mailpit":
             result["SMTP_HOST"] = runtime["services_host"]
     return result
+
+
+def redis_dns_name(runtime):
+    try:
+        identity = runtime["nodes"]["b"]
+        host = f"{identity['name']}.{identity['zone']}.c.{runtime['project_id']}.internal"
+    except (KeyError, TypeError):
+        raise ValueError("Runtime inventory is missing VM B's Redis DNS identity") from None
+    redis = runtime.get("redis")
+    if (not re.fullmatch(r"nexoruta-demo-b\.southamerica-west1-[bc]\.c\.[a-z][a-z0-9-]{4,28}[a-z0-9]\.internal", host)
+            or not isinstance(redis, dict) or redis.get("host") != host or redis.get("port") != 6378):
+        raise ValueError("Redis host does not match the configured VM B identity")
+    return host
+
+
+def redis_addresses(runtime):
+    host = redis_dns_name(runtime)
+    try:
+        subnet = ipaddress.ip_network(runtime["subnet_cidr"], strict=True)
+        addresses = {ipaddress.ip_address(result[4][0]) for result in
+                     socket.getaddrinfo(host, 6378, type=socket.SOCK_STREAM)}
+    except (KeyError, OSError, ValueError):
+        raise ValueError("Redis DNS could not be resolved inside the configured private subnet") from None
+    if not addresses or any(address not in subnet for address in addresses):
+        raise ValueError("Redis DNS resolved outside the configured private subnet")
+    return addresses
+
+
+def _resp_command(connection, reader, *parts):
+    encoded = [part.encode("utf-8") if isinstance(part, str) else part for part in parts]
+    connection.sendall(b"*" + str(len(encoded)).encode() + b"\r\n" + b"".join(
+        b"$" + str(len(part)).encode() + b"\r\n" + part + b"\r\n" for part in encoded))
+    line = reader.readline(4096)
+    if not line.endswith(b"\r\n"):
+        raise RuntimeError("Redis returned a malformed response")
+    prefix, payload = line[:1], line[1:-2]
+    if prefix == b"-":
+        raise RuntimeError("Redis rejected an authenticated client operation")
+    if prefix in (b"+", b":"):
+        return payload
+    if prefix != b"$":
+        raise RuntimeError("Redis returned an unsupported response")
+    length = int(payload)
+    if length < 0:
+        return None
+    if length > 2 * 1024 * 1024:
+        raise RuntimeError("Redis response exceeded the smoke-test bound")
+    data = reader.read(length + 2)
+    if len(data) != length + 2 or not data.endswith(b"\r\n"):
+        raise RuntimeError("Redis returned a truncated response")
+    return data[:-2]
+
+
+def redis_smoke(host, port, password, ca_certificate, release, node):
+    context = ssl.create_default_context(cadata=ca_certificate)
+    context.check_hostname = True
+    context.verify_mode = ssl.CERT_REQUIRED
+    key = f"nexoruta:nexoruta-gcp-demo:cache:v1:operator_branding:smoke:{release}:{node}:{secrets.token_hex(8)}"
+    value = secrets.token_urlsafe(24)
+    raw = socket.create_connection((host, port), timeout=3)
+    try:
+        raw.settimeout(3)
+        with context.wrap_socket(raw, server_hostname=host) as connection:
+            with connection.makefile("rb") as reader:
+                if _resp_command(connection, reader, "AUTH", password) != b"OK":
+                    raise RuntimeError("Redis authentication failed")
+                if _resp_command(connection, reader, "PING") != b"PONG":
+                    raise RuntimeError("Redis TLS health probe failed")
+                if _resp_command(connection, reader, "SET", key, value, "EX", "60") != b"OK":
+                    raise RuntimeError("Redis smoke write failed")
+                try:
+                    if _resp_command(connection, reader, "GET", key) != value.encode("ascii"):
+                        raise RuntimeError("Redis smoke read did not match")
+                except Exception:
+                    try:
+                        _resp_command(connection, reader, "DEL", key)
+                    except Exception:
+                        pass
+                    raise
+                if _resp_command(connection, reader, "DEL", key) != b"1":
+                    raise RuntimeError("Redis smoke cleanup failed")
+    finally:
+        raw.close()
+    return {"redis_node": "b", "redis_client_node": node, "redis_port": port,
+            "redis_probe": "tls-auth-set-get-delete-passed"}
+
+
+def _private_group_file(path, value):
+    if path.is_file() and not path.is_symlink() and path.read_bytes() == value:
+        os.chown(path, 0, 1000)
+        path.chmod(0o440)
+        return
+    private_bytes(path, value)
+    os.chown(path, 0, 1000)
+    path.chmod(0o440)
+
+
+def configure_redis_files(release_directory, identity, node):
+    directory = BASE / "redis"
+    if directory.is_symlink():
+        raise ValueError("Redis configuration directory cannot be a symlink")
+    directory.mkdir(mode=0o750, parents=True, exist_ok=True)
+    directory.chmod(0o750)
+    os.chown(directory, 0, 1000)
+    config_source = release_directory / "redis" / "redis.conf"
+    if not config_source.is_file():
+        raise FileNotFoundError("The release is missing its Redis server configuration")
+    config = config_source.read_bytes()
+    _private_group_file(directory / "redis.conf", config)
+    password = identity["password"]
+    key_pattern = "nexoruta:nexoruta-gcp-demo:cache:v1:*"
+    acl = ("user default on #" + hashlib.sha256(password.encode("utf-8")).hexdigest()
+           + " ~" + key_pattern + " -@all "
+           + " ".join("+" + command for command in REDIS_RUNTIME_COMMANDS) + "\n")
+    _private_group_file(directory / "users.acl", acl.encode("ascii"))
+    _private_group_file(directory / "redis-auth", (password + "\n").encode("ascii"))
+    _private_group_file(directory / "ca.crt", identity["ca_certificate"].encode("ascii"))
+    if node == "b":
+        _private_group_file(directory / "server.crt", identity["server_certificate"].encode("ascii"))
+        _private_group_file(directory / "server.key", identity["server_private_key"].encode("ascii"))
+    fingerprint = hashlib.sha256(
+        config + b"\0" + acl.encode("ascii") + b"\0"
+        + identity["server_certificate"].encode("ascii") + b"\0"
+        + identity["server_private_key"].encode("ascii") + b"\0"
+        + identity["ca_certificate"].encode("ascii")
+    ).hexdigest()
+    return directory, fingerprint
+
+
+def caching_enabled(integrations):
+    value = integrations.get("cache_enabled", "true")
+    if not isinstance(value, str) or value.strip().lower() not in ("true", "false"):
+        raise ValueError("cache_enabled must be true or false")
+    return value.strip().lower() == "true"
 
 
 class Deploy:
@@ -449,15 +604,26 @@ def bridge_subnets(deployment):
     return subnets
 
 
-def prepare(args, deployment, runtime, integrations, hosting, manifest, private_ip):
+def prepare(args, deployment, runtime, integrations, hosting, redis_identity, manifest, private_ip):
+    cache_enabled = caching_enabled(integrations)
+
     def configure_and_pull():
         registry_host = runtime["registry"].split("/")[0]
         deployment.execute("docker", "login", registry_host, "--username", "oauth2accesstoken", "--password-stdin", input=token() + "\n")
         try:
             mail_hash = deployment.execute("docker", "run", "--rm", "-i", "caddy:2.10.2-alpine", "caddy", "hash-password",
                                            capture=True, input=runtime["passwords"]["mail"] + "\n")
+            if cache_enabled:
+                redis_addresses(runtime)
+            if cache_enabled:
+                redis_directory, redis_fingerprint = configure_redis_files(
+                    deployment.directory, redis_identity, args.node)
+            else:
+                redis_directory, redis_fingerprint = BASE / "redis", "cache-bypass"
             values = environment(runtime, integrations, manifest["images"], mail_hash, hosting,
-                                 args.node, private_ip, args.release, bridge_subnets(deployment))
+                                 args.node, private_ip, args.release, bridge_subnets(deployment), redis_identity)
+            values["REDIS_CONFIG_FINGERPRINT"] = redis_fingerprint
+            values["REDIS_CONFIG_DIR"] = str(redis_directory)
             private_file(deployment.directory / ".env", "".join(env_line(key, value) for key, value in values.items()))
             private_file(deployment.directory / "bootstrap.json", json.dumps(bootstrap_config(runtime)))
             certificate = base64.b64decode(hosting["certificate_pfx"], validate=True)
@@ -465,8 +631,12 @@ def prepare(args, deployment, runtime, integrations, hosting, manifest, private_
                 raise ValueError("The shared Data Protection certificate is empty")
             private_bytes(deployment.directory / "hosting.pfx", certificate)
             deployment.compose("--profile", "administration", "--profile", "shared", "config", "--quiet")
+            if args.node == "b" and cache_enabled:
+                deployment.compose("--profile", "cache-b", "config", "--quiet")
             services = APPS + ("migrate", "bootstrap", "db-tools") + (SHARED if args.node == "a" else ())
             deployment.compose("--profile", "administration", "--profile", "shared", "pull", *services)
+            if args.node == "b" and cache_enabled:
+                deployment.compose("--profile", "cache-b", "pull", "redis")
         finally:
             deployment.execute("docker", "logout", registry_host)
     deployment.measure("configure_validate_and_pull_images", configure_and_pull)
@@ -514,6 +684,12 @@ def prepare(args, deployment, runtime, integrations, hosting, manifest, private_
             for topic in ("nexoruta.envios.creados.v1", "nexoruta.password-recovery.requested.v1"):
                 deployment.compose("--profile", "shared", "exec", "-T", "kafka", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:9092",
                                    "--create", "--if-not-exists", "--topic", topic, "--partitions", "1", "--replication-factor", "1")
+        elif cache_enabled:
+            # Redis is an infrastructure service owned by node B, outside the
+            # application list that an ordinary update drains and recreates.
+            deployment.measure("reconcile_redis_b", lambda: deployment.compose(
+                "--profile", "cache-b", "up", "-d", "--no-deps", "--wait",
+                "--wait-timeout", "120", "redis"))
     deployment.measure("start_sql_proxy_and_shared_services", start_sql_and_shared_services)
     def install_monitoring_configuration():
         deploy_dir = BASE / "deploy"
@@ -525,11 +701,14 @@ def prepare(args, deployment, runtime, integrations, hosting, manifest, private_
         private_file(BASE / "monitor.json", json.dumps({"project_id": runtime["project_id"], "node": args.node,
                      "services_host": services_ip, "private_ip": private_ip,
                      "redis_host": runtime["redis"]["host"], "redis_port": runtime["redis"]["port"],
+                     "redis_zone": runtime["nodes"]["b"]["zone"],
+                     "redis_subnet_cidr": runtime["subnet_cidr"],
                      "expires_at": args.deadline}))
         deployment.execute("systemctl", "restart", "nexoruta-monitor.service")
         private_file(deployment.directory / "prepared.json", json.dumps({"node": args.node, "deadline": args.deadline}))
     deployment.measure("install_monitoring_and_mark_prepared", install_monitoring_configuration)
-    return {}
+    return {"cache_enabled": cache_enabled, "redis_node": "b", "redis_port": runtime["redis"]["port"],
+            "redis_server_reconciled": args.node == "b" and cache_enabled}
 
 
 def apply(args, deployment, private_ip):
@@ -604,7 +783,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bucket", required=True)
     parser.add_argument("--release", required=True)
-    parser.add_argument("--stage", choices=("prepare", "stop", "migrate", "apply", "verify"), required=True)
+    parser.add_argument("--stage", choices=("prepare", "stop", "migrate", "apply", "verify", "redis-smoke"), required=True)
     parser.add_argument("--node", choices=("a", "b"), required=True)
     parser.add_argument("--deadline", type=float, required=True)
     args = parser.parse_args()
@@ -676,14 +855,32 @@ def _run_stage(args, timings):
             result = {}
             if args.stage == "prepare":
                 integrations = measure(timings, "read_integrations_secret", lambda: secret(project, "nexoruta-demo-integrations"))
+                redis_identity = None
+                if caching_enabled(integrations):
+                    sys.path.insert(0, str(directory))
+                    from redis_identity import validate_identity
+                    identity = measure(timings, "read_redis_identity_secret",
+                                       lambda: secret(project, "nexoruta-demo-redis"))
+                    redis_identity = measure(timings, "validate_redis_identity",
+                                             lambda: validate_identity(identity, redis_dns_name(runtime)))
                 hosting = measure(timings, "read_hosting_secret", lambda: secret(project, "nexoruta-demo-hosting"))
-                result = prepare(args, deployment, runtime, integrations, hosting, manifest, private_ip)
+                result = prepare(args, deployment, runtime, integrations, hosting, redis_identity, manifest, private_ip)
             elif args.stage == "stop":
                 deployment.measure("stop_apps", lambda: deployment.compose("stop", *APPS))
             elif args.stage == "migrate":
                 deployment.migrate(args.deadline)
             elif args.stage == "apply":
                 apply(args, deployment, private_ip)
+            elif args.stage == "redis-smoke":
+                sys.path.insert(0, str(directory))
+                from redis_identity import validate_identity
+                identity = measure(timings, "read_redis_identity_secret",
+                                   lambda: secret(project, "nexoruta-demo-redis"))
+                redis_identity = measure(timings, "validate_redis_identity",
+                                         lambda: validate_identity(identity, redis_dns_name(runtime)))
+                result = redis_smoke(runtime["redis"]["host"], runtime["redis"]["port"],
+                                     redis_identity["password"], redis_identity["ca_certificate"],
+                                     args.release, args.node)
             else:
                 deployment.measure("direct_health_checks", lambda: direct_health(private_ip))
                 deployment.measure("public_https_and_login_smoke", lambda: smoke(runtime))

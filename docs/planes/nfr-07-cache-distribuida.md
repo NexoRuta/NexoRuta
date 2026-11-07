@@ -1,6 +1,12 @@
 # NFR-07: plan de implementación de caché distribuida
 
-Fecha: 03/11/2026. Estado: **implementada en el checkout; no desplegada**. Ver la evidencia y límites al final.
+Plan original: 03/11/2026. Revisión del estado: 05/11/2026. Cambio de destino aprobado para la planificación: 06/11/2026 (America/Montevideo).
+
+**Estado de la implementación auditada antes de este cambio:** estaba desplegada en GCP con Memorystore READY, AUTH/TLS y la misma release en ambas APIs. Prometheus recibía métricas HTTP, pero la consulta instantánea no devolvió series de caché. No interpretar esa ausencia como prueba de que Redis falla. La ejecución actual añadió cambios locales para migrar el servicio a B y completar la telemetría; todavía no fueron publicados ni desplegados. El estado y los gates actuales están en [la guía de cierre](nfr-07-cierre-y-validacion.md).
+
+La especificación vigente de las próximas acciones está en [NFR-07: guía de cierre para el agente ejecutor](nfr-07-cierre-y-validacion.md). Incluye fuentes exactas, evidencia nueva y criterios verificables. Las secciones siguientes conservan el diseño original y la evidencia histórica; sus pendientes de despliegue y cantidades de tests no describen por sí solos el estado actual. No volver a ejecutar T1–T6 como si la implementación no existiera.
+
+**Destino nuevo solicitado: un único Redis en la VM B**, para detener su cómputo con stop y el límite de cuatro horas. La [capacidad medida de B](../auditorias/nfr-07/2026-11-06-capacidad-vm-b.md) permite preparar la migración con 512 MiB de contenedor y cuota de 1 vCPU, pendiente de validar la carga nueva. Seguir [R0–R8 de la guía vigente](nfr-07-cierre-y-validacion.md#9-migración-de-redis-a-vm-b-y-ciclo-de-cuatro-horas); la elección de Memorystore en la sección 6 siguiente es histórica y queda reemplazada. No mover otros servicios compartidos ni retirar el recurso administrado antes de aceptar B.
 
 ## 1. Requisito y alcance
 
@@ -15,7 +21,7 @@ La implementación comprende:
 
 Ambas lecturas tienen datos y consumidores propios del sistema. Las integraciones geográficas quedan fuera de la implementación: no migrar la caché local Geoapify ni cambiar su habilitación. Mapbox conserva `permanent=false` y sus resultados temporales no entran en Redis ni en otra caché. Se mantienen cuotas PostgreSQL, RLS, permisos, concurrencia optimista, B1–B5 y selección → ajuste → guardado → reapertura. No se amplía a sesiones, permisos, rate limiting, estados de envíos, cotización/admisión de envíos o tracking por token. El cálculo de una simulación se ejecuta de nuevo con sus bultos y reglas de dominio; lo reutilizado es la configuración publicada.
 
-## 2. Diagnóstico del checkout revisado
+## 2. Diagnóstico original del checkout revisado (03/11/2026)
 
 Base de análisis: raíz `53c5d6735ec5582b7b8ec2c7a5145bbb1378876e`; backend `bb1f91b229ee97b24dc43a7567a5f1d6f48dbb24`; frontend `e584c8033faa9d93debbc2248231b8a07c4077eb`; mobile `d570ddb7c482c56070140e25fafb5a18e51cdbfa`. Árboles Git limpios al iniciar el análisis original; esta revisión modifica únicamente el plan. Estos son los SHAs realmente inspeccionados. El manifiesto Cloud contiene otros SHAs para backend/frontend: el ejecutor debe registrar los gitlinks de su checkout, sin cambiarlos para reproducir este documento.
 
@@ -173,7 +179,7 @@ Editar la fuente canónica del dashboard y sincronizar la copia GCP en el mismo 
 
 Las métricas `keyspace_hits/misses` de Redis no sustituyen las de negocio: incluyen operaciones auxiliares y no separan los casos. Un exporter de Redis para memoria/evicciones es ampliación opcional; no es necesario para cerrar los hits/misses pedidos.
 
-## 6. Redis en GCP: elección y alternativas
+## 6. Redis en GCP: elección original y alternativas (reemplazada por Redis en B)
 
 **Elección implementada para la demo actual: Memorystore Basic de 1 GiB**, consumido por las APIs A y B mediante el endpoint privado PSA, AUTH y TLS. Evita usar cuota de CPU de las VMs y la conexión verifica certificado y nombre del servidor. No es una conclusión universal sobre producción.
 
@@ -271,7 +277,7 @@ Como salida operativa de emergencia, deshabilitar `Caching:Enabled` coordinadame
 
 La planificación original leyó la card, extrajo filas pertinentes de los XLSM/XLSX sin ejecutar macros e inspeccionó código/configuración/tests. La sección siguiente registra lo implementado después y diferencia los resultados ejecutados de las verificaciones bloqueadas por herramientas ausentes.
 
-## 11. Estado de implementación y evidencia
+## 11. Estado de implementación y evidencia histórica (03/11/2026)
 
 - Backend: `DistributedCacheAccess` usa entradas versionadas, TTL absoluto con jitter y límites; Redis es opcional al arrancar, los errores de caché hacen fallback a PostgreSQL y las métricas tienen etiquetas acotadas por caso/operación. Los lectores usan snapshots DTO de identidad y tarifario; el estado del operador, autorización/RLS y zona activa permanecen consultados en vivo. Las escrituras no publican entradas antes del commit. El middleware RLS conserva la excepción primaria cuando también falla el rollback posterior a un commit diferido.
 - Observabilidad: los dashboards local/GCP están sincronizados y muestran hit/s, miss/s, ratio ponderado, errores/bypass y p95. El ratio presenta 0% si hay misses pero todavía no hits; queda vacío cuando no hay tráfico. Las alertas requieren volumen suficiente y las pruebas cubren ausencia de tráfico, ratio ponderado, bajo ratio, errores y recuperación.

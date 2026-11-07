@@ -185,7 +185,7 @@ resource "google_compute_instance" "secondary" {
   machine_type              = "n4-custom-6-16384"
   desired_status            = var.running ? "RUNNING" : "TERMINATED"
   allow_stopping_for_update = true
-  tags                      = [local.name]
+  tags                      = [local.name, "nexoruta-cache-b"]
   labels = {
     application = "nexoruta"
     environment = "demo"

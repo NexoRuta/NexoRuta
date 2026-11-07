@@ -178,6 +178,7 @@ def create_bundle(destination):
         restricted = sorted(roles - {"nexoruta_schema_owner"})
         output.write(f"\nREVOKE CREATE ON SCHEMA public, nexoruta_app FROM {', '.join(restricted)};\n")
     shutil.copyfile(ROOT / "scripts/gcp/monitor_agent.py", assets / "monitor_agent.py")
+    shutil.copyfile(ROOT / "scripts/gcp/redis_identity.py", assets / "redis_identity.py")
     bundle = destination / "bundle.tar.gz"
     with tarfile.open(bundle, "w:gz") as archive:
         for path in sorted(assets.rglob("*")):
@@ -445,6 +446,28 @@ def wait_for_load_balancer_health(node, deadline, health):
     raise RuntimeError(f"Node {node['NODE_ID']} was not admitted by the load balancer")
 
 
+def prepared_cache_mode(reports):
+    modes = [report.get("cache_enabled") for report in reports]
+    if len(modes) != 2 or any(type(mode) is not bool for mode in modes) or modes[0] != modes[1]:
+        raise RuntimeError("Both nodes must confirm the same cache mode before deployment")
+    return modes[0]
+
+
+def redis_smoke_clients_if_enabled(cache_enabled, inventory, stage, measure):
+    if not cache_enabled:
+        return []
+    clients = []
+    for node in inventory:
+        report = measure("redis_tls_auth_smoke", lambda node=node: stage(node, "redis-smoke"),
+                         node=node["NODE_ID"])
+        if (report.get("redis_node") != "b"
+                or report.get("redis_client_node") != node["NODE_ID"]
+                or report.get("redis_probe") != "tls-auth-set-get-delete-passed"):
+            raise RuntimeError(f"Redis TLS/AUTH smoke failed from node {node['NODE_ID']}")
+        clients.append(node["NODE_ID"])
+    return clients
+
+
 def deploy(config, release):
     if not re.fullmatch(r"release-[a-f0-9]{32}", release):
         raise ValueError("Invalid release identifier")
@@ -531,8 +554,15 @@ def deploy(config, release):
     measure("initial_ssh_bootstrap", lambda: wait_for_bootstrap(inventory[0]), node=inventory[0]["NODE_ID"])
     # OS Login updates the deployer's shared SSH profile; concurrent connections
     # can fail with ABORTED: Multiple concurrent mutations.
+    prepared = []
     for index, node in enumerate(inventory):
-        prepare_node(node, bootstrap_ready=index == 0)
+        prepared.append(prepare_node(node, bootstrap_ready=index == 0))
+
+    # New APIs stay drained until both independent VM processes prove that the
+    # same Redis B endpoint accepts the configured CA, hostname and AUTH. A
+    # deliberate PostgreSQL bypass must remain deployable during a Redis outage.
+    cache_enabled = prepared_cache_mode(prepared)
+    redis_smoke_clients = redis_smoke_clients_if_enabled(cache_enabled, inventory, stage, measure)
     last_health_report = {}
     def health(node):
         services = ("api", "admin", "backoffice", "commerce", "tracking", "monitor")
@@ -588,6 +618,9 @@ def deploy(config, release):
                 f"--instances={node['VM_NAME']}")
             raise
     result = stage(inventory[0], "verify")
+    result["redis_node"] = "b"
+    result["cache_enabled"] = cache_enabled
+    result["redis_smoke_clients"] = redis_smoke_clients
     print(json.dumps(result))
     return result
 

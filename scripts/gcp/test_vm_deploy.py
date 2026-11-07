@@ -16,6 +16,56 @@ import monitor_agent
 
 
 class VmDeploymentTests(unittest.TestCase):
+    def test_redis_dns_is_exactly_bound_to_vm_b_and_private_subnet(self):
+        runtime, _, _, _ = self.configuration()
+        with patch.object(vm_deploy.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("10.0.0.3", 6378))]):
+            self.assertEqual(vm_deploy.redis_addresses(runtime), {vm_deploy.ipaddress.ip_address("10.0.0.3")})
+        with patch.object(vm_deploy.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("8.8.8.8", 6378))]):
+            with self.assertRaisesRegex(ValueError, "outside the configured private subnet"):
+                vm_deploy.redis_addresses(runtime)
+        runtime["redis"]["host"] = "redis.attacker.example"
+        with self.assertRaisesRegex(ValueError, "VM B identity"):
+            vm_deploy.redis_dns_name(runtime)
+
+    def test_monitor_redis_info_and_docker_units_are_bounded_and_numeric(self):
+        values = monitor_agent.redis_info_fields(
+            b"# Memory\r\nused_memory:100\r\nused_memory_rss:200\r\nmaxmemory:268435456\r\n"
+            b"# Stats\r\nevicted_keys:4\r\n# Clients\r\nconnected_clients:3\r\n")
+        self.assertEqual(values, {"used_memory": 100, "used_memory_rss": 200,
+                                  "maxmemory": 268435456, "evicted_keys": 4, "connected_clients": 3})
+        self.assertEqual(monitor_agent.docker_bytes("128.5MiB"), 134_742_016)
+        for payload in (b"used_memory:not-a-number\n", b"# Memory\nused_memory:1\n"):
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                monitor_agent.redis_info_fields(payload)
+        with self.assertRaises(ValueError):
+            monitor_agent.docker_bytes("999MB-or-more")
+
+    def test_redis_material_keeps_the_server_key_only_on_b_and_acl_restricts_namespace(self):
+        runtime, _, _, _ = self.configuration()
+        identity = runtime["redis_identity_fixture"]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / "release"
+            (release / "redis").mkdir(parents=True)
+            (release / "redis/redis.conf").write_text("maxmemory 256mb\n", encoding="ascii")
+            with (patch.object(vm_deploy, "BASE", root / "base"),
+                  patch.object(vm_deploy.os, "chown", create=True)):
+                directory, a_fingerprint = vm_deploy.configure_redis_files(release, identity, "a")
+                self.assertFalse((directory / "server.key").exists())
+                self.assertFalse((directory / "server.crt").exists())
+                acl = (directory / "users.acl").read_text(encoding="ascii")
+                self.assertIn("~nexoruta:nexoruta-gcp-demo:cache:v1:*", acl)
+                self.assertIn("-@all", acl)
+                self.assertNotIn(identity["password"], acl)
+                self.assertNotIn("flushdb", acl.lower())
+
+                directory, b_fingerprint = vm_deploy.configure_redis_files(release, identity, "b")
+                self.assertTrue((directory / "server.key").is_file())
+                self.assertTrue((directory / "server.crt").is_file())
+                self.assertEqual(a_fingerprint, b_fingerprint)
+                if os.name == "posix":
+                    self.assertEqual((directory / "server.key").stat().st_mode & 0o777, 0o440)
+
     def test_prepare_acquires_lock_before_downloading_manifest(self):
         args = SimpleNamespace(release="release-" + "a" * 32, deadline=2000, stage="prepare", node="a", bucket="demo")
         lock = Mock()
@@ -140,31 +190,42 @@ class VmDeploymentTests(unittest.TestCase):
             "migrator", "api", "worker", "bootstrap", "rabbit", "mongo", "mail", "monitor", "grafana",
             "keys_api", "keys_admin", "keys_backoffice", "keys_commerce", "keys_tracking", "admin", "operator", "commerce")}
         runtime = {"project_id": "demo-project", "sql_connection": "demo-project:region:sql", "registry": registry,
-                   "services_host": "10.0.0.1", "frontend_ip": "34.0.0.1",
-                   "redis": {"host": "10.0.0.3", "port": 6378, "auth_string": "private-redis-auth",
-                             "ca_certificates": ["cGVtLWNhLWNlcnRpZmljYXRl"]},
+                   "services_host": "10.0.0.1", "frontend_ip": "34.0.0.1", "subnet_cidr": "10.0.0.0/24",
+                   "nodes": {"a": {"name": "nexoruta-demo", "zone": "southamerica-west1-a"},
+                             "b": {"name": "nexoruta-demo-b", "zone": "southamerica-west1-b"}},
+                   "redis": {"host": "nexoruta-demo-b.southamerica-west1-b.c.demo-project.internal", "port": 6378},
                    "passwords": passwords, "keys": {name: "key" for name in ("jwt", "tracking", "push", "evidence")},
                    "endpoints": {name: f"https://{name}.34-0-0-1.sslip.io" for name in (
                        "api", "admin", "backoffice", "commerce", "tracking", "mail", "monitor")},
                    "organization_ids": {"operator": "operator-id", "commerce": "commerce-id"}}
         integrations = {"smtp_host": "mailpit", "smtp_port": 1025, "smtp_ssl": False,
                         "smtp_from": "demo@example.test", "monitor_google_client_id": "oauth-client",
-                        "monitor_google_client_secret": "private-oauth", "monitor_allowed_emails": ["reader@example.test"]}
+                        "monitor_google_client_secret": "private-oauth", "monitor_allowed_emails": ["reader@example.test"],
+                        "cache_enabled": "true"}
         hosting = {"grafana_secret_key": "private-grafana-key", "certificate_password": "private-pfx",
                    "certificate_pfx": "cGZ4"}
         images = {name: registry + "/" + name + "@sha256:" + "a" * 64 for name in (
             "api", "worker", "admin", "backoffice", "commerce", "tracking")}
+        runtime["redis_identity_fixture"] = {
+            "dns_name": runtime["redis"]["host"],
+            "password": "private-redis-auth-" + "x" * 48,
+            "ca_certificate": "-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----\n",
+            "server_certificate": "-----BEGIN CERTIFICATE-----\nserver\n-----END CERTIFICATE-----\n",
+            "server_private_key": "-----BEGIN PRIVATE KEY-----\nprivate\n-----END PRIVATE KEY-----\n",
+        }
         return runtime, integrations, hosting, images
 
     def test_shared_environment_preserves_identity_and_restricts_keys_and_google_access(self):
         runtime, integrations, hosting, images = self.configuration()
         values = vm_deploy.environment(runtime, integrations, images, "hash", hosting, "b", "10.0.0.2",
-                                       "release-" + "a" * 32, ("172.22.0.0/16",))
+                                       "release-" + "a" * 32, ("172.22.0.0/16",), runtime["redis_identity_fixture"])
         self.assertEqual(values["SMTP_HOST"], "10.0.0.1")
-        self.assertEqual(values["REDIS_HOST"], "10.0.0.3")
-        self.assertEqual(values["REDIS_AUTH"], "private-redis-auth")
+        self.assertEqual(values["REDIS_HOST"], runtime["redis"]["host"])
+        self.assertEqual(values["REDIS_AUTH"], runtime["redis_identity_fixture"]["password"])
         self.assertEqual(values["REDIS_PORT"], 6378)
-        self.assertEqual(json.loads(values["REDIS_CA_CERTIFICATES_BASE64_JSON"]), ["cGVtLWNhLWNlcnRpZmljYXRl"])
+        import base64
+        expected_ca = base64.b64encode(runtime["redis_identity_fixture"]["ca_certificate"].encode()).decode()
+        self.assertEqual(json.loads(values["REDIS_CA_CERTIFICATES_BASE64_JSON"]), [expected_ca])
         self.assertEqual(values["TRUSTED_NETWORKS"], "34.0.0.1/32,35.191.0.0/16,130.211.0.0/22,172.22.0.0/16")
         allowed_hosts = values["ALLOWED_HOSTS"].split(";")
         self.assertIn("api.34-0-0-1.sslip.io", allowed_hosts)
@@ -182,33 +243,63 @@ class VmDeploymentTests(unittest.TestCase):
                 integrations["monitor_allowed_emails"] = emails
                 with self.assertRaises(ValueError):
                     vm_deploy.environment(runtime, integrations, images, "hash", hosting, "a", "10.0.0.1",
-                                          "release-" + "a" * 32, subnets)
+                                          "release-" + "a" * 32, subnets, runtime["redis_identity_fixture"])
 
     def test_shared_environment_requires_private_authenticated_tls_redis(self):
         runtime, integrations, hosting, images = self.configuration()
         original = runtime["redis"]
-        for redis in (
-            {**original, "host": "8.8.8.8"},
-            {**original, "port": 6379},
-            {**original, "auth_string": ""},
-            {**original, "ca_certificates": []},
-        ):
+        invalid = (
+            ({**original, "host": "redis.attacker.example"}, runtime["redis_identity_fixture"]),
+            ({**original, "port": 6379}, runtime["redis_identity_fixture"]),
+            (original, {**runtime["redis_identity_fixture"], "password": "short"}),
+            (original, {**runtime["redis_identity_fixture"], "dns_name": "redis.attacker.example"}),
+        )
+        for redis, identity in invalid:
             with self.subTest(redis=redis):
                 runtime["redis"] = redis
-                with self.assertRaisesRegex(ValueError, "Memorystore"):
+                with self.assertRaises(ValueError):
                     vm_deploy.environment(runtime, integrations, images, "hash", hosting, "a", "10.0.0.1",
-                                          "release-" + "a" * 32)
+                                          "release-" + "a" * 32, redis_identity=identity)
+        runtime["redis"] = original
 
-    def test_monitor_config_accepts_only_private_memorystore_tls_endpoint(self):
+    def test_shared_environment_allows_empty_redis_credentials_only_in_explicit_bypass(self):
+        runtime, integrations, hosting, images = self.configuration()
+        integrations["cache_enabled"] = "false"
+        values = vm_deploy.environment(runtime, integrations, images, "hash", hosting, "a", "10.0.0.1",
+                                       "release-" + "a" * 32, ("172.22.0.0/16",), redis_identity=None)
+        self.assertEqual(values["REDIS_AUTH"], "")
+        self.assertEqual(json.loads(values["REDIS_CA_CERTIFICATES_BASE64_JSON"]), [])
+        self.assertEqual(values["NEXORUTA_CACHE_ENABLED"], "false")
+
+        integrations["cache_enabled"] = "true"
+        with self.assertRaisesRegex(ValueError, "Enabled Redis requires"):
+            vm_deploy.environment(runtime, integrations, images, "hash", hosting, "a", "10.0.0.1",
+                                  "release-" + "a" * 32, ("172.22.0.0/16",), redis_identity=None)
+
+    def test_cache_bypass_configuration_is_strict(self):
+        self.assertTrue(vm_deploy.caching_enabled({}))
+        self.assertTrue(vm_deploy.caching_enabled({"cache_enabled": "TRUE"}))
+        self.assertFalse(vm_deploy.caching_enabled({"cache_enabled": "false"}))
+        for value in (True, "yes", "", None):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "true or false"):
+                vm_deploy.caching_enabled({"cache_enabled": value})
+
+    def test_monitor_config_accepts_only_private_vm_b_tls_endpoint(self):
         config = {"node": "a", "project_id": "demo-project", "private_ip": "10.0.0.2",
-                  "services_host": "10.0.0.1", "redis_host": "10.0.0.3", "redis_port": 6378}
+                  "services_host": "10.0.0.1",
+                  "redis_host": "nexoruta-demo-b.southamerica-west1-b.c.demo-project.internal",
+                  "redis_port": 6378, "redis_zone": "southamerica-west1-b", "redis_subnet_cidr": "10.0.0.0/24"}
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "monitor.json"
             path.write_text(json.dumps(config), encoding="utf-8")
-            self.assertEqual(monitor_agent.read_config(path), config)
-            for invalid in ({**config, "redis_port": 6379}, {**config, "redis_host": "8.8.8.8"}):
+            resolved = [(2, 1, 6, "", ("10.0.0.3", 6378))]
+            with patch.object(monitor_agent.socket, "getaddrinfo", return_value=resolved):
+                self.assertEqual(monitor_agent.read_config(path), config)
+            for invalid in ({**config, "redis_port": 6379}, {**config, "redis_host": "redis.attacker.example"},
+                            {**config, "redis_subnet_cidr": "192.168.0.0/24"}):
                 path.write_text(json.dumps(invalid), encoding="utf-8")
-                with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                with (self.subTest(invalid=invalid), patch.object(monitor_agent.socket, "getaddrinfo", return_value=resolved),
+                      self.assertRaises(ValueError)):
                     monitor_agent.read_config(path)
 
     def test_migrations_provision_hosting_before_catalog_and_bootstrap(self):
@@ -267,6 +358,8 @@ class VmDeploymentTests(unittest.TestCase):
             (release / "monitor_agent.py").write_text("# collector")
             (release / "monitoring").mkdir()
             (release / "monitoring/ops-agent.yaml").write_text("metrics: {}")
+            (release / "redis").mkdir()
+            (release / "redis/redis.conf").write_text("maxmemory 256mb\n")
             deployment = vm_deploy.Deploy(release, io.StringIO())
             services = vm_deploy.SHARED
             identifiers = [f"container-{index}" for index in range(len(services))]
@@ -290,10 +383,14 @@ class VmDeploymentTests(unittest.TestCase):
             response.__exit__ = Mock(return_value=False)
             with (patch.object(vm_deploy, "token", return_value="token"),
                   patch.object(vm_deploy, "bridge_subnets", return_value=["172.22.0.0/16"]),
+                  patch.object(vm_deploy, "redis_addresses", return_value={"10.0.0.3"}),
+                  patch.object(vm_deploy, "configure_redis_files", return_value=(root / "redis", "fingerprint")),
                   patch.object(vm_deploy, "OPS_AGENT_CONFIG", root / "ops-agent.yaml"),
                   patch.object(vm_deploy.urllib.request, "urlopen", return_value=response) as urlopen):
-                result = vm_deploy.prepare(args, deployment, runtime, integrations, hosting, {"images": images}, "10.0.0.1")
-            self.assertEqual(result, {})
+                result = vm_deploy.prepare(args, deployment, runtime, integrations, hosting,
+                                           runtime["redis_identity_fixture"], {"images": images}, "10.0.0.1")
+            self.assertEqual(result, {"cache_enabled": True, "redis_node": "b", "redis_port": 6378,
+                                      "redis_server_reconciled": False})
             up_calls = [call.args for call in deployment.compose.call_args_list if "up" in call.args]
             self.assertIn(("up", "-d", "--wait", "--wait-timeout", "300", "sql-proxy"), up_calls)
             self.assertIn(("--profile", "shared", "up", "-d", "--no-deps", "--force-recreate",
@@ -317,8 +414,46 @@ class VmDeploymentTests(unittest.TestCase):
             self.assertEqual(config["expires_at"], args.deadline)
             self.assertEqual(config["redis_host"], runtime["redis"]["host"])
             self.assertEqual(config["redis_port"], runtime["redis"]["port"])
+            self.assertEqual(config["redis_zone"], runtime["nodes"]["b"]["zone"])
+            self.assertEqual(config["redis_subnet_cidr"], runtime["subnet_cidr"])
             if os.name == "posix":
                 self.assertEqual((release / "hosting.pfx").stat().st_mode & 0o777, 0o600)
+
+    def test_prepare_with_cache_bypass_does_not_require_or_start_redis_on_b(self):
+        runtime, integrations, hosting, images = self.configuration()
+        integrations["cache_enabled"] = "false"
+        with tempfile.TemporaryDirectory() as directory, patch.object(vm_deploy, "BASE", Path(directory)):
+            root = Path(directory)
+            release = root / "release"
+            release.mkdir()
+            (release / "monitor_agent.py").write_text("# collector")
+            (release / "monitoring").mkdir()
+            (release / "monitoring/ops-agent.yaml").write_text("metrics: {}")
+            (release / "redis").mkdir()
+            (release / "redis/redis.conf").write_text("maxmemory 256mb\n")
+            deployment = vm_deploy.Deploy(release, io.StringIO())
+            deployment.execute = Mock(side_effect=lambda *args, **kwargs: "hash" if args[:2] == ("docker", "run") else "")
+            deployment.compose = Mock()
+            args = SimpleNamespace(node="b", release="release-" + "a" * 32, deadline=12345)
+
+            with (patch.object(vm_deploy, "token", return_value="token"),
+                  patch.object(vm_deploy, "bridge_subnets", return_value=["172.22.0.0/16"]),
+                  patch.object(vm_deploy, "redis_addresses") as redis_addresses,
+                  patch.object(vm_deploy, "configure_redis_files") as configure_redis_files,
+                  patch.object(vm_deploy, "OPS_AGENT_CONFIG", root / "ops-agent.yaml"),
+                  patch.object(vm_deploy.socket, "gethostbyname", return_value="10.0.0.1")):
+                result = vm_deploy.prepare(args, deployment, runtime, integrations, hosting,
+                                           runtime["redis_identity_fixture"], {"images": images}, "10.0.0.2")
+
+            redis_addresses.assert_not_called()
+            self.assertFalse(result["cache_enabled"])
+            self.assertFalse(result["redis_server_reconciled"])
+            configure_redis_files.assert_not_called()
+            calls = [call.args for call in deployment.compose.call_args_list]
+            self.assertNotIn(("--profile", "cache-b", "pull", "redis"), calls)
+            self.assertNotIn(("--profile", "cache-b", "config", "--quiet"), calls)
+            self.assertFalse(any("up" in call and "redis" in call for call in calls))
+            self.assertTrue(any("up" in call and "sql-proxy" in call for call in calls))
 
 
 if __name__ == "__main__":

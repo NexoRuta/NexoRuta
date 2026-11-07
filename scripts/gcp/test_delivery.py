@@ -8,7 +8,7 @@ import tarfile
 import tempfile
 import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import delivery
 import integration
@@ -29,6 +29,21 @@ class DeliveryTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "not admitted"):
                 delivery.wait_for_load_balancer_health({"NODE_ID": "a"}, 2000, lambda node: False)
         sleep.assert_called_once_with(5)
+
+    def test_cache_bypass_skips_redis_smokes_and_requires_both_nodes_to_agree(self):
+        inventory = [{"NODE_ID": "a"}, {"NODE_ID": "b"}]
+        stage = Mock(side_effect=AssertionError("Redis must not be probed in bypass mode"))
+        measure = Mock(side_effect=lambda _name, operation, **_kwargs: operation())
+
+        self.assertFalse(delivery.prepared_cache_mode([
+            {"cache_enabled": False}, {"cache_enabled": False}]))
+        self.assertEqual(delivery.redis_smoke_clients_if_enabled(False, inventory, stage, measure), [])
+        stage.assert_not_called()
+        measure.assert_not_called()
+        with self.assertRaisesRegex(RuntimeError, "same cache mode"):
+            delivery.prepared_cache_mode([{"cache_enabled": False}, {"cache_enabled": True}])
+        with self.assertRaisesRegex(RuntimeError, "same cache mode"):
+            delivery.prepared_cache_mode([{"cache_enabled": False}, {}])
 
     def test_bootstrap_stops_after_one_profile_limit_error_without_sleeping(self):
         config = {"GCP_PROJECT_ID": "demo-project", "GCP_STATE_BUCKET": "demo-state",
@@ -94,6 +109,16 @@ class DeliveryTests(unittest.TestCase):
         }
         self.assertEqual(datasource_types, {"prometheus", "loki"})
 
+        by_title = {panel.get("title"): panel for panel in panels}
+        self.assertIn("Porcentaje total ponderado", by_title)
+        self.assertIn("Hits y misses en el rango", by_title)
+        self.assertIn("Series de telemetría de caché", by_title)
+        self.assertIn("$__range", by_title["Hits y misses en el rango"]["targets"][0]["expr"])
+        self.assertIn("hit|miss", by_title["Porcentaje total ponderado"]["targets"][0]["expr"])
+        self.assertEqual(by_title["Series de telemetría de caché"]["fieldConfig"]["defaults"]["noValue"],
+                         "Sin telemetría")
+        self.assertIn("Redis B: salud TLS/AUTH", by_title)
+
         gcp_row = next(panel for panel in dashboard["panels"]
                        if panel.get("title") == "Infraestructura GCP · Prometheus")
         self.assertTrue(gcp_row["collapsed"])
@@ -116,6 +141,16 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn("GOMEMLIMIT: 300MiB", compose)
         self.assertRegex(compose, r"otel-collector:\n(?:[^\n]*\n){0,5}\s+mem_limit: 512m")
         self.assertIn("- otelcol:/var/lib/otelcol", compose)
+        self.assertIn("redis:7.2.16-alpine3.21@sha256:f2c5eb3d970536f4bd6538875f650cc8482284fc828d7de20fd25a5f16fa7fdc", compose)
+        self.assertIn("mem_limit: 512m", compose)
+        self.assertIn("memswap_limit: 512m", compose)
+        self.assertIn("cpus: 1.0", compose)
+        self.assertIn("- cache-b", compose)
+        redis_config = (root / "deploy/gcp/redis/redis.conf").read_text(encoding="utf-8")
+        self.assertIn("port 0", redis_config)
+        self.assertIn("tls-port 6378", redis_config)
+        self.assertIn('save ""', redis_config)
+        self.assertIn("maxmemory 256mb", redis_config)
 
     def test_load_test_dashboard_is_in_the_gcp_delivery_bundle(self):
         root = Path(__file__).parents[2]
@@ -146,6 +181,8 @@ class DeliveryTests(unittest.TestCase):
             monitor_agent = fixture / "scripts/gcp/monitor_agent.py"
             monitor_agent.parent.mkdir(parents=True)
             shutil.copyfile(root / "scripts/gcp/monitor_agent.py", monitor_agent)
+            redis_identity = fixture / "scripts/gcp/redis_identity.py"
+            shutil.copyfile(root / "scripts/gcp/redis_identity.py", redis_identity)
 
             with patch.object(delivery, "ROOT", fixture):
                 bundle = delivery.create_bundle(Path(temp) / "output")
@@ -156,6 +193,9 @@ class DeliveryTests(unittest.TestCase):
                 packaged_alerts = archive.extractfile("monitoring/alerts.yaml")
                 self.assertIsNotNone(packaged_alerts)
                 self.assertEqual(packaged_alerts.read(), canonical_alerts.read_bytes())
+                packaged_identity = archive.extractfile("redis_identity.py")
+                self.assertIsNotNone(packaged_identity)
+                self.assertEqual(packaged_identity.read(), redis_identity.read_bytes())
 
     def test_environment_cannot_inject_additional_lines(self):
         with self.assertRaises(ValueError):
@@ -264,7 +304,10 @@ class DeliveryTests(unittest.TestCase):
                     stage = command.split("--stage", 1)[1].split()[0]
                     events.append(("stage", node["NODE_ID"], stage))
                     result = {"release": release, "node": node["NODE_ID"], "stage": stage,
-                              "status": "healthy"}
+                              "status": "healthy", "cache_enabled": True}
+                    if stage == "redis-smoke":
+                        result.update({"redis_node": "b", "redis_client_node": node["NODE_ID"],
+                                       "redis_probe": "tls-auth-set-get-delete-passed"})
                     if stage == "verify":
                         result["endpoints"] = {"api": "https://api.example.test"}
                     return json.dumps(result)
@@ -299,8 +342,9 @@ class DeliveryTests(unittest.TestCase):
 
         operations = [event for event in events if event[0] in ("remove-instances", "add-instances", "stage")]
         self.assertCountEqual(operations[:2], [("stage", "a", "prepare"), ("stage", "b", "prepare")])
-        self.assertCountEqual(operations[2:4], [("remove-instances", "a"), ("remove-instances", "b")])
-        self.assertEqual(operations[4:], [
+        self.assertEqual(operations[2:4], [("stage", "a", "redis-smoke"), ("stage", "b", "redis-smoke")])
+        self.assertCountEqual(operations[4:6], [("remove-instances", "a"), ("remove-instances", "b")])
+        self.assertEqual(operations[6:], [
             ("stage", "a", "stop"), ("stage", "b", "stop"), ("stage", "a", "migrate"),
             ("stage", "b", "apply"), ("add-instances", "b"),
             ("stage", "a", "apply"), ("add-instances", "a"), ("stage", "a", "verify"),
@@ -309,6 +353,8 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn(("sleep", 5), events)
         self.assertEqual(bootstrap_attempts, 2)
         self.assertEqual(result["endpoints"]["api"], "https://api.example.test")
+        self.assertEqual(result["redis_node"], "b")
+        self.assertEqual(result["redis_smoke_clients"], ["a", "b"])
 
     def test_remote_error_reports_safe_http_status(self):
         output = json.dumps({"node": "a", "stage": "verify", "status": "failed",

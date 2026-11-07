@@ -88,7 +88,7 @@ resource "google_storage_bucket_iam_member" "delivery_reader" {
 }
 
 resource "google_secret_manager_secret" "config" {
-  for_each  = toset(["nexoruta-demo-runtime", "nexoruta-demo-integrations", "nexoruta-load-preparer-credentials", "nexoruta-mobile-config", "nexoruta-mobile-keystore", "nexoruta-mobile-signing-password"])
+  for_each  = toset(["nexoruta-demo-runtime", "nexoruta-demo-integrations", "nexoruta-demo-redis", "nexoruta-load-preparer-credentials", "nexoruta-mobile-config", "nexoruta-mobile-keystore", "nexoruta-mobile-signing-password"])
   secret_id = each.key
   replication {
     user_managed {
@@ -104,7 +104,7 @@ resource "google_secret_manager_secret_version" "integrations" {
 }
 
 resource "google_secret_manager_secret_iam_member" "runtime" {
-  for_each  = { for name, secret in google_secret_manager_secret.config : name => secret if contains(["nexoruta-demo-runtime", "nexoruta-demo-integrations"], name) }
+  for_each  = { for name, secret in google_secret_manager_secret.config : name => secret if contains(["nexoruta-demo-runtime", "nexoruta-demo-integrations", "nexoruta-demo-redis"], name) }
   secret_id = each.value.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.runtime.email}"

@@ -1239,7 +1239,7 @@
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 94
+            "y": 100
           },
           "id": 105,
           "options": {
@@ -1270,6 +1270,172 @@
           ],
           "title": "Latencia p95 de Redis",
           "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Aciertos / (aciertos + misses) con el total de lecturas elegibles de todos los casos y nodos seleccionados. No promedia porcentajes por caso.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "lineWidth": 2
+              },
+              "noValue": "Sin datos",
+              "unit": "percent",
+              "max": 100,
+              "min": 0
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 0,
+            "y": 94
+          },
+          "id": 106,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "(100 * sum(rate(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=\"hit\"}[$__rate_interval])) / clamp_min(sum(rate(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=~\"hit|miss\"}[$__rate_interval])), 1e-12)) and on() (sum(increase(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=~\"hit|miss\"}[$__rate_interval])) > 0)",
+              "instant": false,
+              "legendFormat": "Total seleccionado",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Porcentaje total ponderado",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Estimación Prometheus de lecturas hit/miss dentro del rango temporal elegido. No es un contador contable exacto.",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "lineWidth": 2
+              },
+              "noValue": "Sin datos",
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 8,
+            "y": 94
+          },
+          "id": 107,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by (cache,result) (increase(nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\",result=~\"hit|miss\"}[$__range]))",
+              "instant": false,
+              "legendFormat": "{{cache}} ? {{result}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Hits y misses en el rango",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Cada nodo listado ya exporta las series iniciales de caché. Si no aparece un nodo, falta telemetría; si aparece y hits/misses permanecen en cero, no hubo lecturas elegibles en el rango.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "gray",
+                "mode": "fixed"
+              },
+              "mappings": [],
+              "noValue": "Sin telemetría",
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 16,
+            "y": 94
+          },
+          "id": 108,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "count by (node) (nexoruta_cache_distributed_requests_total{service_name=~\"$otel_service\",node=~\"$node\",cache=~\"$cache\"})",
+              "instant": true,
+              "legendFormat": "Nodo {{node}}",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Series de telemetría de caché",
+          "type": "stat"
         }
       ],
       "title": "Caché distribuida",
@@ -2097,6 +2263,310 @@
             }
           ],
           "title": "Profundidad de cola · RabbitMQ y Kafka",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "El agente autentica y valida CA y hostname desde cada VM; Redis solo se espera en B.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "gray",
+                "mode": "fixed"
+              },
+              "mappings": [],
+              "noValue": "Sin telemetría",
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 8,
+            "x": 0,
+            "y": 140
+          },
+          "id": 33,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by (node) (nexoruta_gcp_service_up{service=\"redis\",node=~\"$node\"})",
+              "instant": true,
+              "legendFormat": "Nodo {{node}}",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Redis B: salud TLS/AUTH",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Memoria cgroup del contenedor Redis en B como porcentaje de su límite de 512 MiB.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "drawStyle": "line",
+                "fillOpacity": 6,
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "showPoints": "auto",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 8,
+            "y": 140
+          },
+          "id": 34,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "100 * max by (node) (nexoruta_gcp_redis_container_memory_bytes{node=~\"$node\"}) / max by (node) (nexoruta_gcp_redis_container_memory_limit_bytes{node=~\"$node\"})",
+              "instant": false,
+              "legendFormat": "Nodo {{node}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Redis B: memoria de contenedor",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "RSS reportado por Redis INFO; puede diferir del uso cgroup del contenedor.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "drawStyle": "line",
+                "fillOpacity": 6,
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "showPoints": "auto",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 145
+          },
+          "id": 35,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by (node) (nexoruta_gcp_redis_memory_rss_bytes{node=~\"$node\"})",
+              "instant": false,
+              "legendFormat": "Nodo {{node}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Redis B: RSS del proceso",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Cantidad actual de clientes conectados al Redis de B.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "drawStyle": "line",
+                "fillOpacity": 6,
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "showPoints": "auto",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 152
+          },
+          "id": 36,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by (node) (nexoruta_gcp_redis_connected_clients{node=~\"$node\"})",
+              "instant": false,
+              "legendFormat": "Nodo {{node}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Redis B: clientes conectados",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Total acumulado de claves desalojadas por maxmemory-policy allkeys-lru.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "drawStyle": "line",
+                "fillOpacity": 6,
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "showPoints": "auto",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "noValue": "Sin datos",
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 152
+          },
+          "id": 37,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by (node) (nexoruta_gcp_redis_evicted_keys{node=~\"$node\"})",
+              "instant": false,
+              "legendFormat": "Nodo {{node}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Redis B: claves desalojadas",
           "type": "timeseries"
         }
       ],

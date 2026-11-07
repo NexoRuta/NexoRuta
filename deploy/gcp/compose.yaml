@@ -3,13 +3,13 @@ x-api-env: &id001
   ASPNETCORE_ENVIRONMENT: Production
   ConnectionStrings__Postgres: ${API_CONNECTION:?}
   ConnectionStrings__Redis: ${REDIS_HOST:?}:${REDIS_PORT:?},ssl=true,sslHost=${REDIS_HOST:?},abortConnect=false,connectRetry=1,connectTimeout=1000,syncTimeout=500,asyncTimeout=500,keepAlive=30
-  Caching__Enabled: 'true'
+  Caching__Enabled: ${NEXORUTA_CACHE_ENABLED:?}
   Caching__Namespace: nexoruta-gcp-demo
   Caching__OperationTimeoutMilliseconds: '500'
   Caching__MaxEntryBytes: '2097152'
   Caching__RedisTls: 'true'
   Caching__RedisCaCertificatesBase64Json: ${REDIS_CA_CERTIFICATES_BASE64_JSON:?}
-  Caching__RedisPassword: ${REDIS_AUTH:?}
+  Caching__RedisPassword: ${REDIS_AUTH:-}
   Caching__OperatorBranding__TtlSeconds: '900'
   Caching__PublishedTariff__TtlSeconds: '21600'
   Jwt__SigningKeyBase64: ${JWT_KEY:?}
@@ -222,6 +222,44 @@ services:
     - shared
     ports:
     - ${NODE_PRIVATE_IP:?}:1025:1025
+  redis:
+    image: redis:7.2.16-alpine3.21@sha256:f2c5eb3d970536f4bd6538875f650cc8482284fc828d7de20fd25a5f16fa7fdc
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    user: "999:1000"
+    restart: unless-stopped
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+    stop_grace_period: 20s
+    environment:
+      REDIS_HOST: ${REDIS_HOST:?}
+      REDIS_CONFIG_FINGERPRINT: ${REDIS_CONFIG_FINGERPRINT:?}
+    volumes:
+    - ${REDIS_CONFIG_DIR:?}/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    - ${REDIS_CONFIG_DIR:?}/ca.crt:/run/redis/ca.crt:ro
+    - ${REDIS_CONFIG_DIR:?}/server.crt:/run/redis/server.crt:ro
+    - ${REDIS_CONFIG_DIR:?}/server.key:/run/redis/server.key:ro
+    - ${REDIS_CONFIG_DIR:?}/users.acl:/run/redis/users.acl:ro
+    - ${REDIS_CONFIG_DIR:?}/redis-auth:/run/redis/redis-auth:ro
+    tmpfs:
+    - /data:rw,noexec,nosuid,size=16m,uid=999,gid=1000,mode=0750
+    - /tmp:rw,noexec,nosuid,size=8m,uid=999,gid=1000,mode=0700
+    ports:
+    - ${NODE_PRIVATE_IP:?}:6378:6378
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - 'REDISCLI_AUTH="$$(cat /run/redis/redis-auth)" redis-cli --tls --cacert /run/redis/ca.crt --sni "$$REDIS_HOST" -h "$$REDIS_HOST" -p 6378 PING | grep -qx PONG'
+      interval: 10s
+      timeout: 4s
+      retries: 6
+      start_period: 10s
+    profiles:
+    - cache-b
   db-tools:
     image: postgres:18-alpine
     environment:

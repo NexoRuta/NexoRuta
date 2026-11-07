@@ -94,8 +94,19 @@ class GitHubEnvironmentTests(unittest.TestCase):
     def test_unconfigured_integrations_use_mailpit_and_configured_secrets_are_paired(self):
         defaults = settings.integrations()
         self.assertEqual((defaults["smtp_host"], defaults["smtp_port"], defaults["smtp_ssl"]), ("mailpit", 1025, False))
+        self.assertEqual(defaults["cache_enabled"], "true")
         with patch.dict(os.environ, {"SMTP_USERNAME": "demo"}):
             with self.assertRaisesRegex(ValueError, "both SMTP_USERNAME and SMTP_PASSWORD"):
+                settings.integrations()
+
+    def test_cache_bypass_flag_is_strict_and_validated_before_bootstrap(self):
+        with patch.dict(os.environ, {"NEXORUTA_CACHE_ENABLED": "false"}):
+            self.assertEqual(settings.integrations()["cache_enabled"], "false")
+            settings.validate("deploy")
+        with patch.dict(os.environ, {"NEXORUTA_CACHE_ENABLED": "sometimes"}):
+            with self.assertRaisesRegex(ValueError, "NEXORUTA_CACHE_ENABLED"):
+                settings.validate("deploy")
+            with self.assertRaisesRegex(ValueError, "NEXORUTA_CACHE_ENABLED"):
                 settings.integrations()
 
     def test_sync_delivers_private_json_without_secrets_in_arguments_or_logs(self):
@@ -117,6 +128,7 @@ class GitHubEnvironmentTests(unittest.TestCase):
             patch.dict(os.environ, {"SMTP_USERNAME": "demo", "SMTP_PASSWORD": "private-password", "GEOAPIFY_API_KEY": "private-geo-key"}),
             patch.object(settings.session, "command", side_effect=upload) as command,
             patch("hosting_identity.ensure"),
+            patch("redis_identity.ensure"),
             contextlib.redirect_stdout(output),
         ):
             settings.sync_integrations()
@@ -125,6 +137,24 @@ class GitHubEnvironmentTests(unittest.TestCase):
         self.assertNotIn("private-geo-key", output.getvalue())
         self.assertTrue(private_paths)
         self.assertTrue(all(not path.exists() for path in private_paths))
+
+    def test_sync_cache_bypass_does_not_require_a_healthy_redis_identity(self):
+        uploaded = {}
+
+        def upload(*args, **kwargs):
+            path = Path(next(arg.split("=", 1)[1] for arg in args if arg.startswith("--data-file=")))
+            uploaded.update(json.loads(path.read_text()))
+
+        with (
+            patch.dict(os.environ, {"NEXORUTA_CACHE_ENABLED": "false"}),
+            patch.object(settings.session, "command", side_effect=upload),
+            patch("hosting_identity.ensure"),
+            patch("redis_identity.ensure") as ensure_redis,
+        ):
+            settings.sync_integrations()
+
+        self.assertEqual(uploaded["cache_enabled"], "false")
+        ensure_redis.assert_not_called()
 
 
 if __name__ == "__main__":
