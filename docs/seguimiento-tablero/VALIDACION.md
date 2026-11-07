@@ -2,19 +2,19 @@
 
 La implementación se integró en `develop` mediante las PR [Backend #49](https://github.com/NexoRuta/NexoRuta-Backend/pull/49) y [Frontend #51](https://github.com/NexoRuta/NexoRuta-Frontend/pull/51), después de sus checks finales verdes y sin omitir protecciones.
 
-Candidato Backend: `655edd3a2f2e2326e7a9d99bb2a405b81ee7b6e8`. Frontend: `7ce3e969924e1157d2eaa80b5c933bea9560f5b0`. Mobile conserva `f2b3db412ce23b0b36215fd301f6d3d3d6959252`.
+Candidatos del cierre inicial: Backend `655edd3a2f2e2326e7a9d99bb2a405b81ee7b6e8`, Frontend `7ce3e969924e1157d2eaa80b5c933bea9560f5b0`. Mobile conserva `f2b3db412ce23b0b36215fd301f6d3d3d6959252`. La corrección posterior de salud Kafka se identifica al final de este registro.
 
 El [CI final de Frontend](https://github.com/NexoRuta/NexoRuta-Frontend/actions/runs/42306859258) aprobó 518 pruebas. El [CI final de Backend](https://github.com/NexoRuta/NexoRuta-Backend/actions/runs/42306868322) aprobó 346 unitarias, 4 de arquitectura y 720 casos únicos de integración (241/219/260 por shard). El preflight repite además un caso crítico de decisión operativa; no se suma como un caso distinto. No hubo fallos ni omitidas en esos reportes finales.
 
 Gitlinks publicados del conjunto:
 
-| Repositorio | Merge en develop / gitlink |
+| Repositorio | Commit publicado / gitlink |
 |---|---|
-| Backend | `a7c1de8fae4859385082a2e7065704d3dc7d4fe6` |
+| Backend, candidato #52 pendiente de merge | `06a495a35625ba771926e6eca571e148cd016ef2` |
 | Frontend | `06b1ca380aea0ec68dbbaafff5de9a63a24d8f6b` |
 | Mobile, sin cambios | `f2b3db412ce23b0b36215fd301f6d3d3d6959252` |
 
-Los árboles de ambos merges coinciden exactamente con los candidatos validados. No hubo avances concurrentes de sus bases durante el cierre. [ci-final.json](evidencias/ci-final.json) conserva SHAs, corridas, contadores TRX, identidades y hashes SHA-256 de los artefactos descargados. Los artefactos crudos del CI tienen retención de 14 días; los resúmenes y hechos seleccionados permanecen versionados aquí.
+Los merges iniciales Backend `a7c1de8fae4859385082a2e7065704d3dc7d4fe6` y Frontend `06b1ca380aea0ec68dbbaafff5de9a63a24d8f6b` coinciden exactamente con sus candidatos validados. No hubo avances concurrentes de sus bases durante aquel cierre. [ci-final.json](evidencias/ci-final.json) conserva SHAs, corridas, contadores TRX, identidades y hashes SHA-256 de los artefactos descargados de ese cierre inicial. Los artefactos crudos del CI tienen retención de 14 días; los resúmenes y hechos seleccionados permanecen versionados aquí.
 
 ## Cobertura
 
@@ -66,6 +66,12 @@ Los TRX anteriores no contienen pruebas fallidas ni omitidas. [ci-integrado.json
 
 Los comandos OpenTofu reales se limitaron a los autorizados. Las trazas de acciones administrativas de las pruebas Python son simulaciones con comandos reemplazados por mocks; no ejecutaron apply ni operaron recursos. No se accedió al estado remoto ni se utilizaron credenciales de despliegue.
 
-El commit que guarda este informe solo agrega documentación y evidencia; no cambia fuentes, workflow ni gitlinks respecto de la ejecución citada. Los [checks de la PR sobre el candidato final](https://github.com/NexoRuta/NexoRuta/pull/74/checks) son la condición adicional para integrar: se espera su cierre completo en verde y el cumplimiento de las protecciones de GitHub, sin bypass. La cobertura por capa continúa referenciada al gate independiente de los hijos, cuyos árboles permanecen idénticos.
+El commit `99aa4af9bfd03068805ca364194a2112e1de3da3` agregó únicamente este informe y evidencia, sin cambiar fuentes, workflow ni gitlinks respecto de esa ejecución verde. Sin embargo, su [CI 42334710778](https://github.com/NexoRuta/NexoRuta/actions/runs/42334710778) falló: 719 de 720 integraciones aprobaron y el E2E de seguimiento/reprogramación/tablero no alcanzó una proyección vigente en 45 segundos. Esa corrida no se cuenta como verde y la PR no se integró.
+
+Se reprodujo la causa con Kafka real: antes de consumir el primer registro, `Position` permanece sin inicializar; el consumidor omitía el latido de las particiones vacías y la proyección podía quedar atrasada indefinidamente. La [corrección Backend #52](https://github.com/NexoRuta/NexoRuta-Backend/pull/52) usa los watermarks del broker para demostrar que una partición está vacía; si tiene registros y posición desconocida conserva un atraso positivo. No se relajaron los contadores de frontera ni la frescura de 15 segundos.
+
+El usuario autorizó expresamente la excepción necesaria: integrar esa corrección y actualizar únicamente el gitlink Backend, preservando Frontend y Mobile exactos. La prueba nueva falla contra el código anterior y la validación local corregida aprobó cuatro escenarios sin omitidas: particiones vacías/primer evento, E2E completo, paginación pública y replay independiente. Una corrida local intermedia falló por datos de fixture y disposición del worktree; no se cuenta como aprobada. El [CI completo de Backend #52](https://github.com/NexoRuta/NexoRuta-Backend/actions/runs/42336762688) está en curso. El principal valida en paralelo el commit publicado `06a495a35625ba771926e6eca571e148cd016ef2`; antes de integrar se fijará el merge de Backend, con árbol idéntico al candidato aprobado, y se repetirá el CI del conjunto final.
+
+Los [checks de la PR sobre el candidato final](https://github.com/NexoRuta/NexoRuta/pull/74/checks) siguen siendo condición para integrar: se espera su cierre completo en verde y el cumplimiento de las protecciones de GitHub, sin bypass. Los resultados históricos anteriores identifican sus commits y no sustituyen la validación del conjunto corregido.
 
 El guion está en [DEMOSTRACION.md](DEMOSTRACION.md). CU-28 y los demás puntos expresamente fuera de alcance conservan su implementación actual; Kafka interno y correos no se acreditan como webhooks HTTP salientes.
