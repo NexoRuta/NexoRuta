@@ -42,6 +42,8 @@ Las fotografías del tablero se leen en una sola sentencia MVCC, junto con el es
 
 El estado «Actualizada» requiere latidos recientes de todas las particiones, atraso Kafka cero y coincidencia entre hechos capturados en PostgreSQL y hechos proyectados. Por tanto también detecta un outbox pendiente aunque Kafka todavía no tenga ese evento. La falta de latidos por más de 15 segundos se presenta como indisponibilidad. El tablero conserva la última fotografía con advertencia y suspende la evaluación de riesgo actual. El historial documental devuelve su estado de actualización; MongoDB caído produce 503. El seguimiento público conserva la consulta canónica y omite la estimación si no puede demostrar vigencia.
 
+Cuando Kafka todavía no inicializó la posición local, los watermarks prueban si la partición está vacía. Si contiene registros, el consumidor consulta el offset confirmado del grupo para recuperarse de un reinicio en reposo; sin confirmación válida informa atraso positivo. Son lecturas del broker, sin reiniciar ni modificar offsets. Esta recuperación añade una consulta de offset confirmado por partición con posición desconocida y registros retenidos, además de las consultas de watermarks del latido. `OperationalConsumerHealthTests` comprueba las particiones vacías, el primer evento y el reinicio del mismo grupo sin reprocesarlo.
+
 ## Riesgo y estimación
 
 No se crea una franja comprometida a partir de una llegada estimada. Para Estandar/Urgente, el límite es la fecha de admisión más el plazo de esa modalidad de las reglas capturadas, usando la modalidad del cargo original inmutable. Si falta alguno de esos datos, el compromiso es desconocido. No se transforma la franja solicitada de un retiro en una promesa de entrega.

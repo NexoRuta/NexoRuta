@@ -1,0 +1,198 @@
+{
+  "backendCandidate": "58b04e6cd545ea7ecc0a6914fba24a89ae293272",
+  "backendPr": "https://github.com/NexoRuta/NexoRuta-Backend/pull/52",
+  "initialFailingIntegratedRun": "https://github.com/NexoRuta/NexoRuta/actions/runs/42334710778",
+  "authorization": "User explicitly authorized Backend correction and only its gitlink update; Frontend and Mobile unchanged",
+  "runs": [
+    {
+      "label": "Expected regression failure on old consumer",
+      "trx": "_6b8acee13cf3_2026-11-07_03_57_46_net10.0.trx",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "0",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "name": "NexoRuta.IntegrationTests.Operacion.OperationalConsumerHealthTests.EmptyPartitionsReportHealthAndContinueAfterTheFirstRealEvent",
+          "outcome": "Failed",
+          "duration": "00:00:20.5362532"
+        }
+      ]
+    },
+    {
+      "label": "Failed preparation; invalid test identity and missing sibling frontend",
+      "trx": "_6b8acee13cf3_2026-11-07_03_58_59_net10.0.trx",
+      "counters": {
+        "total": "4",
+        "executed": "4",
+        "passed": "1",
+        "failed": "3",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "name": "NexoRuta.IntegrationTests.Operacion.OperationalBrowserTests.AnonymousTrackingPaginatesRealParcelsAndKeepsKeyboardFocusAtMobileWidth",
+          "outcome": "Failed",
+          "duration": "00:00:02.3445897"
+        },
+        {
+          "name": "NexoRuta.IntegrationTests.Operacion.OperationalProjectionTests.IndependentConsumersDeduplicateLatePositionsAndReplayIntoIsolatedDestinations",
+          "outcome": "Passed",
+          "duration": "00:00:28.2318389"
+        },
+        {
+          "name": "NexoRuta.IntegrationTests.Operacion.OperationalConsumerHealthTests.EmptyPartitionsReportHealthAndContinueAfterTheFirstRealEvent",
+          "outcome": "Failed",
+          "duration": "00:00:21.5562422"
+        },
+        {
+          "name": "NexoRuta.IntegrationTests.Operacion.OperationalBrowserTests.RealTrackingRequestsAndBackofficeUseRestrictedApiAndPreservePhysicalCustody",
+          "outcome": "Failed",
+          "duration": "00:00:11.6357867"
+        }
+      ]
+    },
+    {
+      "label": "Corrected candidate and fixtures",
+      "trx": "_6b8acee13cf3_2026-11-07_04_01_46_net10.0.trx",
+      "counters": {
+        "total": "4",
+        "executed": "4",
+        "passed": "4",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "name": "NexoRuta.IntegrationTests.Operacion.OperationalBrowserTests.RealTrackingRequestsAndBackofficeUseRestrictedApiAndPreservePhysicalCustody",
+          "outcome": "Passed",
+          "duration": "00:00:20.7454134"
+        },
+        {
+          "name": "NexoRuta.IntegrationTests.Operacion.OperationalConsumerHealthTests.EmptyPartitionsReportHealthAndContinueAfterTheFirstRealEvent",
+          "outcome": "Passed",
+          "duration": "00:00:05.2258525"
+        },
+        {
+          "name": "NexoRuta.IntegrationTests.Operacion.OperationalBrowserTests.AnonymousTrackingPaginatesRealParcelsAndKeepsKeyboardFocusAtMobileWidth",
+          "outcome": "Passed",
+          "duration": "00:00:04.6134272"
+        },
+        {
+          "name": "NexoRuta.IntegrationTests.Operacion.OperationalProjectionTests.IndependentConsumersDeduplicateLatePositionsAndReplayIntoIsolatedDestinations",
+          "outcome": "Passed",
+          "duration": "00:00:29.1479116"
+        }
+      ]
+    },
+    {
+      "label": "Expected failure of restart extension before committed-offset recovery",
+      "trx": "_6b8acee13cf3_2026-11-07_04_10_14_net10.0.trx",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "0",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "name": "NexoRuta.IntegrationTests.Operacion.OperationalConsumerHealthTests.EmptyPartitionsReportHealthAndContinueAfterTheFirstRealEvent",
+          "outcome": "Failed",
+          "duration": "00:00:25.4424329"
+        }
+      ]
+    },
+    {
+      "label": "Final correction: empty partitions, first event, restart without replay, browser E2E and log replay",
+      "trx": "_6b8acee13cf3_2026-11-07_04_12_07_net10.0.trx",
+      "counters": {
+        "total": "4",
+        "executed": "4",
+        "passed": "4",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "name": "NexoRuta.IntegrationTests.Operacion.OperationalBrowserTests.RealTrackingRequestsAndBackofficeUseRestrictedApiAndPreservePhysicalCustody",
+          "outcome": "Passed",
+          "duration": "00:00:21.2895148"
+        },
+        {
+          "name": "NexoRuta.IntegrationTests.Operacion.OperationalProjectionTests.IndependentConsumersDeduplicateLatePositionsAndReplayIntoIsolatedDestinations",
+          "outcome": "Passed",
+          "duration": "00:00:29.3979134"
+        },
+        {
+          "name": "NexoRuta.IntegrationTests.Operacion.OperationalConsumerHealthTests.EmptyPartitionsReportHealthAndContinueAfterTheFirstRealEvent",
+          "outcome": "Passed",
+          "duration": "00:00:06.9218874"
+        },
+        {
+          "name": "NexoRuta.IntegrationTests.Operacion.OperationalBrowserTests.AnonymousTrackingPaginatesRealParcelsAndKeepsKeyboardFocusAtMobileWidth",
+          "outcome": "Passed",
+          "duration": "00:00:04.4705084"
+        }
+      ]
+    }
+  ]
+}
