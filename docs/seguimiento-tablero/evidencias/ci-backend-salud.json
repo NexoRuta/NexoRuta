@@ -1,0 +1,322 @@
+{
+  "repository": "NexoRuta/NexoRuta-Backend",
+  "pullRequest": "https://github.com/NexoRuta/NexoRuta-Backend/pull/52",
+  "headSha": "58b04e6cd545ea7ecc0a6914fba24a89ae293272",
+  "mergeSha": "6306f6ebbe7539acb34073aa97f45c218b42a0b7",
+  "runId": 42337501810,
+  "url": "https://github.com/NexoRuta/NexoRuta-Backend/actions/runs/42337501810",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "id": 128297754704,
+      "name": "source_policy",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128297776361,
+      "name": "build-and-test",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128297776418,
+      "name": "integration (0)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128297776458,
+      "name": "integration (2)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128297776517,
+      "name": "integration (1)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128301126859,
+      "name": "Backend coverage / Domain and Application >70%",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 128301188588,
+      "name": "Backend CI / result",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 13560706927,
+      "name": "backend-integration-shard-2-42337501810",
+      "digest": "sha256:1a6f74706b1e59184ce2e8e3ccb9eb58fa58981c5849bcedd23e9a67a6b33c44",
+      "expiresAt": "2026-11-21T04:28:35Z"
+    },
+    {
+      "id": 13560481599,
+      "name": "backend-integration-shard-1-42337501810",
+      "digest": "sha256:6d2e8c254a5293e686ad7dbd543486914a6f6854b1a8b9fc4b976fefdfef338f",
+      "expiresAt": "2026-11-21T04:20:30Z"
+    },
+    {
+      "id": 13560391239,
+      "name": "backend-fast-test-results-42337501810",
+      "digest": "sha256:f8f13f63a9ec0b322f74bc73d61177543d0552fd8dffd77cca065688aff83c87",
+      "expiresAt": "2026-11-21T04:15:47Z"
+    },
+    {
+      "id": 13559984512,
+      "name": "backend-coverage-summary-42337501810",
+      "digest": "sha256:57ab9ca84a29700c1c6f46bdba9949cf312e72a083dc5be956a0b2530ca7284d",
+      "expiresAt": "2026-11-21T04:28:57Z"
+    },
+    {
+      "id": 13559963614,
+      "name": "backend-integration-shard-0-42337501810",
+      "digest": "sha256:166392419dd7f852fc5b24e950b1585ea2cf620e0c6855ff8c02266b7988960c",
+      "expiresAt": "2026-11-21T04:22:09Z"
+    }
+  ],
+  "counts": {
+    "unit": 346,
+    "architecture": 4,
+    "integrationUnique": 721,
+    "shards": [
+      289,
+      179,
+      253
+    ],
+    "criticalPreflightRepeated": 1,
+    "failed": 0,
+    "notExecuted": 0
+  },
+  "coverage": {
+    "metric": "source line coverage; union across suites",
+    "threshold": "strictly greater than 70% per layer",
+    "exclusions": "No custom exclusions; collector defaults only",
+    "reports": 8,
+    "layers": {
+      "NexoRuta.Domain": {
+        "covered": 1880,
+        "total": 2038,
+        "percent": 92.24730127576055,
+        "passes": true
+      },
+      "NexoRuta.Application": {
+        "covered": 1576,
+        "total": 1673,
+        "percent": 94.20203227734609,
+        "passes": true
+      }
+    }
+  },
+  "trxReports": [
+    {
+      "archive": "backend-fast.zip",
+      "trx": "architecture/_runnervmwuk1x_2026-11-07_04_15_47_net10.0.trx",
+      "counters": {
+        "total": "4",
+        "executed": "4",
+        "passed": "4",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-fast.zip",
+      "trx": "unit/_runnervmwuk1x_2026-11-07_04_15_30_net10.0.trx",
+      "counters": {
+        "total": "346",
+        "executed": "346",
+        "passed": "346",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-shard-0.zip",
+      "trx": "integration/critical/critical-route-decision.trx",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-shard-0.zip",
+      "trx": "integration/shard-0/integration-shard-0.trx",
+      "counters": {
+        "total": "289",
+        "executed": "289",
+        "passed": "289",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-shard-1.zip",
+      "trx": "integration/shard-1/integration-shard-1.trx",
+      "counters": {
+        "total": "179",
+        "executed": "179",
+        "passed": "179",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "archive": "backend-shard-2.zip",
+      "trx": "integration/shard-2/integration-shard-2.trx",
+      "counters": {
+        "total": "253",
+        "executed": "253",
+        "passed": "253",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    }
+  ],
+  "downloadedArtifacts": [
+    {
+      "file": "backend-fast.zip",
+      "sha256": "f8f13f63a9ec0b322f74bc73d61177543d0552fd8dffd77cca065688aff83c87"
+    },
+    {
+      "file": "backend-shard-0.zip",
+      "sha256": "166392419dd7f852fc5b24e950b1585ea2cf620e0c6855ff8c02266b7988960c"
+    },
+    {
+      "file": "backend-shard-1.zip",
+      "sha256": "6d2e8c254a5293e686ad7dbd543486914a6f6854b1a8b9fc4b976fefdfef338f"
+    },
+    {
+      "file": "backend-shard-2.zip",
+      "sha256": "1a6f74706b1e59184ce2e8e3ccb9eb58fa58981c5849bcedd23e9a67a6b33c44"
+    },
+    {
+      "file": "coverage-summary.zip",
+      "sha256": "57ab9ca84a29700c1c6f46bdba9949cf312e72a083dc5be956a0b2530ca7284d"
+    }
+  ],
+  "operationalFacts": [
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalProjectionTests.IndependentConsumersDeduplicateLatePositionsAndReplayIntoIsolatedDestinations",
+      "outcome": "Passed",
+      "facts": {
+        "topic": "test-operational-63bcc10dc8334a98a716af68e0dd0306",
+        "firstGroups": [
+          "board-e99489b0e8dd4e69bb4a6a0477aa1582",
+          "history-048216b757fe4ff4b1ca92730b6876df"
+        ],
+        "replayGroups": [
+          "board-96ea872b1229468b81890eee7a0e3c15",
+          "history-6aa16db5fa0a4a7583701b6172d75a8f"
+        ],
+        "uniqueEvents": 12,
+        "materializedRows": 9,
+        "identicalReplay": true,
+        "physicalPositionNeverRewinds": true,
+        "duplicatesCountOnce": true,
+        "documentaryConsumerRecoveredIndependently": true
+      }
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.OperationalSignalRTests.TwoRealKestrelApisShareTenantScopedPhotographsAndReconnectWithoutRewinding",
+      "outcome": "Passed",
+      "facts": {
+        "apiInstances": 2,
+        "failovers": 1,
+        "webSocketsWithoutNegotiation": true,
+        "reconnectOnSurvivingApi": true,
+        "tenantsIsolated": true,
+        "outboxLagDetected": true,
+        "revision": 4
+      }
+    },
+    {
+      "test": "NexoRuta.IntegrationTests.Operacion.RecipientMailpitTests.PersistedNoticeUsesRealMailpitAndRecoversThroughRabbitRetryWithoutLogicalDuplicates",
+      "outcome": "Passed",
+      "facts": {
+        "mailpitMessageId": "6iWHvpG9WQo8T3u4kk7ZrW",
+        "received": 1,
+        "smtpAttempts": 2,
+        "controlledSmtpFailureRecovered": true,
+        "duplicateMessageDidNotResend": true,
+        "operatorBrandAndOpaqueLinkVerified": true
+      }
+    }
+  ]
+}

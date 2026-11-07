@@ -145,7 +145,9 @@ jobs:
   backend_integration:
     needs: sources
     if: fromJSON(needs.sources.outputs.plan).components.backend.run
-    runs-on: ubuntu-latest
+    # MongoDB 8 startup guard rejects kernels 6.19–7.0.13 (SERVER-125742).
+    # Use the supported Jammy hosted kernel for the actual MongoDB scenarios.
+    runs-on: ubuntu-22.04
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
       NEXORUTA_PLAYWRIGHT_MODULE: ${{ github.workspace }}/backend/tests/browser/node_modules/playwright
