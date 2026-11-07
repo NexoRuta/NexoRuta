@@ -7,7 +7,7 @@ Fuentes: `docs/alcance/Laboratorio__NET_2026.pdf`, planilla original `docs/alcan
 | Requisito | Implementación | Evidencia automatizada |
 |---|---|---|
 | OPT-03 | Contrato aditivo `EventoOperativo` v1; outbox transaccional; consumidores `nexoruta-operational-board-v1` y `nexoruta-operational-history-v1` | `OperationalProjectionTests` |
-| OPT-05 | MongoDB `operational_history_v1`, `_id` estable, filtros de operador/comercio, rango máximo 31 días, página 1–100, offset máximo 10000, orden por registro e identidad | `OperationalMongoIsolationTests`, consumidores y replay; API `/api/operacion/historial` |
+| OPT-05 | MongoDB `operational_history_v1`, `_id` estable, filtros de operador/comercio, rango máximo 31 días, página 1–100, offset máximo 10000, analítica de eventos y API tipada de historial/volumen | `OperationalHistoryUseCaseTests`, `OperationalMongoIsolationTests`, consumidores y replay; detalle de evidencia en `docs/auditorias/opt-05/aceptacion.md` |
 | CU-29 / NFR-10 | `/tablero`, canal SignalR `/hubs/operacion`, puente Backoffice `/hubs/tablero`, fotografías completas con revisión, sesiones/permisos revalidados y RLS | `OperationalSignalRTests`, `OperationalBrowserTests` |
 | CU-25/26 | Progreso y detalle público sin IDs, historial permitido, solicitud persistida por token y tratamiento operativo en `/reprogramaciones` | E2E de navegador, pruebas HTTP y aislamiento |
 | AP-07 | Intervalo previsto de atención tomado de llegada manual y duración explícita; se publica solo con parada activa, proyección al día y horario futuro | Función `public_estimated_service_window`, E2E y escenarios sin estimación |
@@ -75,3 +75,9 @@ La demostración usa exclusivamente Mailpit y direcciones `example.test`. El wor
 ## Entorno de validación
 
 Los escenarios locales se ejecutaron con MongoDB 8.0.34 sobre kernel 6.18.57. Los jobs de integración fijan `ubuntu-22.04` porque MongoDB 8 rechaza kernels 6.19–7.0.13 por [SERVER-125742](https://jira.mongodb.org/browse/SERVER-125742). Se mantienen el servidor real y su protección de arranque; no se sustituye por un mock ni se cambia su guardia. Los resultados crudos del CI, la versión del commit y los límites efectivamente verificados se recogen en `VALIDACION.md` y `evidencias/operacion.json`.
+
+## Implementación OPT-05 (2026-11-07)
+
+La implementación y el estado de aceptación de esta revisión están registrados en [`docs/auditorias/opt-05/aceptacion.md`](../auditorias/opt-05/aceptacion.md). Se agregaron contratos y casos de uso tipados para historial/volumen; el repositorio Mongo reutiliza el mismo cliente, aplica límites de tiempo y mantiene filtros por operador/comercio. El endpoint lector no intenta crear índices: el worker conserva su permiso acotado para inicializarlos. La preparación GCP aprovisiona roles y usuarios Mongo de forma idempotente sobre el volumen existente y verifica la topología/retención del topic operativo.
+
+Las pruebas unitarias, de arquitectura y de scripts GCP pasaron. La integración HTTP/Mongo/Kafka/PostgreSQL y la verificación real de índices, TTL y explain quedan pendientes porque este entorno no dispone del CLI de Docker; no se desplegó en GCP ni se modificaron datos persistentes. El estado de esta revisión no cambia el estado de la card en Notion.

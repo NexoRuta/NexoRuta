@@ -72,6 +72,16 @@ groups:
           summary: "Retraso Kafka alto en {{ $labels.node }}"
           description: "El retraso del consumidor supera 100 mensajes durante 5 minutos."
 
+      - alert: NexoRutaOperationalProjectionLag
+        expr: max by (node, group) (nexoruta_gcp_kafka_group_lag) > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: kafka
+        annotations:
+          summary: "Atraso {{ $labels.group }} en {{ $labels.node }}"
+          description: "La proyección operativa supera 100 mensajes de retraso durante 5 minutos."
+
       - alert: NexoRutaMobileSyncFailures
         expr: sum by (node, service_name) (increase(nexoruta_mobile_sync_operations_total{service_name="NexoRuta.Api", result="Error"}[5m])) > 0
         for: 1m

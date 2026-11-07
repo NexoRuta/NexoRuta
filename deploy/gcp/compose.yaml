@@ -2,6 +2,8 @@ name: nexoruta-demo
 x-api-env: &id001
   ASPNETCORE_ENVIRONMENT: Production
   ConnectionStrings__Postgres: ${API_CONNECTION:?}
+  MongoDB__ConnectionString: mongodb://nexoruta_api:${MONGO_API_PASSWORD:?}@${SERVICES_HOST:?}:27017/nexoruta?authSource=nexoruta
+  MongoDB__Database: nexoruta
   ConnectionStrings__Redis: ${REDIS_HOST:?}:${REDIS_PORT:?},ssl=true,sslHost=${REDIS_HOST:?},abortConnect=false,connectRetry=1,connectTimeout=1000,syncTimeout=500,asyncTimeout=500,keepAlive=30
   Caching__Enabled: ${NEXORUTA_CACHE_ENABLED:?}
   Caching__Namespace: nexoruta-gcp-demo
@@ -212,6 +214,28 @@ services:
     - shared
     ports:
     - ${NODE_PRIVATE_IP:?}:27017:27017
+  mongo-provisioner:
+    image: mongo:8.0
+    entrypoint:
+    - mongosh
+    - --quiet
+    - --host
+    - mongo
+    - --file
+    - /opt/nexoruta/create-operational-users.js
+    environment:
+      MONGO_ROOT_USERNAME: nexoruta
+      MONGO_ROOT_PASSWORD: ${MONGO_PASSWORD:?}
+      MONGO_API_PASSWORD: ${MONGO_API_PASSWORD:?}
+      MONGO_WORKER_PASSWORD: ${MONGO_WORKER_PASSWORD:?}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+    - ./mongo/create-operational-users.js:/opt/nexoruta/create-operational-users.js:ro
+    mem_limit: 128m
+    profiles:
+    - shared
   mailpit:
     image: axllent/mailpit:v1.27
     restart: unless-stopped
@@ -399,7 +423,7 @@ services:
       Email__Smtp__FromAddress: ${SMTP_FROM:?}
       Kafka__BootstrapServers: ${SERVICES_HOST:?}:19092
       Kafka__SecurityProtocol: Plaintext
-      MongoDb__ConnectionString: mongodb://nexoruta:${MONGO_PASSWORD:?}@${SERVICES_HOST:?}:27017/?authSource=admin
+      MongoDb__ConnectionString: mongodb://nexoruta_worker:${MONGO_WORKER_PASSWORD:?}@${SERVICES_HOST:?}:27017/nexoruta?authSource=nexoruta
       MongoDb__Database: nexoruta
       MongoDb__PasswordRecoveryCollection: PasswordRecoveryRequested
       OpenTelemetry__Enabled: 'true'

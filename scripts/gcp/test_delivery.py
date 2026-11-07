@@ -196,6 +196,10 @@ class DeliveryTests(unittest.TestCase):
                 packaged_identity = archive.extractfile("redis_identity.py")
                 self.assertIsNotNone(packaged_identity)
                 self.assertEqual(packaged_identity.read(), redis_identity.read_bytes())
+                packaged_mongo_users = archive.extractfile("mongo/create-operational-users.js")
+                self.assertIsNotNone(packaged_mongo_users)
+                self.assertEqual(packaged_mongo_users.read(),
+                                 (root / "deploy/gcp/mongo/create-operational-users.js").read_bytes())
 
     def test_environment_cannot_inject_additional_lines(self):
         with self.assertRaises(ValueError):

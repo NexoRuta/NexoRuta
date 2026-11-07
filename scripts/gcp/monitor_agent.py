@@ -27,7 +27,11 @@ HTTP_PORTS = {"api": 18080, "admin": 18081, "backoffice": 18082,
               "commerce": 18083, "tracking": 18084, "monitor": 13000}
 TRANSPORTS = ("RabbitMq", "Kafka", "PushFcm")
 OUTBOX_STATES = ("Pendiente", "Procesando", "Error")
-KAFKA_GROUP = "nexoruta.password-recovery.mongo.v1"
+KAFKA_GROUPS = {
+    "recovery": "nexoruta.password-recovery.mongo.v1",
+    "board": "nexoruta-operational-board-v1",
+    "history": "nexoruta-operational-history-v1",
+}
 
 
 def command(*arguments, timeout=10, env=None):
@@ -83,11 +87,11 @@ def expires_at(value):
     return parsed.timestamp()
 
 
-def kafka_lag(output):
+def kafka_lag(output, group):
     total, partitions = 0, 0
     for line in output.splitlines():
         columns = line.split()
-        if not columns or columns[0] != KAFKA_GROUP:
+        if not columns or columns[0] != group:
             continue
         if len(columns) < 6 or not columns[5].isdigit():
             raise ValueError("Kafka partition lag is unavailable")
@@ -327,10 +331,15 @@ class Collector:
                 self.metric("outbox_oldest_seconds", row.get("oldest_age_seconds", 0), transport=transport, status=state)
 
     def collect_kafka(self):
-        output = command("docker", "exec", self.containers["kafka"]["id"],
-                         "/opt/kafka/bin/kafka-consumer-groups.sh", "--bootstrap-server", "kafka:9092",
-                         "--group", KAFKA_GROUP, "--describe", timeout=10)
-        self.metric("kafka_lag", kafka_lag(output))
+        for name, group in KAFKA_GROUPS.items():
+            output = command("docker", "exec", self.containers["kafka"]["id"],
+                             "/opt/kafka/bin/kafka-consumer-groups.sh", "--bootstrap-server", "kafka:9092",
+                             "--group", group, "--describe", timeout=10)
+            lag = kafka_lag(output, group)
+            if name == "recovery":
+                self.metric("kafka_lag", lag)
+            else:
+                self.metric("kafka_group_lag", lag, group=name)
 
     def collect_rabbit(self):
         with urllib.request.urlopen(f"http://{self.config['services_host']}:15692/metrics", timeout=5) as response:
@@ -342,9 +351,21 @@ class Collector:
         script = ('const u=encodeURIComponent(process.env.MONGO_INITDB_ROOT_USERNAME);'
                   'const p=encodeURIComponent(process.env.MONGO_INITDB_ROOT_PASSWORD);'
                   'const c=new Mongo("mongodb://"+u+":"+p+"@127.0.0.1:27017/admin");'
-                  'quit(c.getDB("admin").runCommand({ping:1}).ok===1?0:1);')
-        command("docker", "exec", self.containers["mongo"]["id"], "mongosh", "--quiet", "--nodb", "--eval", script)
+                  'if(c.getDB("admin").runCommand({ping:1}).ok!==1) quit(2);'
+                  'const d=c.getDB("nexoruta");'
+                  'const n=d.getCollectionNames().includes("operational_history_v1");'
+                  'const s=n?d.runCommand({collStats:"operational_history_v1"}):{count:0,size:0};'
+                  'print(JSON.stringify({count:s.count,size:s.size}));')
+        output = command("docker", "exec", self.containers["mongo"]["id"], "mongosh", "--quiet", "--nodb", "--eval", script)
+        values = json.loads(output)
+        if (not isinstance(values, dict)
+                or any(isinstance(values.get(name), bool) or not isinstance(values.get(name), (int, float))
+                       or not math.isfinite(values[name]) or values[name] < 0
+                       for name in ("count", "size"))):
+            raise ValueError("MongoDB operational history metrics are unavailable")
         self.metric("service_up", 1, service="mongo_ping")
+        self.metric("mongo_history_documents", values["count"])
+        self.metric("mongo_history_data_bytes", values["size"])
 
     def collect(self):
         self.samples = []

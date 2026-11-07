@@ -4,6 +4,7 @@ import argparse
 import base64
 from contextlib import contextmanager
 import hashlib
+import hmac
 import io
 import ipaddress
 import json
@@ -165,6 +166,46 @@ def connection(username, password):
     return f"Host=sql-proxy;Port=5432;Database=nexoruta;Username={username};Password={password};SSL Mode=Disable;Maximum Pool Size=20"
 
 
+def mongo_runtime_password(root_password, application):
+    if (application not in ("api", "worker") or not isinstance(root_password, str)
+            or not root_password or any(character in root_password for character in "\r\n\x00")):
+        raise ValueError("MongoDB runtime credentials require the protected root secret and a known application")
+    return hmac.new(root_password.encode("utf-8"),
+                     ("nexoruta-mongodb-" + application + "-v1").encode("ascii"),
+                     hashlib.sha256).hexdigest()
+
+
+def validate_operational_topic(topic_description, topic_config):
+    if not isinstance(topic_description, str) or not isinstance(topic_config, str):
+        raise RuntimeError("Kafka operational topic configuration could not be verified")
+    if not re.search(r"(?:^|\s)PartitionCount:\s*3(?:\s|$)", topic_description):
+        raise RuntimeError("Kafka operational topic must have exactly three partitions")
+    if not re.search(r"(?:^|\s)ReplicationFactor:\s*1(?:\s|$)", topic_description):
+        raise RuntimeError("Kafka operational topic must match the single-broker replication factor")
+    for setting in ("retention.ms", "retention.bytes"):
+        if not re.search(r"(?<![A-Za-z0-9_.-])" + re.escape(setting) + r"=-1(?![A-Za-z0-9_.-])", topic_config):
+            raise RuntimeError("Kafka operational topic has incompatible retention configuration")
+
+
+def ensure_operational_topic(deployment):
+    topic = "nexoruta.operacion.v1"
+    deployment.compose("--profile", "shared", "exec", "-T", "kafka", "/opt/kafka/bin/kafka-topics.sh",
+                       "--bootstrap-server", "kafka:9092", "--create", "--if-not-exists", "--topic", topic,
+                       "--partitions", "3", "--replication-factor", "1", "--config", "min.insync.replicas=1",
+                       "--config", "retention.ms=-1", "--config", "retention.bytes=-1")
+    description = deployment.compose("--profile", "shared", "exec", "-T", "kafka", "/opt/kafka/bin/kafka-topics.sh",
+                                     "--bootstrap-server", "kafka:9092", "--describe", "--topic", topic,
+                                     capture=True)
+    config = deployment.compose("--profile", "shared", "exec", "-T", "kafka", "/opt/kafka/bin/kafka-configs.sh",
+                                "--bootstrap-server", "kafka:9092", "--entity-type", "topics", "--entity-name", topic,
+                                "--describe", "--all", capture=True)
+    validate_operational_topic(description, config)
+
+
+def ensure_mongo_runtime_users(deployment):
+    deployment.compose("--profile", "shared", "run", "--rm", "mongo-provisioner")
+
+
 def bootstrap_config(runtime):
     passwords, ids = runtime["passwords"], runtime["organization_ids"]
     return {
@@ -198,6 +239,8 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
         "JWT_KEY": keys["jwt"], "TRACKING_KEY": keys["tracking"],
         "PUSH_KEY": keys["push"], "EVIDENCE_KEY": keys["evidence"],
         "RABBIT_PASSWORD": passwords["rabbit"], "MONGO_PASSWORD": passwords["mongo"],
+        "MONGO_API_PASSWORD": mongo_runtime_password(passwords["mongo"], "api"),
+        "MONGO_WORKER_PASSWORD": mongo_runtime_password(passwords["mongo"], "worker"),
         "MAIL_PASSWORD_HASH": mail_hash,
         "SMTP_HOST": integrations["smtp_host"], "SMTP_PORT": integrations["smtp_port"],
         "SMTP_SSL": str(integrations["smtp_ssl"]).lower(), "SMTP_FROM": integrations["smtp_from"],
@@ -684,6 +727,8 @@ def prepare(args, deployment, runtime, integrations, hosting, redis_identity, ma
             for topic in ("nexoruta.envios.creados.v1", "nexoruta.password-recovery.requested.v1"):
                 deployment.compose("--profile", "shared", "exec", "-T", "kafka", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:9092",
                                    "--create", "--if-not-exists", "--topic", topic, "--partitions", "1", "--replication-factor", "1")
+            ensure_operational_topic(deployment)
+            ensure_mongo_runtime_users(deployment)
         elif cache_enabled:
             # Redis is an infrastructure service owned by node B, outside the
             # application list that an ordinary update drains and recreates.

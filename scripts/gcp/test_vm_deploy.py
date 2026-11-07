@@ -16,6 +16,86 @@ import monitor_agent
 
 
 class VmDeploymentTests(unittest.TestCase):
+    def test_mongodb_runtime_credentials_are_separate_and_never_reuse_root_password(self):
+        root = "ab" * 32
+        api = vm_deploy.mongo_runtime_password(root, "api")
+        worker = vm_deploy.mongo_runtime_password(root, "worker")
+        self.assertEqual(api, vm_deploy.mongo_runtime_password(root, "api"))
+        self.assertNotEqual(api, worker)
+        self.assertNotEqual(api, root)
+        self.assertEqual(len(api), 64)
+        with self.assertRaises(ValueError):
+            vm_deploy.mongo_runtime_password(root, "admin")
+
+    def test_operational_topic_provisioning_is_idempotent_and_checks_existing_configuration(self):
+        deployment = Mock()
+        deployment.compose.side_effect = [
+            None,
+            "Topic: nexoruta.operacion.v1 PartitionCount: 3 ReplicationFactor: 1 Configs: retention.ms=-1",
+            "Configs for topic 'nexoruta.operacion.v1': retention.ms=-1, retention.bytes=-1",
+        ]
+        vm_deploy.ensure_operational_topic(deployment)
+        self.assertEqual(deployment.compose.call_count, 3)
+        create_args = deployment.compose.call_args_list[0].args
+        self.assertIn("--if-not-exists", create_args)
+        self.assertIn("retention.ms=-1", create_args)
+        self.assertIn("retention.bytes=-1", create_args)
+
+        with self.assertRaisesRegex(RuntimeError, "three partitions"):
+            vm_deploy.validate_operational_topic(
+                "Topic: nexoruta.operacion.v1 PartitionCount: 1", "retention.ms=-1, retention.bytes=-1")
+        with self.assertRaisesRegex(RuntimeError, "replication factor"):
+            vm_deploy.validate_operational_topic(
+                "Topic: nexoruta.operacion.v1 PartitionCount: 3 ReplicationFactor: 2",
+                "retention.ms=-1, retention.bytes=-1")
+        with self.assertRaisesRegex(RuntimeError, "incompatible retention"):
+            vm_deploy.validate_operational_topic(
+                "Topic: nexoruta.operacion.v1 PartitionCount: 3 ReplicationFactor: 1",
+                "retention.ms=604800000, retention.bytes=-1")
+
+    def test_mongodb_runtime_users_are_reconciled_without_secret_arguments(self):
+        deployment = Mock()
+        vm_deploy.ensure_mongo_runtime_users(deployment)
+        self.assertEqual(deployment.compose.call_args.args,
+                         ("--profile", "shared", "run", "--rm", "mongo-provisioner"))
+
+    def test_monitor_reads_lag_for_each_operational_group_and_recovery(self):
+        collector = monitor_agent.Collector.__new__(monitor_agent.Collector)
+        collector.config = {"node": "a"}
+        collector.containers = {"kafka": {"id": "kafka-id"}}
+        collector.timestamp = "2026-11-07T00:00:00Z"
+        collector.resource = {"type": "gce_instance", "labels": {}}
+        collector.samples = []
+        outputs = {
+            group: f"{group} topic 0 1 3 2 consumer host client"
+            for group in monitor_agent.KAFKA_GROUPS.values()
+        }
+        with patch.object(monitor_agent, "command", side_effect=lambda *args, **kwargs: outputs[args[args.index("--group") + 1]]):
+            collector.collect_kafka()
+        metrics = {(sample["metric"]["type"].rsplit("/", 1)[-1],
+                    sample["metric"]["labels"].get("group")): sample["points"][0]["value"]["doubleValue"]
+                   for sample in collector.samples}
+        self.assertEqual(metrics[("kafka_lag", None)], 2)
+        self.assertEqual(metrics[("kafka_group_lag", "board")], 2)
+        self.assertEqual(metrics[("kafka_group_lag", "history")], 2)
+
+    def test_monitor_exports_only_bounded_operational_collection_size(self):
+        collector = monitor_agent.Collector.__new__(monitor_agent.Collector)
+        collector.config = {"node": "a"}
+        collector.containers = {"mongo": {"id": "mongo-id"}}
+        collector.timestamp = "2026-11-07T00:00:00Z"
+        collector.resource = {"type": "gce_instance", "labels": {}}
+        collector.samples = []
+        with patch.object(monitor_agent, "command", return_value='{"count":12,"size":2048}'):
+            collector.collect_mongo()
+        values = {sample["metric"]["type"].rsplit("/", 1)[-1]: sample["points"][0]["value"]["doubleValue"]
+                  for sample in collector.samples}
+        self.assertEqual(values["mongo_history_documents"], 12)
+        self.assertEqual(values["mongo_history_data_bytes"], 2048)
+        with patch.object(monitor_agent, "command", return_value='{"count":-1,"size":2048}'):
+            with self.assertRaises(ValueError):
+                collector.collect_mongo()
+
     def test_redis_dns_is_exactly_bound_to_vm_b_and_private_subnet(self):
         runtime, _, _, _ = self.configuration()
         with patch.object(vm_deploy.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("10.0.0.3", 6378))]):
@@ -189,6 +269,7 @@ class VmDeploymentTests(unittest.TestCase):
         passwords = {name: "private-" + name for name in (
             "migrator", "api", "worker", "bootstrap", "rabbit", "mongo", "mail", "monitor", "grafana",
             "keys_api", "keys_admin", "keys_backoffice", "keys_commerce", "keys_tracking", "admin", "operator", "commerce")}
+        passwords["mongo"] = "private-mongo"
         runtime = {"project_id": "demo-project", "sql_connection": "demo-project:region:sql", "registry": registry,
                    "services_host": "10.0.0.1", "frontend_ip": "34.0.0.1", "subnet_cidr": "10.0.0.0/24",
                    "nodes": {"a": {"name": "nexoruta-demo", "zone": "southamerica-west1-a"},
@@ -376,7 +457,14 @@ class VmDeploymentTests(unittest.TestCase):
                     events.append("restart_ops_agent")
                 return ""
             deployment.execute = Mock(side_effect=execute)
-            deployment.compose = Mock(side_effect=lambda *args, **kwargs: events.append(("compose", *args)))
+            def compose(*args, **kwargs):
+                events.append(("compose", *args))
+                if kwargs.get("capture"):
+                    if "--entity-type" in args:
+                        return "Configs for topic 'nexoruta.operacion.v1': retention.ms=-1, retention.bytes=-1"
+                    return "Topic: nexoruta.operacion.v1 PartitionCount: 3 ReplicationFactor: 1"
+                return None
+            deployment.compose = Mock(side_effect=compose)
             args = SimpleNamespace(node="a", release="release-" + "a" * 32, deadline=12345)
             response = Mock()
             response.__enter__ = Mock(return_value=SimpleNamespace(status=200))
