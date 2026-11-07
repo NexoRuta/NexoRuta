@@ -39,7 +39,7 @@ DIRECT_PORTS = {"api": 18080, "admin": 18081, "backoffice": 18082,
 MIGRATION_LOCK = 74200344171234
 OPS_AGENT_CONFIG = Path("/etc/google-cloud-ops-agent/config.yaml")
 REDIS_RUNTIME_COMMANDS = (
-    "ping", "get", "set", "del", "hmget", "hmset", "hset", "pexpire", "eval", "evalsha",
+    "ping", "get", "set", "del", "hmget", "hmset", "hset", "expire", "pexpire", "eval", "evalsha",
     "client|setname", "client|setinfo", "info", "command|info", "hello", "echo",
 )
 
