@@ -118,6 +118,6 @@
     "Synthetic disposable infrastructure only",
     "No Android native visual validation",
     "No real VM/database, deployment or IaC execution",
-    "Root integrated CI pending explicit clarification of the no-IaC instruction"
+    "Root integrated CI recorded separately in VALIDACION.md; static infrastructure validation authorization clarified by the user"
   ]
 }
