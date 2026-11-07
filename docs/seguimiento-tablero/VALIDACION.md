@@ -1,6 +1,6 @@
 # Registro de validación
 
-La implementación se integró en `develop` mediante las PR [Backend #49](https://github.com/NexoRuta/NexoRuta-Backend/pull/49) y [Frontend #51](https://github.com/NexoRuta/NexoRuta-Frontend/pull/51), después de sus checks finales verdes y sin omitir protecciones.
+La implementación inicial se integró en `develop` mediante las PR [Backend #49](https://github.com/NexoRuta/NexoRuta-Backend/pull/49) y [Frontend #51](https://github.com/NexoRuta/NexoRuta-Frontend/pull/51), después de sus checks finales verdes y sin omitir protecciones.
 
 Candidatos del cierre inicial: Backend `655edd3a2f2e2326e7a9d99bb2a405b81ee7b6e8`, Frontend `7ce3e969924e1157d2eaa80b5c933bea9560f5b0`. Mobile conserva `f2b3db412ce23b0b36215fd301f6d3d3d6959252`. La corrección posterior de salud Kafka se identifica al final de este registro.
 
@@ -47,9 +47,9 @@ El usuario aclaró el alcance y autorizó las validaciones del CI existente: `to
 
 El workflow [Integrated CI](../../.github/workflows/ci.yml) usa permisos `contents: read` y el entorno `nexoruta-ci` para las PR, sin autenticación de despliegue ni permiso OIDC. El job `infrastructure` inicializa los módulos con backend deshabilitado y valida su configuración; `cloudsql` verifica PostgreSQL efímero, no una instancia real. Los workflows de publicación y operación no se disparan al abrir esta PR ni al integrar con `develop`.
 
-La [PR principal #74](https://github.com/NexoRuta/NexoRuta/pull/74) apunta a `develop` y conserva los gitlinks publicados de ambos hijos ya integrados y Mobile sin cambios. La consulta remota confirmó la base en `25ffb1d8a7f34bb17623a99357d0b7b743ba8404`, antecesor del candidato, sin avances concurrentes.
+La [PR principal #74](https://github.com/NexoRuta/NexoRuta/pull/74) apunta a `develop`, mantiene Frontend y Mobile exactos y valida la corrección posterior de Backend #52. La consulta remota confirmó la base en `25ffb1d8a7f34bb17623a99357d0b7b743ba8404`, antecesor del candidato, sin avances concurrentes.
 
-El [CI integrado completo 42333366312](https://github.com/NexoRuta/NexoRuta/actions/runs/42333366312) terminó con **success** sobre el head `15aef02f9393f128f6f67c5edbd53061b95b1cb6`. GitHub ejecutó el checkout de merge sintético `ef9f184c461a6d210802e2ce5924837cf7992744`, con los tres gitlinks de la tabla anterior. El plan activó todas las validaciones y los doce jobs terminaron aprobados, sin jobs omitidos.
+El [CI integrado completo 42333366312](https://github.com/NexoRuta/NexoRuta/actions/runs/42333366312) terminó con **success** sobre el head `15aef02f9393f128f6f67c5edbd53061b95b1cb6`. GitHub ejecutó el checkout de merge sintético `ef9f184c461a6d210802e2ce5924837cf7992744`, con Backend `a7c1de8fae4859385082a2e7065704d3dc7d4fe6`, Frontend `06b1ca380aea0ec68dbbaafff5de9a63a24d8f6b` y Mobile `f2b3db412ce23b0b36215fd301f6d3d3d6959252`. El plan activó todas las validaciones y los doce jobs terminaron aprobados, sin jobs omitidos.
 
 | Validación integrada | Resultado real |
 |---|---|
