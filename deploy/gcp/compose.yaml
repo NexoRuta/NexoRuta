@@ -233,7 +233,7 @@ services:
         condition: service_healthy
     volumes:
     - ./mongo/create-operational-users.js:/opt/nexoruta/create-operational-users.js:ro
-    mem_limit: 128m
+    mem_limit: 512m
     profiles:
     - shared
   mailpit:
