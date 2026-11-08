@@ -156,6 +156,7 @@ jobs:
       NEXORUTA_VEHICLES_E2E_DIR: ${{ github.workspace }}/artifacts/browser/vehicles
       NEXORUTA_SESSION_E2E_DIR: ${{ github.workspace }}/artifacts/browser/session
       NEXORUTA_GESTION_E2E_DIR: ${{ github.workspace }}/artifacts/browser/management
+      NEXORUTA_WEBHOOK_E2E_DIR: ${{ github.workspace }}/artifacts/browser/webhooks
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -218,6 +219,7 @@ jobs:
             artifacts/backend/integration/**/*.trx
             artifacts/browser/management/**/*.json
             artifacts/browser/management/**/*.png
+            artifacts/browser/webhooks/**
           if-no-files-found: error
           retention-days: 14
 

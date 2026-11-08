@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+ <ItemGroup>
+  <ProjectReference Include="../../backend/src/NexoRuta.Api/NexoRuta.Api.csproj" />
+  <Compile Include="../../backend/tests/NexoRuta.IntegrationTests/Fixtures/ReglasEnvioTestData.cs" Link="ReglasEnvioTestData.cs" />
+  <Compile Include="../../backend/tests/NexoRuta.IntegrationTests/Fixtures/ServiciosEnvioTestData.cs" Link="ServiciosEnvioTestData.cs" />
+ </ItemGroup>
+</Project>

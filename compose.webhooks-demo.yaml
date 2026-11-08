@@ -1,0 +1,24 @@
+# Explicit local-only demo. Never include this override in a production deployment.
+services:
+  api:
+    environment:
+      Webhooks__DevelopmentReceiverUrl: http://tracking:8080/comercio/webhook
+  worker-webhooks:
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      Webhooks__DevelopmentReceiverUrl: http://tracking:8080/comercio/webhook
+      Webhooks__MaxAttempts: "3"
+      Webhooks__RetryBaseSeconds: "2"
+      Webhooks__RetryMaxSeconds: "10"
+      Webhooks__TimeoutSeconds: "3"
+  tracking:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      CommerceDemo__Enabled: "true"
+      CommerceDemo__AdminPassword: ${NEXORUTA_WEBHOOK_DEMO_ADMIN_PASSWORD:?Set a random demo controls password of at least 24 characters}
+      CommerceDemo__SigningSecrets__0: ${NEXORUTA_WEBHOOK_DEMO_SIGNING_SECRET:?Set whsec_ plus Base64 of 32 random bytes}
+      CommerceDemo__DatabasePath: /var/nexoruta/commerce-demo/inbox.db
+    volumes:
+      - tracking_commerce_demo_data:/var/nexoruta/commerce-demo
+volumes:
+  tracking_commerce_demo_data:

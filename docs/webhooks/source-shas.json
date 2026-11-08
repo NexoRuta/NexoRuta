@@ -1,0 +1,13 @@
+{
+  "base": {
+    "root": "3da5374e10c82d4b4c00b69fed17e368dddd4354",
+    "backend": "0d14dddb3b3ba6cc7c32389e415a8776e61bc370",
+    "frontend": "fa94588955c9de877190b411ae6543fd4c3e9b98",
+    "mobile": "53f6be2cdec48f48e30e390060feeaefb5be0ead"
+  },
+  "components": {
+    "backend": "8167f7a59ed0570076cd223d9e5f715249eeae60",
+    "frontend": "d51da1846e02d65f3d874bf1f1c6cf1a9c9210d3",
+    "mobile": "53f6be2cdec48f48e30e390060feeaefb5be0ead"
+  }
+}
