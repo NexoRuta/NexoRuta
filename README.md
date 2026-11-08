@@ -2,6 +2,10 @@
 
 NexoRuta es la base académica de una plataforma multioperador de distribución de última milla. El repositorio principal reúne la arquitectura y el entorno de desarrollo; el backend, las aplicaciones web y el cliente móvil están en submódulos Git.
 
+## Reportes, liquidaciones y cuenta operativa
+
+Definiciones, reglas económicas, permisos, recuperación y demostración reproducible: [documentación vigente](docs/gestion/reportes-liquidaciones-cuenta.md). [Decisión de arquitectura](docs/adr/ADR-reportes-liquidaciones-cuenta.md). [Evidencia de esta entrega](docs/gestion/evidencia.md).
+
 ## Clonar
 
 Cloná el repositorio con sus submódulos:

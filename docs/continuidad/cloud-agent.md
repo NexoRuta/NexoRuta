@@ -42,3 +42,9 @@ Para validar otro clon sin reutilizar el contenedor del checkout anterior, deten
 ## Investigación posterior de sesión (03/11/2026)
 
 [Diagnóstico y reproducción](../auditorias/sesion-401/01-diagnostico-y-verificacion.md): respuesta 401 demorada que invalidaba un ingreso posterior. El origen del 401 histórico de arranque sigue sin determinar. El harness optativo ejecuta portales reales, API Kestrel y PostgreSQL aislado; no requiere ni usa los datos de la prueba manual Mobile. Mantener HTTP y navegador en invocaciones separadas, y no recompilar DLLs mientras los portales del harness las están usando. No se cierran CU pendientes por este corte.
+
+## Reportes, liquidaciones y cuenta operativa
+
+La entrega de gestión tiene su [guía vigente y demostración reproducible](../gestion/reportes-liquidaciones-cuenta.md), [ADR](../adr/ADR-reportes-liquidaciones-cuenta.md) y [evidencia](../gestion/evidencia.md). Parte del develop integrado registrado en esa guía, no del manifiesto histórico de 2026-11-02. Mobile conserva el gitlink integrado de partida.
+
+El runtime mínimo dev.py sigue sin levantar Kafka/Mongo; no acreditar procesamiento de indicadores con ese arranque solo. La aceptación nueva crea PostgreSQL/PostGIS, Kafka y sesiones propios, y levanta ambos portales con API real en el fixture de navegador. Usa `NEXORUTA_GESTION_E2E_DIR` y los companions exactos. Key rings y datos privados quedan fuera de los artefactos de evidencia. Las restricciones operativas, revisión nativa pendiente y límites B1–B5 anteriores siguen vigentes.

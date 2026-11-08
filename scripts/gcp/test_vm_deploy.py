@@ -78,6 +78,7 @@ class VmDeploymentTests(unittest.TestCase):
         self.assertEqual(metrics[("kafka_lag", None)], 2)
         self.assertEqual(metrics[("kafka_group_lag", "board")], 2)
         self.assertEqual(metrics[("kafka_group_lag", "history")], 2)
+        self.assertEqual(metrics[("kafka_group_lag", "management")], 2)
 
     def test_monitor_exports_only_bounded_operational_collection_size(self):
         collector = monitor_agent.Collector.__new__(monitor_agent.Collector)
