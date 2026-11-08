@@ -30,6 +30,7 @@ El frontend fija como productor de contrato `981cb4a9a26096516268f609f51e7b460c9
 | Frontend con contrato OpenAPI servido por API real | 513 aprobadas; 5 escenarios históricos opt-in sin activar en esta invocación local, habilitados por sus variables en CI integrado |
 | Migración/roles estilo Cloud SQL | Cadena con NOSUPERUSER/CREATEROLE/CREATEDB, roles runtime, bootstrap repetido, RLS forzado, aislamiento de key rings y cuota compartida: aprobados en PostgreSQL local desechable |
 | Retiro fallido | Se verifica como FalloRetiro y no como IntentoFallido de entrega |
+| Pruebas Python del superproyecto (incluido monitor del nuevo grupo) | 240 aprobadas, servicios externos simulados; sin operaciones de VM |
 | Mapas | Sin consumo real; transporte controlado en los escenarios existentes de retiro/routing |
 
 Pruebas principales: `GestionCircuitTests`, `GestionWorkerTests`, `GestionBrowserTests`, `ManagementBoundaryTests`, `LiquidacionRulesTests` y la ampliación de `OperacionesRepartoHttpTests.Retiros`.
@@ -47,6 +48,8 @@ Se probaron seis vistas a 1440 y 320 px (12 comprobaciones), sin desbordamiento 
 La prueba guarda `acceptance.json` y PNG en subdirectorios por ejecución de `NEXORUTA_GESTION_E2E_DIR`; key rings quedan en un directorio temporal aparte y no se publican como evidencia. El CI integrado adjunta los JSON/PNG de gestión junto con los TRX del shard correspondiente. No se acredita Android con estos ensayos ni con pruebas portables.
 
 ## CI y revisión
+
+[PR principal #75 y checks integrados por SHA](https://github.com/NexoRuta/NexoRuta/pull/75/checks).
 
 - [Corrida backend](https://github.com/NexoRuta/NexoRuta-Backend/actions/runs/42430219281).
 - [Corrida frontend](https://github.com/NexoRuta/NexoRuta-Frontend/actions/runs/42430222723).
