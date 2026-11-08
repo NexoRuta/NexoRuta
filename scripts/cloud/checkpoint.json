@@ -6,7 +6,7 @@
       "path": "backend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Backend.git",
       "branch": "feat/gestion-liquidaciones-cuenta",
-      "commit": "7c2ddb8657cd791195aba2f7c9e4dd1f54ee1cfb"
+      "commit": "0d14dddb3b3ba6cc7c32389e415a8776e61bc370"
     },
     {
       "path": "frontend",

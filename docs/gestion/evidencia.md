@@ -12,11 +12,11 @@ Gitlinks de la entrega:
 
 | Componente | SHA exacto | PR hacia develop |
 | --- | --- | --- |
-| Backend | `7c2ddb8657cd791195aba2f7c9e4dd1f54ee1cfb` | [Backend #53](https://github.com/NexoRuta/NexoRuta-Backend/pull/53) |
+| Backend | `0d14dddb3b3ba6cc7c32389e415a8776e61bc370` | [Backend #53](https://github.com/NexoRuta/NexoRuta-Backend/pull/53) |
 | Frontend | `fa94588955c9de877190b411ae6543fd4c3e9b98` | [Frontend #52](https://github.com/NexoRuta/NexoRuta-Frontend/pull/52) |
 | Mobile | `53f6be2cdec48f48e30e390060feeaefb5be0ead` | Sin modificación |
 
-El frontend fija como productor de contrato `981cb4a9a26096516268f609f51e7b460c98ec1b`. El posterior `7c2ddb8` solo fija en CI el companion frontend exacto; no cambia código del producto. La raíz integra los gitlinks de la tabla. Su SHA final se identifica en los checks de la PR principal y con `git rev-parse HEAD`, evitando intentar contener su propio hash en el commit.
+El frontend fija como productor de contrato `981cb4a9a26096516268f609f51e7b460c98ec1b`. El posterior `7c2ddb8` fija en CI el companion frontend exacto. `0d14ddd` conserva además el diagnóstico de rechazo de rollback que verifican las pruebas históricas; no cambia los contratos HTTP ni permite revertir historia. La raíz integra los gitlinks de la tabla. Su SHA final se identifica en los checks de la PR principal y con `git rev-parse HEAD`, evitando intentar contener su propio hash en el commit.
 
 ## Comprobaciones locales
 
@@ -31,6 +31,8 @@ El frontend fija como productor de contrato `981cb4a9a26096516268f609f51e7b460c9
 | Migración/roles estilo Cloud SQL | Cadena con NOSUPERUSER/CREATEROLE/CREATEDB, roles runtime, bootstrap repetido, RLS forzado, aislamiento de key rings y cuota compartida: aprobados en PostgreSQL local desechable |
 | Retiro fallido | Se verifica como FalloRetiro y no como IntentoFallido de entrega |
 | Pruebas Python del superproyecto (incluido monitor del nuevo grupo) | 237 aprobadas y 3 omitidas por condiciones existentes (240 descubiertas); servicios externos simulados, sin operaciones de VM |
+| Regresión de rollback histórico | Prueba de cancelación pública aprobada; las migraciones rechazan el rollback y conservan auditoría/estado |
+| Control Cloud general | 5 HTTP, 2 fullstack, 14 frontend, 3 Mobile Core portables y 5 Node aprobados; verify autenticado con API restringida y reinicio preservando datos/estado |
 | Mapas | Sin consumo real; transporte controlado en los escenarios existentes de retiro/routing |
 
 Pruebas principales: `GestionCircuitTests`, `GestionWorkerTests`, `GestionBrowserTests`, `ManagementBoundaryTests`, `LiquidacionRulesTests` y la ampliación de `OperacionesRepartoHttpTests.Retiros`.
@@ -51,11 +53,11 @@ La prueba guarda `acceptance.json` y PNG en subdirectorios por ejecución de `NE
 
 [PR principal #75 y checks integrados por SHA](https://github.com/NexoRuta/NexoRuta/pull/75/checks).
 
-- [Corrida backend](https://github.com/NexoRuta/NexoRuta-Backend/actions/runs/42430219281).
+- [Checks de backend por SHA](https://github.com/NexoRuta/NexoRuta-Backend/pull/53/checks).
 - [Corrida frontend](https://github.com/NexoRuta/NexoRuta-Frontend/actions/runs/42430222723).
 - La PR principal publica el resultado integrado por SHA y los artefactos de las corridas. No se usa el verde de develop como sustituto del CI de esta entrega.
 
-El procedimiento reproducible está en `reportes-liquidaciones-cuenta.md`. Los resultados del control Cloud general y del CI integrado se registran en los checks de la PR, además de los ensayos focalizados anteriores.
+El procedimiento reproducible está en `reportes-liquidaciones-cuenta.md`. El control Cloud general y verify-restart se ejecutaron localmente sobre servicios sintéticos propios. Node 24 usa el proxy heredado (`NODE_USE_ENV_PROXY=1`) para descargar el SDK estático del ensayo de mapas; las llamadas de geocodificación/routing siguen controladas y sin consumo facturable. El CI integrado publica sus checks por SHA y artefactos de cada shard.
 
 ## Límites explícitos
 
