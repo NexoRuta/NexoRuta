@@ -1,0 +1,132 @@
+{
+  "checks": [
+    "Operator filters, parcel authorship, prepares, reviews and confirms a real persisted settlement.",
+    "Commerce reads only its confirmed document and movements, sees loading, switches independent operator account and cannot enumerate another operator document.",
+    "Second commerce cannot open the first commerce settlement.",
+    "Named filters, reload and direct URLs, empty results, recoverable option lookup failure and new-visit navigation.",
+    "Actual Chromium zoom 200%: tabs.getZoom=2, innerWidth=720 and devicePixelRatio=2 at a 1440px viewport; keyboard and no page overflow."
+  ],
+  "views": [
+    {
+      "name": "reportes",
+      "width": 1440,
+      "violations": []
+    },
+    {
+      "name": "reportes",
+      "width": 768,
+      "violations": []
+    },
+    {
+      "name": "reportes",
+      "width": 375,
+      "violations": []
+    },
+    {
+      "name": "reportes",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "detalle-bultos",
+      "width": 1440,
+      "violations": []
+    },
+    {
+      "name": "detalle-bultos",
+      "width": 768,
+      "violations": []
+    },
+    {
+      "name": "detalle-bultos",
+      "width": 375,
+      "violations": []
+    },
+    {
+      "name": "detalle-bultos",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "cuenta-operador",
+      "width": 1440,
+      "violations": []
+    },
+    {
+      "name": "cuenta-operador",
+      "width": 768,
+      "violations": []
+    },
+    {
+      "name": "cuenta-operador",
+      "width": 375,
+      "violations": []
+    },
+    {
+      "name": "cuenta-operador",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "borrador",
+      "width": 1440,
+      "violations": []
+    },
+    {
+      "name": "borrador",
+      "width": 768,
+      "violations": []
+    },
+    {
+      "name": "borrador",
+      "width": 375,
+      "violations": []
+    },
+    {
+      "name": "borrador",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "confirmada",
+      "width": 1440,
+      "violations": []
+    },
+    {
+      "name": "confirmada",
+      "width": 768,
+      "violations": []
+    },
+    {
+      "name": "confirmada",
+      "width": 375,
+      "violations": []
+    },
+    {
+      "name": "confirmada",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "cuenta-comercio",
+      "width": 1440,
+      "violations": []
+    },
+    {
+      "name": "cuenta-comercio",
+      "width": 768,
+      "violations": []
+    },
+    {
+      "name": "cuenta-comercio",
+      "width": 375,
+      "violations": []
+    },
+    {
+      "name": "cuenta-comercio",
+      "width": 320,
+      "violations": []
+    }
+  ],
+  "externalBlocked": []
+}

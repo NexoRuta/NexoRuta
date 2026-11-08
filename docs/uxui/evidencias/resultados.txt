@@ -1,0 +1,6 @@
+Build frontend: 0 errores.
+Aceptación integrada de gestión y webhooks: 7 aprobadas, 0 fallidas, 0 omitidas.
+Última repetición de ambos circuitos de navegador, sobre los commits publicados: 2 aprobadas, 0 fallidas, 0 omitidas.
+Firma y persistencia del receptor: 2 aprobadas.
+Gestión: 24 comprobaciones de viewport con axe sin violaciones de las etiquetas seleccionadas; no certifica WCAG.
+Zoom nativo 200%: reportes, liquidación, cuenta Commerce, webhooks y receptor; tabs.getZoom=2, innerWidth=720 y devicePixelRatio=2.
