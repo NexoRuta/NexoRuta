@@ -59,6 +59,12 @@ class VmDeploymentTests(unittest.TestCase):
         self.assertEqual(deployment.compose.call_args.args,
                          ("--profile", "shared", "run", "--rm", "mongo-provisioner"))
 
+    def test_mongodb_provisioner_has_memory_for_mongosh(self):
+        compose = Path(__file__).resolve().parents[2] / "deploy" / "gcp" / "compose.yaml"
+        services = compose.read_text(encoding="utf-8").split("  mongo-provisioner:\n", 1)[1]
+        provisioner = services.split("\n  mailpit:\n", 1)[0]
+        self.assertIn("    mem_limit: 512m", provisioner)
+
     def test_monitor_reads_lag_for_each_operational_group_and_recovery(self):
         collector = monitor_agent.Collector.__new__(monitor_agent.Collector)
         collector.config = {"node": "a"}
