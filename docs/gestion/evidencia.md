@@ -30,7 +30,7 @@ El frontend fija como productor de contrato `981cb4a9a26096516268f609f51e7b460c9
 | Frontend con contrato OpenAPI servido por API real | 513 aprobadas; 5 escenarios históricos opt-in sin activar en esta invocación local, habilitados por sus variables en CI integrado |
 | Migración/roles estilo Cloud SQL | Cadena con NOSUPERUSER/CREATEROLE/CREATEDB, roles runtime, bootstrap repetido, RLS forzado, aislamiento de key rings y cuota compartida: aprobados en PostgreSQL local desechable |
 | Retiro fallido | Se verifica como FalloRetiro y no como IntentoFallido de entrega |
-| Pruebas Python del superproyecto (incluido monitor del nuevo grupo) | 240 aprobadas, servicios externos simulados; sin operaciones de VM |
+| Pruebas Python del superproyecto (incluido monitor del nuevo grupo) | 237 aprobadas y 3 omitidas por condiciones existentes (240 descubiertas); servicios externos simulados, sin operaciones de VM |
 | Mapas | Sin consumo real; transporte controlado en los escenarios existentes de retiro/routing |
 
 Pruebas principales: `GestionCircuitTests`, `GestionWorkerTests`, `GestionBrowserTests`, `ManagementBoundaryTests`, `LiquidacionRulesTests` y la ampliación de `OperacionesRepartoHttpTests.Retiros`.
