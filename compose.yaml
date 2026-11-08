@@ -178,6 +178,24 @@ services:
       mailpit:
         condition: service_started
 
+  worker-webhooks:
+    image: nexoruta-worker:local
+    build: *worker-build
+    entrypoint: ["dotnet", "NexoRuta.Worker.dll"]
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      Messaging__Transport: HttpWebhooks
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_worker_runtime;Password=${NEXORUTA_WORKER_DB_PASSWORD:?Set the restricted worker role password}"
+      DataProtection__KeysDirectory: /var/nexoruta/data-protection-keys
+    volumes:
+      - api_dataprotection_keys:/var/nexoruta/data-protection-keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
   worker-push:
     image: nexoruta-worker:local
     build: *worker-build

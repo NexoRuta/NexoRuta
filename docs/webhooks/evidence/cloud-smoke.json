@@ -1,0 +1,7 @@
+{
+  "browserUrl": "http://localhost:5103/comercio",
+  "workerUrl": "http://127.0.0.1:5103/comercio/webhook",
+  "http": 200,
+  "shipment": "01a1b910-a15b-7ac8-b949-b0b6f2747a16",
+  "delivery": "82c0a8ba-0f85-42b4-9273-7caa697090b6"
+}

@@ -28,3 +28,7 @@ secrets/
 
 /tests/Cambios.DemoMobile/bin/
 /tests/Cambios.DemoMobile/obj/
+
+/work/
+/tests/Webhooks.Demo/bin/
+/tests/Webhooks.Demo/obj/

@@ -13,3 +13,9 @@ export DOCKER_HOST=unix:///var/run/docker.sock
 unset DOCKER_CONTEXT DOCKER_TLS DOCKER_TLS_VERIFY DOCKER_CERT_PATH
 # Keep build workers owned by the current invocation in managed tool sessions.
 export MSBUILDDISABLENODEREUSE=1 DOTNET_CLI_USE_MSBUILD_SERVER=0 UseSharedCompilation=false
+# Managed executors mount the home directory read-only; use task-owned caches.
+export NUGET_PACKAGES=/workspace/.nuget/packages
+export NUGET_HTTP_CACHE_PATH=/workspace/.nuget/http-cache
+export DOTNET_CLI_HOME=/workspace/.dotnet-cli
+export npm_config_cache=/workspace/.cache/npm
+export PLAYWRIGHT_BROWSERS_PATH=/workspace/.cache/ms-playwright

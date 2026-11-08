@@ -24,11 +24,15 @@ def load():
     if "evidences" not in s:
         s["evidences"] = base64.b64encode(secrets.token_bytes(32)).decode()
         (STATE / "private.json").write_text(json.dumps(s)); (STATE / "private.json").chmod(0o600)
+    if "webhookSigning" not in s:
+        s["webhookSigning"] = "whsec_" + base64.b64encode(secrets.token_bytes(32)).decode()
+        s["webhookAdmin"] = secrets.token_hex(24)
+        (STATE / "private.json").write_text(json.dumps(s)); (STATE / "private.json").chmod(0o600)
     return s
 
 def env(s, role="api"):
     conn = f"Host=127.0.0.1;Port={s['pgPort']};Database={s['database']};Username={s[role+'User']};Password={s[role+'Password']}"
-    return dict(os.environ, ASPNETCORE_ENVIRONMENT="Development", DOTNET_ENVIRONMENT="Development",
+    values = dict(os.environ, ASPNETCORE_ENVIRONMENT="Development", DOTNET_ENVIRONMENT="Development",
         ConnectionStrings__Postgres=conn, ConnectionStrings__RateLimits=conn,
         Jwt__SigningKeyBase64=s["jwt"], Seguimiento__EncryptionKey=s["tracking"], Reparto__EvidenciasEncryptionKey=s["evidences"],
         DatabaseInitialization__ApplyMigrations="false", DatabaseInitialization__SeedData="false",
@@ -38,6 +42,12 @@ def env(s, role="api"):
         Geocoding__Geoapify__PermitirLlamadasReales="false", RoutingGeoapify__PermitirLlamadasReales="false",
         RoutingGeoapify__ApiKey="", Geocoding__Geoapify__ApiKey="",
         Api__BaseAddress="http://127.0.0.1:5000/", FleetTransition__StageOnly="false")
+    if os.environ.get("NEXORUTA_CLOUD_WEBHOOK_DEMO") == "1":
+        values.update(Tracking__BaseAddress="http://localhost:5103/", CommerceDemo__Enabled="true", CommerceDemo__AdminPassword=s["webhookAdmin"],
+            CommerceDemo__SigningSecrets__0=s["webhookSigning"], CommerceDemo__DatabasePath=str(STATE / "receiver" / "inbox.db"),
+            Webhooks__DevelopmentReceiverUrl="http://127.0.0.1:5103/comercio/webhook",
+            Webhooks__MaxAttempts="3", Webhooks__RetryBaseSeconds="2", Webhooks__RetryMaxSeconds="10", Webhooks__TimeoutSeconds="3")
+    return values
 
 def psql(s, sql=None, file=None, database=None):
     args = [PG / "psql", "-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", str(s["pgPort"]), "-U", s["ownerUser"], "-d", database or s["database"]]
@@ -59,6 +69,8 @@ def provision_limits(s):
 def build():
     for project in ["backend/src/NexoRuta.Api", "frontend/src/NexoRuta.Backoffice", "frontend/src/NexoRuta.Commerce", "frontend/src/NexoRuta.Tracking"]:
         run(["dotnet", "build", ROOT / project, "--artifacts-path", STATE / "artifacts", "--nologo"], cwd=ROOT)
+    if os.environ.get("NEXORUTA_CLOUD_WEBHOOK_DEMO") == "1":
+        run(["dotnet", "build", ROOT / "backend/src/NexoRuta.Worker", "--artifacts-path", STATE / "artifacts", "--nologo"], cwd=ROOT)
 
 def launch(s, name, project, port):
     pidfile = STATE / (name + ".pid")
@@ -66,13 +78,16 @@ def launch(s, name, project, port):
         pid = int(pidfile.read_text())
         try:
             os.kill(pid, 0)
-            if (STATE / (name+".identity")).read_text() not in pathlib.Path(f"/proc/{pid}/cmdline").read_text():
+            command = pathlib.Path(f"/proc/{pid}/cmdline").read_text()
+            if not command: raise ProcessLookupError()
+            if (STATE / (name+".identity")).read_text() not in command:
                 raise RuntimeError("PID no longer belongs to this runtime")
             return
         except ProcessLookupError: pass
     dll = STATE / "artifacts" / "bin" / project / "debug" / (project + ".dll")
-    e = env(s); e["ASPNETCORE_URLS"] = f"http://0.0.0.0:{port}"
-    content = ROOT / ("backend" if name == "api" else "frontend") / "src" / project
+    e = env(s, "worker" if name == "webhooks" else "api"); e["ASPNETCORE_URLS"] = f"http://0.0.0.0:{port}"
+    if name == "webhooks": e["Messaging__Transport"] = "HttpWebhooks"
+    content = ROOT / ("backend" if name in ("api", "webhooks") else "frontend") / "src" / project
     with (STATE / (name + ".log")).open("ab") as log:
         process = subprocess.Popen(["dotnet", dll], cwd=content, env=e, stdout=log, stderr=log, start_new_session=True)
     pidfile.write_text(str(process.pid)); (STATE / (name+".identity")).write_text(str(dll))
@@ -89,7 +104,7 @@ def start():
         for r in ["owner", "api", "worker", "bootstrap", "operator", "commerce", "admin"]: s[r+"Password"] = secrets.token_hex(24)
         with socket.socket() as probe: probe.bind(("127.0.0.1", s["pgPort"]))
         (STATE / "private.json").write_text(json.dumps(s)); (STATE / "private.json").chmod(0o600)
-    else: s = load()
+    s = load()
     if DOCKER:
         found = subprocess.run(["docker", "container", "inspect", CONTAINER], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
         if found.returncode:
@@ -127,11 +142,11 @@ def start():
     existing = psql(s, "SELECT datname FROM pg_database WHERE datname='"+s["database"]+"';", database="postgres")
     if s["database"] not in existing: psql(s, 'CREATE DATABASE "'+s["database"]+'";', database="postgres")
     # Never rebuild files mapped by a running web process. Stop this runtime first.
-    for name in ["api", "backoffice", "commerce"]:
+    for name in ["api", "backoffice", "commerce", "tracking", "webhooks"]:
         pidfile=STATE/(name+".pid")
         if pidfile.exists():
             pid=int(pidfile.read_text())
-            if pathlib.Path(f"/proc/{pid}/cmdline").exists():
+            if pathlib.Path(f"/proc/{pid}/cmdline").exists() and pathlib.Path(f"/proc/{pid}/cmdline").read_bytes():
                 raise RuntimeError("Runtime already started; use stop before start/rebuild")
     build()
     dll = STATE / "artifacts/bin/NexoRuta.Api/debug/NexoRuta.Api.dll"
@@ -151,23 +166,35 @@ def start():
             Bootstrap__Roles__1__Codigo="propietario_comercio", Bootstrap__Roles__1__Nombre="Cloud commerce owner", Bootstrap__Roles__1__ComercioId=s["commerceId"])
         run(["dotnet", dll, "local-bootstrap"], cwd=ROOT / "backend/src/NexoRuta.Api", env=e); seeded.touch()
     for name,project,port in [("api","NexoRuta.Api",5000),("backoffice","NexoRuta.Backoffice",5101),("commerce","NexoRuta.Commerce",5102),("tracking","NexoRuta.Tracking",5103)]: launch(s,name,project,port)
+    if os.environ.get("NEXORUTA_CLOUD_WEBHOOK_DEMO") == "1": launch(s,"webhooks","NexoRuta.Worker",0)
     for port in [5000,5101,5102,5103]:
         for _ in range(90):
             try:
                 LOCAL_HTTP.open(f"http://127.0.0.1:{port}/health/ready",timeout=2);break
             except Exception: time.sleep(1)
         else: raise RuntimeError(f"Service {port} failed; inspect private logs in {STATE}")
+    if os.environ.get("NEXORUTA_CLOUD_WEBHOOK_DEMO") == "1":
+        pid=int((STATE/"webhooks.pid").read_text())
+        command=pathlib.Path(f"/proc/{pid}/cmdline")
+        if not command.exists() or not command.read_bytes(): raise RuntimeError("HTTP worker exited; inspect its private log")
     print("Synthetic Cloud runtime ready: API5000 Backoffice5101 Commerce5102 Tracking5103. Run verify next.")
 
 def stop():
     s=load()
-    for name in ["tracking","commerce","backoffice","api"]:
+    for name in ["webhooks","tracking","commerce","backoffice","api"]:
         p=STATE/(name+".pid")
         if not p.exists(): continue
         pid=int(p.read_text())
         try:
-            if (STATE/(name+".identity")).read_text() not in pathlib.Path(f"/proc/{pid}/cmdline").read_text(): raise RuntimeError("Refusing to stop an unrelated PID")
+            command = pathlib.Path(f"/proc/{pid}/cmdline").read_text()
+            if not command: raise ProcessLookupError()
+            if (STATE/(name+".identity")).read_text() not in command: raise RuntimeError("Refusing to stop an unrelated PID")
             os.killpg(pid,signal.SIGTERM)
+            for _ in range(100):
+                command_path=pathlib.Path(f"/proc/{pid}/cmdline")
+                if not command_path.exists() or not command_path.read_bytes(): break
+                time.sleep(0.1)
+            else: raise RuntimeError("Owned process did not stop; refusing to rebuild loaded files")
         except (ProcessLookupError,FileNotFoundError): pass
         p.unlink()
     if DOCKER:
@@ -195,6 +222,12 @@ def verify():
     if count < 1: raise RuntimeError("API runtime connection not observed")
     rls=psql(s,"SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relrowsecurity AND relforcerowsecurity;")
     if int(rls.splitlines()[2].strip()) < 1: raise RuntimeError("Forced RLS not observed")
+    if os.environ.get("NEXORUTA_CLOUD_WEBHOOK_DEMO") == "1":
+        response=LOCAL_HTTP.open("http://127.0.0.1:5103/comercio")
+        if urllib.parse.urlsplit(response.url).path != "/comercio/ingresar": raise RuntimeError("Demo receiver must require its controls login")
+        commerce=http("api/auth/login",dict(email=s["commerceEmail"],password=s["commercePassword"]))["accessToken"]
+        http("api/webhooks/suscripciones",token=commerce)
+        print("HTTP webhook API and protected /comercio verified")
     print("API connections use restricted runtime role; forced RLS tables verified")
     print("PostgreSQL/PostGIS and runtime RLS role verified; credentials remain in ignored private.json")
     print(checks)
