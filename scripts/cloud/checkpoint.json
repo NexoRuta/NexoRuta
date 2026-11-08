@@ -1,25 +1,27 @@
 {
   "rootRepository": "https://github.com/NexoRuta/NexoRuta.git",
-  "rootBranch": "develop",
+  "rootBranch": "feat/gestion-liquidaciones-cuenta",
   "submodules": [
     {
       "path": "backend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Backend.git",
-      "branch": "fix/entregaparcial",
-      "commit": "96ee1c72b50a11749d1eb95b147e473350b5a081"
+      "branch": "feat/gestion-liquidaciones-cuenta",
+      "commit": "0d14dddb3b3ba6cc7c32389e415a8776e61bc370"
     },
     {
       "path": "frontend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Frontend.git",
-      "branch": "codex/repair-entregaparcial",
-      "commit": "bae070083ec81519f4ad40726fc1667839b7ea53"
+      "branch": "feat/gestion-liquidaciones-cuenta",
+      "commit": "fa94588955c9de877190b411ae6543fd4c3e9b98"
     },
     {
       "path": "mobile",
       "repository": "https://github.com/NexoRuta/NexoRuta-Mobile.git",
-      "branch": "fix/entregaparcial",
-      "commit": "f2b3db412ce23b0b36215fd301f6d3d3d6959252"
+      "branch": "develop",
+      "commit": "53f6be2cdec48f48e30e390060feeaefb5be0ead"
     }
   ],
-  "initialRequiredCommit": "8991321593f9092e18aac83d6a9a11df4c388cb3"
+  "initialRequiredCommit": "8991321593f9092e18aac83d6a9a11df4c388cb3",
+  "integratedBaseCommit": "6001eb5cf6dba189f2be4d4777459b5bb554e7c9",
+  "preservedDevelopFollowupCommit": "14a17b67d6a61be8bf56d52bc026fd9e63458896"
 }

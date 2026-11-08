@@ -155,6 +155,7 @@ jobs:
       NEXORUTA_GEOCODING_FULLSTACK_DIR: ${{ github.workspace }}/artifacts/browser/geocoding
       NEXORUTA_VEHICLES_E2E_DIR: ${{ github.workspace }}/artifacts/browser/vehicles
       NEXORUTA_SESSION_E2E_DIR: ${{ github.workspace }}/artifacts/browser/session
+      NEXORUTA_GESTION_E2E_DIR: ${{ github.workspace }}/artifacts/browser/management
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -213,7 +214,10 @@ jobs:
         if: always()
         with:
           name: backend-integration-shard-${{ matrix.shard }}
-          path: artifacts/backend/integration/**/*.trx
+          path: |
+            artifacts/backend/integration/**/*.trx
+            artifacts/browser/management/**/*.json
+            artifacts/browser/management/**/*.png
           if-no-files-found: error
           retention-days: 14
 

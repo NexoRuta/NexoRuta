@@ -31,6 +31,7 @@ KAFKA_GROUPS = {
     "recovery": "nexoruta.password-recovery.mongo.v1",
     "board": "nexoruta-operational-board-v1",
     "history": "nexoruta-operational-history-v1",
+    "management": "nexoruta-management-v1",
 }
 
 

@@ -3,6 +3,8 @@ export DOTNET_ROOT="${DOTNET_ROOT:-/workspace/.dotnet}"
 export NEXORUTA_AGENT_TOOLS=/workspace/.nexoruta-tools
 export PATH="$NEXORUTA_AGENT_TOOLS/node/bin:$DOTNET_ROOT:$PATH"
 export DOTNET_PROCESSOR_COUNT=4 DOTNET_CLI_TELEMETRY_OPTOUT=1
+# Node 24 fetch must honor the inherited Cloud proxy for static SDK downloads.
+export NODE_USE_ENV_PROXY=1
 export NEXORUTA_CLOUD_POSTGRES_MODE=docker NEXORUTA_TEST_POSTGRES_MODE=docker
 if [[ -x /opt/nexoruta-redis-7.2.16/bin/redis-server ]]; then
   export NEXORUTA_TEST_REDIS_SERVER=/opt/nexoruta-redis-7.2.16/bin/redis-server
