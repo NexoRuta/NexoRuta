@@ -4,3 +4,7 @@ Aceptación integrada de gestión y webhooks: 7 aprobadas, 0 fallidas, 0 omitida
 Firma y persistencia del receptor: 2 aprobadas.
 Gestión: 24 comprobaciones de viewport con axe sin violaciones de las etiquetas seleccionadas; no certifica WCAG.
 Zoom nativo 200%: reportes, liquidación, cuenta Commerce, webhooks y receptor; tabs.getZoom=2, innerWidth=720 y devicePixelRatio=2.
+Repetición final del circuito de gestión tras resolver la zona del encabezado: 1 aprobada, con los cuatro anchos y zoom nativo.
+Arquitectura tras declarar DTO API: 7 aprobadas.
+HTTP de gestión tras el mapeo API: 5 aprobadas.
+Opciones autorizadas y zonas homónimas tras la desambiguación: 1 aprobada.

@@ -36,3 +36,7 @@ Las capturas antes/después comparan tareas y viewport, con identidades sintéti
 La precisión temporal de la atribución es un defecto de reconstrucción, documentado en [revision.md](revision.md). No se cambia la función de proyección ni se afirma reparar el registro Windows. La prueba crea los hechos sintéticos originales con fracciones submicrosegundo, sin actualizar un diario inmutable.
 
 No se modifican MAUI, servicios facturables, bases compartidas ni documentos confirmados. No se acredita una certificación integral de contraste/accesibilidad de pantallas no modificadas. El smoke interactivo previo devolvió 409 al admitir su envío; el circuito aislado de webhooks valida los transportes reales con su configuración sintética controlada.
+
+El CI remoto aprobó 380 pruebas unitarias backend y el build frontend. Detectó que el endpoint nuevo no declaraba su DTO de respuesta API; se corrigió la frontera HTTP con DTOs propios y el mismo JSON, sin relajar la prueba de arquitectura. Los resultados de la repetición enfocada se registran junto con las evidencias finales.
+
+Resultados posteriores a esas correcciones: arquitectura 7 aprobadas; regresión HTTP de gestión 5 aprobadas; repetición enfocada de opciones autorizadas/homónimos/paginación 1 aprobada. La corrección visual del encabezado de zona pasó otra ejecución del circuito completo (1 aprobada, 24 vistas y zoom nativo). No se deshabilitó ninguna aserción.

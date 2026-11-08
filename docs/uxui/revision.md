@@ -17,7 +17,7 @@ No se modifica MAUI, estados de negocio, tarifas, denominadores, firma, autentic
 
 `GET /api/gestion/operadores/{operador}/opciones/{tipo}` reutiliza el módulo de gestión y su permiso `envios.consultar`. Tipos de filtro: Comercio, Zona, Repartidor; referencias: Envio, Bulto, Ruta. Búsqueda literal por nombre, orden nombre/UUID, páginas de 50 con `hayMas`; resolución de hasta 100 identidades por petición. No se carga un catálogo completo en el navegador. La selección fuera de la primera página se resuelve aparte.
 
-Los casos de uso validan el operador de la sesión. Commerce solamente puede resolver Envio/Bulto, con selección de operador y RLS existentes; no recibe catálogos de otros comercios. Se incluyen entidades inactivas para consultas anteriores. Comercios homónimos se distinguen por código de un envío autorizado; repartidores homónimos, por correo disponible bajo RLS. No se amplían grants ni políticas. La tabla de identidad de importación no es legible por el rol API: no se consulta ni se amplía su acceso para este rediseño.
+Los casos de uso validan el operador de la sesión. Commerce solamente puede resolver Envio/Bulto, con selección de operador y RLS existentes; no recibe catálogos de otros comercios. Se incluyen entidades inactivas para consultas anteriores. Comercios homónimos se distinguen por código de un envío autorizado; repartidores homónimos, por correo disponible bajo RLS; zonas homónimas, por su fecha de creación en Uruguay. No se amplían grants ni políticas. La tabla de identidad de importación no es legible por el rol API: no se consulta ni se amplía su acceso para este rediseño.
 
 Los nombres son actuales. Los identificadores de autor/ruta provienen de la proyección histórica; la presentación no los reemplaza por asignaciones actuales. Los códigos de bulto existentes identifican los enlaces a envíos; no se crea numeración nueva.
 
@@ -41,8 +41,10 @@ Los resultados finales y capturas comparables se registran en `verificacion.md`.
 
 ## Publicación
 
-- [Backend #55](https://github.com/NexoRuta/NexoRuta-Backend/pull/55): `b4fb6e05ef80c22481843d448aaac8c4b0836f6c`.
-- [Frontend #54](https://github.com/NexoRuta/NexoRuta-Frontend/pull/54): `f903665e4fda81ab5a3d6e4f161405c27a40a560`.
+- [Backend #55](https://github.com/NexoRuta/NexoRuta-Backend/pull/55): `c786977580dc5fb01839ee8c9816118c7e8dbf1e`.
+- [Frontend #54](https://github.com/NexoRuta/NexoRuta-Frontend/pull/54): `b994957d3ae30c3a6290e8d990b95ba00273232c`.
 - Mobile permanece en `53f6be2cdec48f48e30e390060feeaefb5be0ead`.
 
 Ambos hijos se publicaron antes de actualizar los gitlinks raíz. Sus ramas develop contienen commits de integración con árboles idénticos a los gitlinks iniciales; se comprobó esa igualdad sin cambiar la base de fuentes seleccionada. Las PR quedan abiertas hacia develop, sin merge ni auto-merge. La última compilación de los commits publicados pasó y la repetición final de ambos circuitos, con zoom nativo y capturas revisadas, aprobó 2/2.
+
+El CI de Backend fija el companion Frontend exactamente en `b994957d3ae30c3a6290e8d990b95ba00273232c`, para que las regresiones de selectores se ejecuten contra el mismo portal publicado, sin cambiar otros componentes para resolver builds. El encabezado del detalle también resuelve la zona por nombre actual cuando la proyección solo conserva su identidad. Su recorrido completo se volvió a comprobar (1 prueba aprobada).
