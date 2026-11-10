@@ -1,0 +1,336 @@
+# AP-04 — Plan de implementación de devoluciones del comercio
+
+Análisis inicial: 09/11/2026; actualización de ejecución: 10/11/2026 (America/Montevideo). Destinatario: agente de IA que implementa la feature. Estado: **implementación en curso, con validación parcial en entorno sintético local; AP-04 permanece In progress**. Los resultados y límites verificados se registran en `docs/auditorias/ap-04/validacion.md`.
+
+Card consultada mediante MCP de Notion: [AP-04 — Consulta y gestión de devoluciones del comercio](https://app.notion.com/p/40a032f1caff816a8c01c160a9e10c18). Está en **In progress**, prioridad Media, módulo M02. Conservar ese estado durante el diseño/implementación; pasar a Do tests cuando toda la solución esté implementada y pendiente de aceptación, y a Done únicamente con los criterios de cierre comprobados.
+
+## 1. Fuentes y resultado requerido
+
+Se leyó el PDF y el contenido OOXML de la planilla sin ejecutar macros. No interpretar colores ni reportes de otras revisiones como prueba del código actual.
+
+| Fuente | Exigencia que afecta AP-04 |
+| --- | --- |
+| `docs/alcance/Laboratorio__NET_2026.pdf`, §4, página física 4 / impresa 3 | El portal del comercio es Blazor y debe ofrecer gestión de devoluciones. Backoffice conserva la gestión operativa del operador. |
+| Mismo PDF, §3.3 | El comercio accede exclusivamente a su información y puede trabajar con varios operadores. El operador es el tenant. |
+| `docs/alcance/Calcs/Casos de Uso - Responsables.xlsm`, `Alcance aplicaciones!A7:G7` | AP-04: «El comercio consulta y gestiona devoluciones de sus envíos». M02, Portal Blazor, §4. Estado de definición: **Detalle funcional a diseñar**. Es una capacidad obligatoria, sin CU propio. |
+| `docs/alcance/Entregas/Entrega-10-4-2026-Grupo-4.pdf`, Anexo B, página 12 | Reitera AP-04 y que esas capacidades son obligatorias y necesitan definición funcional. |
+| PDF original, §5.1/4, §5.2/11–12 y §5.4/22; planilla CU-04/11/12/22 y D03/D13 | Reglas versionadas por operador, transiciones declarativas, eventos inmutables y devolución/rendición al depósito. |
+| `docs/alcance/ADR-MT-001-PostgreSQL-RLS.md` | Identidad contextual, operador por envío, roles restringidos, contexto transaccional y aislamiento también en PostgreSQL. No exigir una membresía permanente comercio–operador inexistente. |
+| `docs/cambios-requerimientos/Cambios de Requerimientos Planificados.pdf`, requisitos 31–34 | Cada bulto puede entregarse, quedar pendiente o devolverse independientemente. El estado agregado puede permanecer EntregadoParcialmente. Reglas capturadas y visitas históricas se conservan. |
+| Mismo documento, requisitos 37–41 | El retiro desde el comprador tiene un ciclo y modalidad propios. Reutilizarlo solo si se necesita ese caso; no confundir un retiro nuevo con la devolución de un envío existente. |
+| PDF original §6.1–6.6, §6.8, §6.12–6.15 | Arquitectura modular, autorización, migraciones, concurrencia, outbox donde corresponda, observabilidad, ejecución multiinstancia, CI y despliegue remoto HTTPS. |
+
+**Resultado verificable:** el comercio autorizado encuentra las devoluciones de sus envíos por operador, comprende la situación de cada bulto y puede realizar una acción de gestión persistente y trazable. Una pantalla de solo lectura o mostrar `Devuelto` en Mis envíos no basta para cerrar AP-04.
+
+La letra no define quién solicita la devolución, un proceso de aprobación, una devolución posventa, una devolución de dinero, una prueba de recepción del comercio ni un plazo para esa recepción. Las decisiones del apartado 3 son una propuesta concreta del proyecto, no texto docente.
+
+## 2. Base actual y brechas confirmadas
+
+Snapshot inspeccionado, que el agente debe volver a verificar al comenzar:
+
+| Repositorio | HEAD materializado |
+| --- | --- |
+| Raíz, develop | `d420dfefc70f0b4e789ae350d4d66bba9e4180a0` |
+| Backend, develop | `3a7cffefb03967e6a9135a5575676403b7c12d8f` |
+| Frontend, develop | `84444f6a8b42c0f9f164229f520ef6f005bed205` |
+| Mobile, develop | `329dd3454704c0f45b615d609f469b7fd4b2dd5f` |
+
+Los submódulos están limpios, pero sus HEAD difieren de los gitlinks registrados en la raíz. Es trabajo existente: no ejecutar un submodule update que lo sustituya ni usar `--remote`. `scripts/cloud/checkpoint.json` es histórico y no selecciona las fuentes de esta implementación.
+
+| Capacidad existente | Evidencia de código | Consecuencia para el plan |
+| --- | --- | --- |
+| Inicio de devolución por decisión operativa | `GestionarRutasUseCase.IniciarDevolucionAsync`, `EfRutasRepository.Reasignaciones.cs`, `POST /api/envios/{id}/iniciar-devolucion` | Reutiliza reglas capturadas, intentos, versión, actor y ComandoId. Commerce no debe obtener esa autorización de operador. |
+| Resultados independientes y custodia por bulto | `Domain/Envios/ResultadoBulto.cs`, `Bulto.cs`, `AgregacionBultos` | Consultar resultados/custodia por bulto, no solo EstadoEnvio. No modificar bultos entregados para devolver otros. |
+| Rendición, recepción y cierre con incidencias | `EfOperacionesRepartoRepository.*`, `EfRutasRepository.RecibirAsync`, `backend/docs/cu/cierre-jornada.md` | Rendición declarada no prueba recepción física; cierre, retorno y liberación de recursos son hechos distintos. |
+| Devolución física al comercio | `EfRutasRepository.Recepcion.cs`, `POST /api/deposito/envios/{id}/devolucion-comercio`, Backoffice `Pages/Rutas/_Deposito.cshtml` | Ya mueve bultos EnDevolucion desde Deposito a Comercio y registra Devuelto. Está limitado al actor operador y usa versión del envío. |
+| Semántica de devolución total | `EfRutasRepository.RecibirAsync` | En el recorrido de envío completo EnDevolucion, recibir en depósito ya cambia resultados a Devuelto y estado a Devuelto. Por tanto **Devuelto no demuestra custodia Comercio**. |
+| Brecha entre recorridos total/parcial | El comando de devolución al comercio selecciona solo Resultado=EnDevolucion; la UI usa el mismo criterio | Los bultos Devuelto que siguen en Deposito pueden quedar fuera de esa acción. Debe reproducirse y resolverse como parte del circuito AP-04. No suponer que ambos recorridos ya son equivalentes. |
+| Lectura Commerce | `MisEnvios.razor` muestra EnDevolucion/Devuelto; `ListarEnviosUseCase`/`EfEnviosRepository` | No existe bandeja/gestión propia de devoluciones. Evitar descargar todos los envíos y filtrar en el navegador. |
+| Permisos | `Domain/Administracion/CatalogoPermisos.cs` | `envios.consultar` sirve a ambos ámbitos; `envios.gestionar` es exclusivo de Operador. No ampliarlo a Comercio. |
+| Navegación y host | `CommerceNavigationCatalog.cs`, Commerce `Program.cs` | Blazor InteractiveServer, cookies, ApiClient, autorización API, antiforgery y Data Protection ya existen. |
+| Finanzas | `docs/gestion/reportes-liquidaciones-cuenta.md` | Los cargos de devoluciones permanecen visibles/retenidos según política existente. Un acuse no genera reembolso, pago ni liquidación. |
+
+## 3. Decisión funcional propuesta para completar «gestionar»
+
+Adoptar el siguiente flujo en una especificación/ADR de AP-04 antes de escribir comandos. Es la propuesta mínima completa de este plan; el equipo debe confirmar su adecuación al alcance académico durante la revisión del diseño. Si solicita otra interpretación, registrar el cambio y revisar contrato/matriz antes de implementar; nunca presentar esa decisión como requisito literal.
+
+1. El **operador** inicia la devolución según las reglas capturadas y registra rendición, recepción y transferencia física. Sus autorizaciones permanecen separadas.
+2. El **comercio** consulta una bandeja de devoluciones y su detalle por bulto. Puede registrar un **acuse de recepción conforme o con observaciones** sobre bultos que el operador ya entregó físicamente a ese comercio.
+3. El acuse es un hecho propio, inmutable, con actor, fecha y selección de bultos. No cambia EstadoEnvio, ResultadoBulto, custodia, rutas, precios ni reservas. Las observaciones permiten gestionar una diferencia sin declarar automáticamente un extravío ni cerrar una incidencia AP-01.
+4. El operador registra la transferencia física para un conjunto explícito de bultos elegibles y presentes. Esa operación sí cambia custodia y, cuando corresponda, resultado/estado mediante las reglas canónicas. No es un simple click de «visto» del comercio.
+5. No introducir solicitudes de devolución posventa ni permitir al comercio forzar EnDevolucion o Devuelto. Si se requiere recoger mercancía desde el comprador, usar el retiro existente bajo su contrato; AP-04 no lo crea automáticamente.
+6. No exigir fotos, firma, documento personal o GPS del navegador para un acuse si el equipo no adopta explícitamente esa política adicional. Fecha de registro: reloj UTC del servidor. Nunca generar evidencia física o ubicación ficticia.
+
+### Estados de presentación y acciones
+
+Son situaciones derivadas, no nuevos valores de EstadoEnvio:
+
+| Situación por bulto | Información visible | Acción Commerce |
+| --- | --- | --- |
+| EnDevolucion y custodia Repartidor/PendienteDeposito | En retorno / recepción pendiente | Consultar; sin acuse |
+| EnDevolucion o Devuelto y custodia Deposito con procedencia de devolución verificable | En depósito, pendiente de entrega al comercio | Consultar; sin acuse |
+| Resultado Devuelto, custodia Comercio y transferencia trazable posterior al corte | Entregado al comercio, pendiente de acuse | Registrar acuse si tiene permiso |
+| Transferencia con acuse | Recibido conforme / recibido con observaciones, actor y fecha | Consultar el acuse; no editarlo |
+| Envío EntregadoParcialmente con bultos devueltos | Conservar el agregado y mostrar cada resultado | Operar solo los bultos de devolución elegibles |
+| Cancelado/Extraviado u otra excepción con historia de retorno | Mostrar estado y custodia reales, explicar bloqueo | Consulta; no habilitar una transición por el mero historial |
+| Hecho anterior al corte sin transferencia suficientemente atribuible | Histórico; acuse no disponible y motivo | Consulta; no fabricar transferencia ni acuse |
+
+Al mostrar datos legados, separar «lo que dice el estado comercial», «custodia actual» y «hechos acreditados». Si existe evidencia histórica suficiente puede reutilizarse como fuente identificada; no backfillear una entrega física deduciéndola solo de Devuelto. Una corrección histórica exige un procedimiento explícito, fuera del backfill automático.
+
+## 4. Arquitectura y contratos objetivo
+
+### Distribución de responsabilidades
+
+- **M02 / Domain.Envios:** invariantes de transferencia y acuse en tipos pequeños; mantener estado/custodia existentes como autoridad. No agregar dependencias EF/ASP.NET, red ni reloj estático al dominio.
+- **Application.Envios/Devoluciones:** consultas/DTOs, validación, autorización del actor y coordinación mediante puertos tipados. Crear casos de uso separados de lectura, transferencia operativa y acuse de comercio. No crecer el caso de uso de rutas con toda la feature.
+- **Infrastructure.Envios/Devoluciones:** implementaciones PostgreSQL/EF, transacciones, bloqueos, RLS y escritura auditada. La transferencia existente debe tener un solo escritor: extraer/delegar su lógica a esta capacidad o a un puerto compartido de aplicación, manteniendo la entrada operativa. No duplicar algoritmos en Reparto y Commerce.
+- **API.Features.Envios/Devoluciones:** DTOs HTTP propios, políticas, errores y composición. No devolver entidades EF ni DTOs internos de Application como contrato público. Usar las convenciones de `ShipmentBoundaryTests`.
+- **ApiClient.Features.Devoluciones** y **Commerce.Components.Features.Devoluciones:** cliente HTTP tipado y páginas Blazor InteractiveServer. Reutilizar sesión/errores/servicios y componentes existentes.
+- **Backoffice:** ajustar su acción de entrega física y su ApiClient al contrato común; no darle acceso al acuse del comercio ni rediseñar todo Depósito.
+- **Workers y Mobile:** conservar responsabilidades existentes. AP-04 no requiere un proceso nuevo, un broker nuevo ni cambiar la app móvil. Revisar consumidores existentes si cambia un contrato que realmente comparten.
+
+### Contrato HTTP propuesto
+
+Los nombres nuevos son propuesta de implementación. Congelar nombres, unidades, límites, ejemplos y códigos en la especificación antes de usarlos en tests/clientes. Actualizar productores y consumidores juntos; no agregar aliases o un contrato v1 paralelo para mantener versiones anteriores.
+
+| Método/ruta propuesta | Contrato |
+| --- | --- |
+| `GET /api/devoluciones?operadorId=...&desde=...&hasta=...&situacion=...&cursor=...&limite=...` | Comercio contextual; filtro por operador explícito, período de actividad de devolución, situación y búsqueda acotada por referencia. Paginación estable en servidor. |
+| `GET /api/devoluciones/envios/{envioId}?operadorId=...` | Resumen propio, estado real y cantidades por situación; referencias para páginas de bultos, transferencias y acuses. |
+| `GET /api/devoluciones/envios/{envioId}/bultos?...` | Página de bultos de devolución; resultado, custodia, motivo permitido, versión y acciones disponibles con causa de bloqueo. |
+| `GET /api/devoluciones/envios/{envioId}/historial?...` | Hechos de devolución/transferencia/acuse autorizados y paginados; separar fecha física acreditada y registrada. No exponer payloads de operaciones móviles ni evidencias privadas por defecto. |
+| `POST /api/devoluciones/transferencias/{transferenciaId}/acuses` | `ComandoId`, versión de la transferencia, IDs/versiones o pertenencia estable de bultos, resultado conforme/con observaciones y observaciones por bulto. Comercio/actor inferidos de la sesión. |
+| Existente `POST /api/deposito/envios/{id}/devolucion-comercio` | Enriquecer a comando explícito con ComandoId, VersionEnvio, conjunto de bultos/versiones y confirmación de transferencia física. Misma operación de negocio para todos los caminos. Actualizar endpoint/cliente/Backoffice/tests juntos. |
+
+Reglas del contrato:
+
+1. `ComercioId`, usuario y acceso nunca vienen como autoridad desde el body. `OperadorId` identifica el contexto elegido y se valida contra la propiedad real del envío; no equivale a autorización.
+2. Páginas de 1–100 elementos y cursor estable por `(FechaActividadUtc, Id)`, con corte superior de consulta si se necesita estabilidad entre páginas. Definir el cursor como opaco, validado y asociado a los filtros, sin SQL interpolado. Orden total también para fechas iguales.
+3. Período `[desde,hasta)`, ISO-8601 UTC en API; convertir fechas de UI explícitamente desde America/Montevideo. Definir qué evento determina FechaActividad; no filtrar solamente por fecha de admisión y perder devoluciones recientes de envíos viejos. Rechazar rangos inválidos y limitar el rango interactivo, proponiendo 90 días y paginación para histórico.
+4. Detalle, historial y bultos no pueden crecer sin límite. Soportar envíos con 501/1500 bultos; un máximo de 100 bultos por comando es un límite de lote de transporte, no un máximo comercial. Cada lote es atómico y la UI permite completar el resto sin perder contexto.
+5. Lecturas devuelven capacidades calculadas en servidor (`PuedeAcusar`, razón de bloqueo y versiones pertinentes). Son ayudas de UI: el comando revalida todo.
+6. Errores: 400 validación, 401 sesión, 403 ámbito/permiso, 404 recurso ajeno o inexistente bajo política uniforme, 409 versión/estado/custodia/comando incompatible, 503 dependencia indisponible. Usar ProblemDetails y códigos funcionales estables; no devolver mensajes SQL ni información de otro tenant.
+7. `Cache-Control: no-store` para estas lecturas y respuestas privadas. Propagar CancellationToken, tiempos de espera y correlación; no cachear permisos ni datos entre organizaciones.
+
+## 5. Secuencia de implementación para el agente
+
+Ejecutar las fases en orden. En cada una registrar archivos, decisiones, evidencia y pendientes. Un exit code verde sin aserciones pertinentes no cierra una fase.
+
+### Fase 0 — Preparar y congelar las fuentes
+
+1. Leer `AGENTS.md`, `frontend/AGENTS.md`, `frontend/DESIGN.md`, `docs/continuidad/cloud-agent.md`, `codex-cloud.md` y `scripts/cloud/checkpoint.json`. Leer este plan y las fuentes del apartado 1.
+2. Registrar rama/HEAD/status de los cuatro repositorios y los gitlinks registrados (`git ls-tree HEAD backend frontend mobile`). Identificar cambios del usuario y preservar los tres submódulos materializados. No hacer reset, stash, checkout de otra punta ni submodule update sobre este workspace sin una selección de fuente deliberada.
+3. Preparar ramas de feature o un checkout aislado desde la combinación elegida; si se usan los HEAD actuales, fijarlos explícitamente. No usar checkpoint.json como selector ni actualizar submódulos para resolver builds.
+4. Inventariar comandos de construcción, SDK/locks, Compose efectivo, fixtures PostgreSQL y harness navegador vigentes. No instalar herramientas globales ni cambiar la configuración publicada del entorno para esta feature.
+5. Registrar la base en `docs/auditorias/ap-04/estado-inicial.md` con inventario de hallazgos. Revalidar rutas y métodos de este plan si el checkout avanzó.
+
+**Salida:** inventario reproducible y fuentes elegidas, sin alteraciones de datos existentes.
+
+### Fase 1 — Especificar comportamiento y reproducir las brechas
+
+6. Crear `backend/docs/cu/AP-04-devoluciones-comercio.md` y una decisión breve de arquitectura/alcance con la propuesta del apartado 3. Trazar cada requisito literal, decisión de producto, estado, actor, comando y prueba; no escribir «la letra exige un acuse».
+7. Construir una matriz de elegibilidad por EstadoEnvio × ResultadoBulto × Custodia × EsRetiro × permiso. Incluir entregas parciales, retorno total, cancelación, extravío, versión obsoleta e historial anterior al corte.
+8. Reproducir en fixtures propias: devolución total → recepción depósito → Devuelto/Deposito; devolución parcial → EnDevolucion/Deposito → devolución al comercio. Verificar el comando y la UI existentes. Añadir una regresión que demuestre el hueco de transferencia total antes de corregirlo.
+9. Definir el corte de nueva auditoría, la procedencia de hechos históricos y los mensajes de casos no acreditados. No reconstruir custodia a partir del estado agregado.
+10. Revisar que el flujo incluya una acción Commerce real y una historia consultable. Si el equipo requiere solicitudes/aprobación o RMA, actualizar primero esta definición con sus reglas; no improvisarlas dentro de un controlador.
+
+**Salida:** especificación revisable, contrato y matriz congelados; reproducción de los dos recorridos.
+
+### Fase 2 — Modelar dominio y persistencia
+
+11. Reutilizar Bulto/ResultadoBulto/EstadoCustodiaBulto/AgregacionBultos. Diseñar entidades de auditoría propuestas `TransferenciaDevolucion` + líneas por bulto y `AcuseDevolucionComercio` + líneas, con IDs estables. Estos registros describen hechos; no son una máquina de estados de envío alternativa.
+12. Cada transferencia conserva operador, comercio, envío, actor/acceso, comando, fecha UTC de registro y bultos/versions antes y después. Cada acuse referencia una transferencia y líneas concretas, resultado, observaciones normalizadas, actor/acceso y fecha UTC. FK compuestas deben impedir mezclar operador/comercio/envío/bultos.
+13. Definir identidad única de comando con ámbito y huella canónica de entrada normalizada: mismo actor/ámbito/contenido reproduce la respuesta original; distinta selección, actor o contenido con el mismo ID da 409. Guardar el resultado estable, no reconstruirlo desde el estado futuro.
+14. Impedir doble acuse definitivo por línea transferida mediante restricción única. Un acuse no se edita ni se elimina; observaciones posteriores, si se necesitan, serán hechos nuevos especificados, no UPDATE de historia.
+15. Crear una migración aditiva nueva y el snapshot/configuraciones EF pertinentes. No modificar/borrar migraciones históricas ni agregar filas ficticias para envíos previos. Índices por comercio/operador/fecha/ID, envío, transferencia y pendientes de acuse; comprobar el plan de consultas con datos selectivos.
+16. Habilitar y forzar RLS en todas las tablas nuevas, incluidas líneas. Conceder solo lecturas/escrituras necesarias; prohibir UPDATE/DELETE/TRUNCATE de hechos incluso por vías SQL directas según el patrón del sistema. Revisar permisos de propietario/migrador sin dejar al runtime como dueño.
+17. Si se usan funciones SECURITY DEFINER, limitar argumento/resultado/operación, dueño NOLOGIN sin superusuario/BYPASSRLS, search_path fijo, EXECUTE revocado a PUBLIC y revalidación completa del actor y recurso. No conceder acceso general a Envios/Bultos para evitar una función acotada.
+18. Aplicar la cadena en PostgreSQL/PostGIS efímero desde vacío y desde la revisión inmediatamente anterior a AP-04, usando el migrador restringido y roles runtime reales. Validar grants, FORCE RLS e inmutabilidad. No probar upgrades apuntando al PostgreSQL compartido de desarrollo o Cloud SQL.
+
+**Salida:** migración/grants verificables, modelo inmutable y consultas indexadas, sin pérdida de datos.
+
+### Fase 3 — Autorización y límites de aplicación
+
+19. Lectura Commerce: reutilizar `envios.consultar` y el ámbito Comercio. Para el acuse, agregar `devoluciones.gestionar` aplicable únicamente a Comercio en `CatalogoPermisos`; no habilitar `envios.gestionar` para Comercio.
+20. Actualizar catálogo persistido, validadores, listados de permisos, políticas API/portal y tests. Definir una asignación inicial mínima: rol propietario/administrador protegido del comercio mediante el mecanismo idempotente existente; roles personalizados solo por concesión explícita. Verificar cuentas ya existentes y altas nuevas en local/GCP.
+21. Los comandos operativos conservan `envios.gestionar` y actor Operador; la decisión de iniciar devolución conserva además su comprobación específica de decisiones operativas. Un administrador de plataforma no hereda por eso acceso al envío.
+22. Resolver usuario/comercio desde `IUsuarioActual`, validar acceso activo, organización y permiso vigentes dentro de la transacción usando los contratos existentes. Revalidar también antes de devolver un replay. La comprobación de un menú o claims antiguos no basta.
+23. Para un comercio con varios operadores, listar únicamente operadores presentes en sus datos autorizados o usar el catálogo permitido con respuestas que no revelen envíos ajenos. Cambiar operador cancela cargas anteriores y vacía la selección pendiente; evitar que una respuesta tardía contamine el contexto nuevo.
+
+**Salida:** políticas y casos de uso con pruebas negativas reales, sin ampliar permisos de operador al comercio.
+
+### Fase 4 — Implementar lectura consistente
+
+24. Crear los puertos/DTOs/casos de uso tipados de M02 y su registro DI. Reutilizar transacción contextual/RLS de los módulos existentes. SQL y EF pertenecen a Infrastructure.
+25. Consultar PostgreSQL canónico para estado, resultado, custodia, transferencias y acuses; no depender de Mongo/Kafka ni una proyección eventualmente consistente para decidir si el comercio puede actuar.
+26. Incluir devoluciones totales, parciales y completadas por existencia de hechos/resultados apropiados; no filtrar únicamente `Envio.Estado IN (EnDevolucion,Devuelto)`. Conservar la visibilidad histórica si el agregado cambia después.
+27. Proyectar solo datos necesarios: referencia del envío, operador, código de bulto propio, situación, motivo permitido, cantidades y fechas. No copiar fotos/firmas/documentos del destinatario, payloads privados, tokens de seguimiento ni datos de otros comercios.
+28. Implementar filtros/paginación y conteos SQL sin N+1 ni materializar todo el comercio. Asegurar una lectura coherente del detalle y capacidades mediante una consulta o transacción apropiada; no unir resultados tomados en instantes incompatibles.
+29. Probar consulta con miles de registros, iguales timestamps, múltiples páginas, cambios concurrentes y envíos antiguos con actividad reciente. Documentar índices/EXPLAIN sin atribuir capacidad productiva no medida.
+
+**Salida:** consultas seguras, acotadas y correctas para parciales y grandes colecciones.
+
+### Fase 5 — Completar transferencia física y acuse
+
+30. Refactorizar el escritor existente de devolución al comercio hacia el puerto común sin duplicación. Actualizar `RecepcionController`, `GestionarRutasUseCase.Recepcion.cs`, `IRutasRepository`, `RutasApiClient` y los handlers/formularios de Backoffice afectados para el contrato nuevo.
+31. Releer con bloqueo las filas del envío y bultos seleccionados, respetando el orden de bloqueos existente por operador y un orden determinista por ID. Validar actor, versiones, pertenencia y procedencia de devolución dentro de la misma transacción.
+32. Permitir transferencia tanto de bultos EnDevolucion/Deposito como de Devuelto/Deposito con procedencia de devolución acreditada. Mantener el significado histórico de Devuelto; no hacer un UPDATE masivo que lo convierta en otro estado para arreglar la UI.
+33. Seleccionar explícitamente los bultos físicamente presentes. Rechazar bultos entregados al destinatario, de retiro, ajenos, con custodia Repartidor/PendienteDeposito o de otra transferencia. Validar la política de excepciones de la matriz; no inferir presencia de GPS, cierre, rendición ni estado agregado.
+34. Guardar custodia Comercio, resultados/agregado cuando corresponda, versiones, transferencia y contexto de historia/eventos en una sola transacción. Para un bulto ya Devuelto, no inventar una transición Devuelto→Devuelto: registrar el hecho real de transferencia/custodia y conservar la semántica de versiones acordada.
+35. Implementar el acuse del comercio sobre líneas transferidas, con selección explícita, permiso vigente y observaciones obligatorias cuando declara diferencias. No tocar las filas operativas del envío/bulto. Registrar el resultado de comando y el acuse atómicamente.
+36. Demostrar carreras operador/operador, comercio/comercio y transferencia/acuse con conexiones PostgreSQL independientes: una confirmación válida, replay estable o conflicto controlado; sin líneas parciales ni duplicados. La autorización se comprueba también si el comando ya existe.
+37. Simular respuesta perdida después del commit, reinicio de API y reintento en otra instancia. Reutilizar el mismo ComandoId y contenido hasta resultado conocido. Con 409, recargar y requerir nueva intención explícita; no reescribir silenciosamente versiones del comando fallido.
+38. Reutilizar historia canónica y outbox para efectos que ya genera una transferencia. Verificar rollback completo si fallan auditoría/outbox. Evitar publicar dos veces desde trigger y código. El acuse no es entrega al destinatario ni inicia otro correo/webhook de éxito; un evento nuevo solo se agrega si se especifica su consumidor y semántica.
+39. Mantener importes, tarifas capturadas, reservas/ocupación, intentos, prueba de entrega, fechas físicas previas y retención de historia. No convertir observaciones del comercio en un reembolso o un extravío automático.
+
+**Salida:** ambos recorridos de transferencia funcionan y Commerce tiene una acción de gestión idempotente y auditable.
+
+### Fase 6 — API, ApiClient y UI
+
+40. Implementar rutas/DTOs y ProblemDetails declarando respuestas propias de API. Actualizar OpenAPI exportándolo desde la API ejecutable y el snapshot `frontend/contracts/nexoruta.openapi.json`; no editar el snapshot para ocultar una diferencia del servidor.
+41. Crear el ApiClient tipado y registrarlo en Commerce. Propagar token por petición con el patrón existente, nunca mediante estado global compartido. Mapear 401/403/404/409/503 a estados de sesión, permisos o error recuperable coherentes.
+42. Agregar `/devoluciones` y detalle bajo `Components/Features/Devoluciones`, con la política de lectura. Agregar el destino a `CommerceNavigationCatalog.cs`, consumido por Razor/Blazor, y acceso contextual desde Mis envíos sin duplicar el menú ni modificar su agrupación de estados ajena a AP-04.
+43. Bandeja: operador, fechas, situación y referencia; resultados paginados con resumen de bultos. Detalle: estado agregado real, progreso de devolución, filas de bultos con resultado/custodia, transferencia y acuse. No llamar «recibido por comercio» a un Devuelto/Deposito.
+44. Acción principal por contexto: abrir detalle o registrar recepción. Mostrar claramente el conjunto de bultos y la consecuencia del acuse; conforme/con observaciones con ayuda y errores junto a los campos. Un usuario de consulta conserva la información y no recibe controles de escritura.
+45. Reutilizar `shared/portal-design.css`, Bootstrap y componentes/patrones existentes. Skeleton solo durante lectura, `aria-busy`, mensaje de estado accesible y movimiento reducido. Conservar datos al refrescar; un guardado mantiene formulario/selección y muestra progreso sin sustituirlos por skeleton.
+46. Implementar carga, vacío, error recuperable, permisos, sesión vencida, organización suspendida, datos históricos sin evidencia, conflicto y éxito persistido. Preservar ComandoId/entrada en error de transporte, bloquear doble envío y cancelar solicitudes al navegar/cambiar filtros/operador.
+47. Soportar 320 CSS px, texto 200 %, teclado, foco visible y devolución de foco tras confirmación, nombres accesibles y contraste. Paginación de bultos/selecciones explícitas; no depender del color ni de hover. No perder selección silenciosamente al cambiar de página.
+48. Revisar la acción operativa de Backoffice para lotes totales/parciales con los mismos estados, permisos, versiones y errores. Conservar antiforgery y el patrón de envío único existente.
+
+**Salida:** recorrido operativo y autogestión completos usando el stack actual.
+
+### Fase 7 — Observabilidad y regresiones transversales
+
+49. Usar logs estructurados/TraceId/CorrelationId y métricas existentes de API. Registrar operación, resultado y duración; evitar documentos personales, observaciones libres, tokens y credenciales en logs. No usar IDs de envío/usuario como etiquetas métricas de alta cardinalidad.
+50. Si se añaden métricas de negocio, limitar etiquetas a tipo/resultado e integrarlas en la fuente de dashboards existente; no crear otro stack. Mostrar fallos y conflictos en los paneles existentes o consultas documentadas.
+51. Verificar que Kafka, historial Mongo, tablero, seguimiento público, notificaciones y webhooks conservan significado e idempotencia al cambiar custodia/versión. Actualizar aserciones por evento semántico, no relajando conteos globales. Un fallo de broker no debe bloquear una consulta/acuse canónicos de PostgreSQL ni perder un outbox persistido.
+52. Verificar que los reportes/cuenta mantienen los cargos de devolución retenidos según la política actual. El acuse no recalcula precios ni liquida automáticamente.
+
+### Fase 8 — Pruebas y CI obligatorios
+
+Crear pruebas que detecten las brechas y riesgos reales. Aprovechar `PostgresFixture`, `IntegrationApiFactory`, conexiones restringidas y el patrón Kestrel/portales de `GestionBrowserTests`; no usar una base del usuario. Nombres propuestos: `DevolucionesHttpTests`, `DevolucionesConcurrencyTests`, `DevolucionesBrowserTests`, `backend/tests/browser/returns.cjs`. Para verificar la aplicación renderizada, navegación, estados de interacción y capturas se autoriza además el uso de la skill `browser-act` solicitado por el usuario. Puede complementar la automatización reproducible existente; no reemplaza sus aserciones de PostgreSQL, RLS, HTTP ni concurrencia. La autorización es para verificar esta aplicación en local y no para iniciar sesiones, cambiar infraestructura ni operar GCP.
+
+| Grupo | Aserciones mínimas |
+| --- | --- |
+| Dominio | Elegibilidad total/parcial, custodia, acuse conforme/con observaciones, terminalidad/inmutabilidad, selección mixta atómica. |
+| Autorización/RLS | Dos operadores, dos comercios, comercio con ambos operadores, mismo código en tenants distintos; acceso revocado, rol revocado, solo lectura, operador contra acuse, comercio contra inicio/transferencia, ID ajeno en lista/detalle/comando/cursor/replay. SQL directo bajo runtime también rechazado. |
+| Estado/custodia | Total EnDevolucion→Devuelto/Deposito→Comercio; parcial entregado+devuelto; rendición sin recepción; cierre con incidencias; cancelación/extravío; retiro separado; bulto ajeno/ya entregado; agregado y bultos no elegidos intactos. |
+| Concurrencia/idempotencia | Dos APIs/actores con conexiones independientes; una transferencia/acuse por línea; mismo comando idéntico tras reinicio y cambio posterior; mismo ID con distinto actor/payload; autorización revocada antes de replay. |
+| Atomicidad | Excepción antes de commit y fallo de auditoría/outbox no dejan custodia/líneas/versiones parciales; respuesta cortada después del commit se recupera sin duplicación. |
+| Lecturas | Filtros SQL, [desde,hasta), fechas iguales, cursor inválido/otro filtro, cambio de operador, actividad reciente de envío viejo, histórico sin evidencia; 1/100/101 elementos y 501/1500 bultos sin truncamiento. |
+| Integraciones | Historia/outbox/Kafka/webhook correctos por evento, sin notificación falsa por acuse; cuenta/reportes/precios/custodia de otros flujos intactos. |
+| Migraciones | Base nueva y upgrade real a AP-04, migrador sin superusuario/BYPASSRLS, roles/grants/FORCE RLS, FK compuestas e índices; datos previos preservados y sin acuses ficticios. |
+| ApiClient/OpenAPI | DTOs, nulos, enums, parámetros, límites, errores tipados, contrato real y cancelación; API no expone entidades internas. |
+| Navegador real | Commerce→API→PostgreSQL y Backoffice→misma API; dos sesiones aisladas, filtro, detalle parcial, transferencia, acuse, reapertura, 409, doble click, pérdida de respuesta, permiso revocado y error/red lenta reales. |
+| Visual/a11y | 1440 y 320 px, texto 200 %, teclado/foco, carga/vacío/error/solo lectura, capturas inspeccionadas y axe complementario. Captura o HTTP no sustituyen revisión visual. |
+
+53. Implementar unitarias enfocadas en Domain/Application y HTTP/SQL con PostgreSQL real. Añadir pruebas de arquitectura de fronteras. Ejecutarlas antes de navegador para localizar fallos funcionales.
+54. Crear fixture sintética con comercio C1 en operadores A y B, C2 en A, devolución total, parcial con entregado al destinatario, transferencia pendiente, acuse conforme/con observaciones y registros previos al corte. Usar cuentas `example.test` y datos nuevos.
+55. Automatizar navegador con API Kestrel y ambos portales reales, puertos y key rings propios. Bloquear llamadas Mapbox/Geoapify y correo a terceros; no sembrar estados con UPDATE directo para el circuito principal: crear los hechos mediante comandos reales.
+56. Agregar `NEXORUTA_RETURNS_E2E_DIR` como gate explícito propuesto del harness y habilitarlo en `.github/workflows/ci.yml` raíz y CI Backend, con sus companions Frontend exactos. Descargar/restaurar dependencias con locks. CI debe publicar TRX, JSON y capturas, y demostrar que el test no fue omitido.
+57. Actualizar el inventario/sharding de integración existente si corresponde para que cada prueba nueva se ejecute, no solo se compile. Mantener los gates actuales de cobertura y los contratos de roles/migraciones.
+58. Ejecutar primero suites afectadas; después el CI obligatorio de los repositorios/PRs y del conjunto raíz. No repetir suites verdes por rutina sin cambios. Documentar fallos/omitidas y no convertir una ejecución parcial en aceptación completa.
+
+Comandos de referencia desde la raíz, una vez creados los tests y con Docker/SDK/locks preparados (el filtro nombra clases propuestas, no pruebas existentes):
+
+```bash
+dotnet restore backend/NexoRuta.sln --locked-mode
+dotnet build backend/NexoRuta.sln -c Release --no-restore
+dotnet restore frontend/NexoRuta.sln --locked-mode
+dotnet build frontend/NexoRuta.sln -c Release --no-restore
+dotnet test backend/tests/NexoRuta.UnitTests -c Release --no-build --no-restore --filter 'FullyQualifiedName~Devolucion'
+dotnet test backend/tests/NexoRuta.ArchitectureTests -c Release --no-build --no-restore
+dotnet test backend/tests/NexoRuta.IntegrationTests -c Release --no-build --no-restore --filter 'FullyQualifiedName~DevolucionesHttpTests|FullyQualifiedName~DevolucionesConcurrencyTests'
+# Configurar el módulo Playwright y Chromium con las versiones fijadas del harness existente.
+export NEXORUTA_RETURNS_E2E_DIR="$PWD/.local/ap04-evidence/browser"
+dotnet test backend/tests/NexoRuta.IntegrationTests -c Release --no-build --no-restore --filter 'FullyQualifiedName~DevolucionesBrowserTests'
+dotnet test frontend/tests/NexoRuta.ApiClient.Tests -c Release --no-build --no-restore --filter 'FullyQualifiedName~Devolucion|FullyQualifiedName~OpenApiContractTests'
+```
+
+Registrar cantidad descubierta/ejecutada; un filtro sin tests es fallo del procedimiento. Mantener HTTP y navegador en invocaciones separadas. Usar los scripts/companion configurados del checkout y no suponer que `bin` antiguo es la implementación probada.
+
+## 6. Aceptación local con Docker y WSL
+
+59. En WSL comprobar `docker version`, `docker info`, `docker compose version`, SDK y acceso al daemon de Docker Desktop/Engine elegido. Registrar contexto del daemon y Compose project; no usar simultáneamente dos runtimes sobre los mismos puertos/bases.
+60. Preferir checkout en el filesystem Linux para rendimiento/casing. Si se usa `/mnt/c`, comprobar volúmenes/permisos/casing y mantener bin/obj separados de procesos Windows. No recompilar DLLs cargadas por portales ni depender de procesos de otra tarea.
+61. Usar datos sintéticos en un proyecto/volúmenes propios para aceptación automática. Las fixtures HTTP/browser crean su PostgreSQL/PostGIS con roles restringidos. Para inspección persistente del entorno habitual, identificar expresamente el destino antes de migrar y conservar su respaldo/procedimiento; no usar `down -v`, reset de offsets ni borrados como preparación.
+62. Revisar `compose.yaml` + `compose.override.yaml` efectivos y las variables ignoradas locales, sin imprimir secretos. Aplicar el orden actual: `rls-migrator` → `rls-role-provisioner` → API/workers/portales. API mantiene migraciones/seeds automáticos deshabilitados. No editar `__EFMigrationsHistory` para simular un upgrade.
+63. En un entorno propio autorizado y preparado, el arranque normal es:
+
+```bash
+docker compose config --quiet
+docker compose build
+docker compose up -d
+docker compose ps
+```
+
+El migrador manual documentado usa `docker compose --profile rls-admin run --rm --build rls-migrator`, solo tras confirmar el destino local. Usar el Compose efectivo y sus servicios reales; no fijar contraseñas del README histórico. `compose.dev.yaml` es opcional para desarrollo, no una condición de funcionamiento.
+
+64. Verificar API `localhost:5000`, Backoffice `localhost:5101`, Commerce `localhost:5102`; dentro de Compose el ApiClient usa el host/puerto interno configurado (`api:8080`), no localhost del contenedor. No agregar URLs de Windows, rutas absolutas ni `host.docker.internal` como requisito de AP-04.
+65. Repetir el circuito sintético completo: decisión/retorno/recepción/transferencia en Backoffice → bandeja y acuse en Commerce → reapertura. Verificar roles reales y persistencia después de reiniciar API/Commerce conservando volúmenes. Probar broker detenido en un entorno propio: consultas/acuses canónicos no deben depender de su disponibilidad.
+66. Registrar build, HTTP/SQL, automatización y revisión visual por separado en `docs/auditorias/ap-04/validacion.md`; adjuntar archivos sintéticos a `.local/ap04-evidence`, excluyendo claves, sesiones y observaciones privadas.
+
+Alternativa para un agente Linux Cloud con Docker: usar `scripts/cloud/environment-install.sh`, cargar `scripts/cloud/env-agent.sh` y seguir `dev.py` según continuidad vigente, con fuentes exactas. El runtime mínimo no levanta todos los brokers: las pruebas de efectos asíncronos usan fixtures propias o el stack documentado completo. Este camino no depende de `.env`/DPAPI/servicios del Windows del usuario y tampoco demuestra operación GCP por sí solo.
+
+## 7. Entrega y aceptación remota en GCP
+
+67. Construir AP-04 con la misma configuración y contratos que en local. No crear un modo «devoluciones GCP», endpoints Development para operar devoluciones, almacenamiento local de acuses, SQLite por VM ni locks en memoria. PostgreSQL/Cloud SQL es la autoridad compartida de concurrencia/idempotencia.
+68. Revisar `deploy/gcp/compose.yaml`, `scripts/gcp/delivery.py`, `vm_deploy.py`, `deploy/gcp/sql/postflight.sql`, provisioning de roles y el comando `database-migrate`. Incluir la migración/grants nuevos en las imágenes/artefactos existentes. No se prevé nuevo recurso IaC, broker o secreto; justificar y documentar cualquier cambio que aparezca durante implementación.
+69. Validar la cadena de migraciones/grants con una base efímera representativa de Cloud SQL y migrador sin privilegios globales. API/worker no reciben CREATE ROLE, superusuario ni BYPASSRLS. Verificar que el provisionador reaplica permisos de forma idempotente sin borrar accesos existentes.
+70. Publicar primero los commits de Backend y Frontend en sus ramas de feature; después fijar esos SHA exactos en el principal y abrir las PRs según flujo vigente. Mantener Mobile en su SHA elegido salvo cambio justificado. No usar tags `latest` mezclados; la evidencia debe identificar combinación exacta y digests.
+71. Pasar CI de componentes y CI integrado obligatorio del principal, incluido navegador AP-04 no omitido y migraciones/roles. Actualizar documentación del contrato, permisos, operación y demostración antes de solicitar promoción/despliegue.
+72. **Gate de operación remota:** preparar un diff/release y plan de datos revisables. El pedido actual autoriza elaborar este plan; ejecutar `start`, `update`, migraciones de la base compartida, bootstrap/apply o publicación operativa requiere autorización para ese destino. No tomar el acceso a GCP como aprobación implícita.
+73. Con despliegue autorizado, usar los workflows vigentes y una release completa. `main` consume la última release publicada; `develop` construye/despliega su combinación y comparte VMs/Cloud SQL. Por eso no probar migraciones sobre develop suponiendo una base descartable. Inspeccionar workflow y manifiesto del canal elegido antes de dispararlo.
+
+```bash
+# Solo en la fase autorizada, con el canal y release previamente comprobados.
+gh workflow run vm-controls.yml --repo NexoRuta/NexoRuta --ref main -f operation=update
+gh run list --repo NexoRuta/NexoRuta --workflow vm-controls.yml
+gh run watch ID_EJECUCION --repo NexoRuta/NexoRuta
+```
+
+Si las VMs están apagadas, `update` no las enciende; `start` inicia una sesión y costos por su ventana vigente. No dispararlo por rutina. Ver `infra/gcp/guia-uso-actions.md`, `infra/gcp/README.md` e `infra/gcp/integration-tags.md`.
+
+74. El procedimiento actual retira ambos nodos del balanceador, detiene escritores, migra una vez y arranca la release objetivo. Conservar ese corte coordinado al cambiar el contrato de transferencia; no exigir compatibilidad entre binarios viejos/nuevos. Si el workflow real avanzó, reconciliar su procedimiento sin saltar protecciones.
+75. Confirmar en A y B: misma release/digest, migración aplicada una vez, roles runtime acotados, variables API internas, Data Protection compartida y permisos/keys correctos para sesiones Commerce. Conservar HTTPS, forwarded headers, antiforgery, WebSocket de Blazor y configuración del balanceador actuales.
+76. Hacer smoke HTTPS con cuentas sintéticas dedicadas y operadores/comercios propios: listado, parcial, transferencia, acuse, historial, refresh y rechazos cruzados. No reutilizar envíos del usuario ni leer secretos en los artefactos. Tomar hosts del resumen efectivo de sesión, sin copiar IPs históricas de documentos.
+77. Probar concurrencia y replay entre API A y B identificadas por separado mediante el mecanismo operativo aprobado, conservando TLS/autenticación. Confirmar por telemetría el nodo que procesó cada llamada; el balanceador alternando por azar no demuestra multiinstancia. No publicar puertos privados ni añadir un header de bypass a producción.
+78. Reiniciar una instancia y repetir el mismo comando en la superviviente: mismo resultado persistido, sin acuse/transferencia/evento duplicados. Ejecutar únicamente sobre datos/servicios autorizados; no usar esa prueba para apagar infraestructura ajena.
+79. Verificar métricas, errores, correlación y comportamiento de colas/proyecciones existentes. Comparar datos de cuenta/reportes antes/después. Registrar tiempos y contexto reales sin afirmar SLO/capacidad productiva a partir de un smoke.
+80. Fallo de migración: mantener escritores detenidos según el runbook y diagnosticar. Fallo posterior: aislar nodo fallido y corregir hacia delante con nueva release compatible con el esquema presente. No hacer Down destructivo, restaurar contenedores viejos contra esquema nuevo por intuición ni borrar datos/volúmenes para recuperar. La demo no dispone de recuperación automática por backups; preparar previamente cualquier protección adicional necesaria y no inventar que existe.
+
+## 8. Criterios de cierre y entregables
+
+AP-04 podrá pasar a Done cuando se demuestre todo lo siguiente, en una combinación de fuentes identificada:
+
+- [ ] Fuente literal, interpretación de gestión y reglas de actor/estado documentadas y aceptadas para AP-04.
+- [ ] Bandeja/detalle Commerce propios por operador, con devoluciones totales, parciales, históricas y completadas; filtros y paginación en servidor.
+- [ ] Acción de gestión Commerce persistente: acuse conforme/con observaciones, permisos vigentes, auditoría inmutable y reapertura.
+- [ ] Transferencia operativa correcta tanto para EnDevolucion/Deposito como para Devuelto/Deposito, sin confundir custodia con el agregado ni tocar bultos entregados.
+- [ ] Comandos atómicos/idempotentes y conflictos probados con dos APIs/actores y PostgreSQL real; replay vuelve a autorizar.
+- [ ] RLS/grants/migración cumplen aislamiento y se aplican a cuentas existentes/nuevas; ninguna lectura/escritura ajena por API o SQL runtime.
+- [ ] Historia, outbox y consumidores conservan significado; no hay reembolsos, cambios de tarifa, liberaciones o datos físicos inventados.
+- [x] OpenAPI, ApiClient, Commerce y Backoffice actualizados juntos, sin aliases de compatibilidad innecesarios; rutas y campos clave verificados por el test de contrato versionado.
+- [ ] Tests pertinentes y CI integrado verdes, cantidades/omitidas comprobadas; test browser nuevo realmente ejecutado.
+- [ ] Revisión visual/teclado a 1440/320 px y texto 200 %, con estados lentos/errores activados y evidencia separada. `browser-act` está autorizado para esta revisión desde el navegador local, además del harness de navegador fijado del repositorio.
+- [ ] Circuito local Docker/WSL reproducible, reinicio sin pérdida de acuses y sin dependencia de archivos privados de otra máquina.
+- [ ] Aceptación GCP autorizada sobre release/digests correctos en ambos nodos, con HTTPS, permisos y replay; o pendiente operacional explícito que mantenga Do tests y no Done.
+- [ ] Documentación y evidencias publicables sin secretos/datos privados; SHAs de componentes y gitlinks de raíz coherentes.
+
+Entregables de implementación: especificación AP-04 y decisión de alcance; cambios Domain/Application/Infrastructure/API; migración y permisos; OpenAPI/ApiClient; UI Commerce y adaptación puntual Backoffice; tests y configuración CI; guía local/GCP y demostración con fixtures; informe de validación por categoría y manifest de fuentes. Actualizar la card con enlaces a PRs/artefactos, brechas reales y estado correspondiente. No cerrar CU-06, AP-01, AP-09 ni validación nativa por haber completado este circuito web.
+
+## 9. Instrucción de ejecución resumida para el próximo agente
+
+«Implementá AP-04 siguiendo este plan y las instrucciones del checkout. Primero revalidá las fuentes y la matriz funcional; después resolvé la transferencia total/parcial, permisos/RLS, lectura, acuse y UI. Reutilizá el dominio y los contratos de aplicación; mantené separado el hecho físico del acuse comercial. Trabajá con datos sintéticos y validá PostgreSQL restringido, ambos portales y el replay multiinstancia. Conservá la selección de código, datos, secretos y protecciones existentes. Entregá cambios revisables, pruebas/evidencia y un procedimiento local/GCP; no ejecutes operaciones remotas sin autorización del destino. Si falta una capacidad de ejecución, identificá exactamente qué criterio queda sin probar y mantené la card abierta».
+
+## 10. Comprobaciones y estado de ejecución (10/11/2026)
+
+Se reconsultó la card mediante MCP: continúa en **In progress**. Se conserva ese estado porque faltan aceptación visual/interactiva completa, el circuito Docker con reinicio y persistencia, CI integrado y las comprobaciones remotas multiinstancia/GCP. No se desplegó ni se escribió en servicios remotos.
+
+- **Compilación:** las soluciones completas Backend y Frontend compilaron sin errores antes de los últimos ajustes. Después, el proyecto de integración Backend se recompiló con el código final y el arranque Cloud sintético reconstruyó API, Backoffice, Commerce y Tracking; el test de contrato frontend recompiló sus proyectos referenciados y pasó en ejecución serial. Los warnings registrados son de paquetes/analyzers ya existentes.
+- **HTTP/OpenAPI:** `scripts/cloud/dev.py verify` pasó en PostgreSQL/PostGIS sintético con rol `nexoruta_api_runtime` sin superusuario ni `BYPASSRLS` y 91 migraciones aplicadas. API y Commerce respondieron readiness 200. `GET /openapi/v1.json` respondió 200; se regeneró desde esa API el snapshot versionado, con los cinco endpoints nuevos y sin `/api/deposito/envios/{id}/devolucion-comercio`.
+- **Automatización:** el caso C31 de entrega parcial ejecutó y aprobó sus tres variantes, incluida transferencia por bulto, consulta Commerce, permiso 403, acuse inmutable, replay idempotente y conflicto por reutilizar el comando con contenido distinto. La prueba `CommerceReturnsContractPublishesCurrentRoutesAndVersionedCommands` pasó (1/1). No se ejecutó la suite completa ni CI integrado.
+- **BrowserAct/visual:** se abrió Commerce con cuenta sintética en `http://127.0.0.1:5102/devoluciones`, se inspeccionaron navegación, filtros y estado vacío y se guardó `.local/ap04-evidence/commerce-devoluciones-desktop.png` (1366 px de ancho). La revisión visual de escritorio confirmó jerarquía y controles visibles. El circuito Blazor Server no estabilizó su conexión (`/_blazor/negotiate` repetía reintentos); por eso el envío del filtro navegó como GET y no cuenta como prueba de interacción funcional. Sin envíos de devolución sintéticos disponibles para Commerce, detalle/acuse tampoco se revisaron en navegador. No se verificaron 1440/320 px ni ampliación de texto al 200 %.
+- **Local y remoto:** Windows no tenía Docker CLI y el socket Docker de WSL no era accesible para el usuario ni para root. Se usó `scripts/cloud/dev.py` con PostgreSQL 18/PostGIS 3.7 y datos/roles sintéticos aislados en el filesystem Linux de WSL; no se usaron `.env`, servicios o bases del usuario, ni se borraron volúmenes. Este camino sí valida API/UI por HTTP, migraciones y RLS, pero no acredita Compose/Docker, reinicio persistente completo ni ejecución en GCP. A y B, Cloud SQL, despliegue y migraciones remotas quedan pendientes de autorización específica.
+
+La evidencia detallada por categoría, comandos y límites está en `docs/auditorias/ap-04/validacion.md`. Los criterios de cierre del apartado 8 permanecen pendientes salvo donde se documente explícitamente una comprobación parcial; la card no se mueve a Do tests ni a Done en esta ejecución.
