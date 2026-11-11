@@ -188,6 +188,25 @@ def recent_seed_errors():
         exception = event.get("Exception", "")
         first_line = exception.splitlines()[0] if isinstance(exception, str) and exception else ""
         exception_match = re.search(r"\b([A-Za-z0-9_.+]*(?:Exception|Error))(?=[: (])", first_line)
+        exception_summary = first_line.partition(": ")[2].strip()
+        if exception_summary:
+            exception_summary = re.sub(
+                r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
+                "<id>",
+                exception_summary,
+            )
+            exception_summary = re.sub(
+                r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+                "<email>",
+                exception_summary,
+            )
+            exception_summary = re.sub(
+                r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
+                "<ip>",
+                exception_summary,
+            )
+            exception_summary = re.sub(r"\bAP04-[A-Za-z0-9-]+\b", "<fixture>", exception_summary)
+            exception_summary = exception_summary[:200]
         sqlstate_match = re.search(r"\b([0-9A-Z]{5}):", exception if isinstance(exception, str) else "")
         constraint_match = re.search(
             r'constraint\s+["\']([A-Za-z0-9_.-]{1,120})["\']',
@@ -199,6 +218,7 @@ def recent_seed_errors():
             error_type = exception_match.group(1) if exception_match else "unknown"
         errors.append({
             "type": error_type,
+            "summary": exception_summary or None,
             "sqlstate": sqlstate_match.group(1) if sqlstate_match else None,
             "constraint": constraint_match.group(1) if constraint_match else None,
             "httpStatus": properties.get("StatusCode"),
