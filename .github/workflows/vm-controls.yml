@@ -5,11 +5,11 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: 'Start/update deploy the selected channel. Stop powers down the demo. Seed-demo creates or synchronizes general synthetic accounts and shipments. Repair-ssh removes obsolete CI keys without operating the VMs.'
+        description: 'Start/update deploy the selected channel. Stop powers down the demo. Seed-demo creates or synchronizes general synthetic accounts and shipments; seed-status reads its status. Repair-ssh removes obsolete CI keys without operating the VMs.'
         required: true
         default: start
         type: choice
-        options: [start, update, stop, seed-demo, repair-ssh]
+        options: [start, update, stop, seed-demo, seed-status, repair-ssh]
 
 permissions:
   contents: read
@@ -184,7 +184,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/develop' &&
-      inputs.operation == 'seed-demo'
+      (inputs.operation == 'seed-demo' || inputs.operation == 'seed-status')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: nexoruta-demo
@@ -228,14 +228,20 @@ jobs:
           "$NEXORUTA_VM_NAME:~/nexoruta-seed-demo.py"
           --project="$GCP_PROJECT_ID" --zone="$GCP_ZONE"
           --tunnel-through-iap --quiet
-      - name: Run the general seed using the VM runtime identity
+      - name: Run the selected seed operation using the VM runtime identity
         env:
           CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
-        run: >-
-          gcloud compute ssh "$NEXORUTA_VM_NAME"
-          --project="$GCP_PROJECT_ID" --zone="$GCP_ZONE"
-          --tunnel-through-iap --quiet
-          --command="python3 ~/nexoruta-seed-demo.py"
+          NEXORUTA_SEED_OPERATION: ${{ inputs.operation }}
+        run: |
+          case "$NEXORUTA_SEED_OPERATION" in
+            seed-demo) remote_command='python3 ~/nexoruta-seed-demo.py' ;;
+            seed-status) remote_command='python3 ~/nexoruta-seed-demo.py --status-only --diagnose-last-failure' ;;
+            *) echo "Unsupported seed operation." >&2; exit 2 ;;
+          esac
+          gcloud compute ssh "$NEXORUTA_VM_NAME" \
+            --project="$GCP_PROJECT_ID" --zone="$GCP_ZONE" \
+            --tunnel-through-iap --quiet \
+            --command="$remote_command"
       - name: Remove the temporary seed helper
         if: always()
         env:

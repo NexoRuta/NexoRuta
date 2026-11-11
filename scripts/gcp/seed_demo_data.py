@@ -5,7 +5,10 @@ credential or bearer token is written to disk or printed to stdout.
 """
 
 import base64
+import argparse
 import json
+import re
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -121,7 +124,84 @@ def api_request(origin, method, path, bearer=None, payload=None, timeout=30):
     return status, value
 
 
+def seed_status(origin, bearer):
+    status, value = api_request(
+        origin,
+        "GET",
+        "/api/admin/demo-data",
+        bearer=bearer,
+    )
+    if status != 200 or not isinstance(value.get("sembrada"), bool):
+        raise RuntimeError(f"Could not read general seed status (HTTP {status}).")
+    return value
+
+
+def recent_seed_errors():
+    """Return only error type and PostgreSQL identifiers from the target route."""
+    try:
+        result = subprocess.run(
+            ["sudo", "-n", "docker", "logs", "--since=30m", "nexoruta-api"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+
+    errors = []
+    for line in (result.stdout + "\n" + result.stderr).splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        properties = event.get("Properties", {})
+        if not isinstance(properties, dict):
+            continue
+        path = str(properties.get("RequestPath", properties.get("Route", "")))
+        if "/api/admin/demo-data" not in path and "api/admin/demo-data" not in path:
+            continue
+        exception = event.get("Exception", "")
+        first_line = exception.splitlines()[0] if isinstance(exception, str) and exception else ""
+        exception_match = re.search(r"\b([A-Za-z0-9_.+]*(?:Exception|Error))(?=[: (])", first_line)
+        sqlstate_match = re.search(r"\b([0-9A-Z]{5}):", exception if isinstance(exception, str) else "")
+        constraint_match = re.search(
+            r'constraint\s+["\']([A-Za-z0-9_.-]{1,120})["\']',
+            exception if isinstance(exception, str) else "",
+            flags=re.IGNORECASE,
+        )
+        error_type = properties.get("ErrorType")
+        if not isinstance(error_type, str) or error_type == "none":
+            error_type = exception_match.group(1) if exception_match else "unknown"
+        errors.append({
+            "type": error_type,
+            "sqlstate": sqlstate_match.group(1) if sqlstate_match else None,
+            "constraint": constraint_match.group(1) if constraint_match else None,
+        })
+    return errors[-5:]
+
+
+def counts(value):
+    result = {
+        "operators": value.get("operadores"),
+        "commerces": value.get("comercios"),
+        "shipments": value.get("envios"),
+        "routes": value.get("rutas"),
+        "operations": value.get("operaciones"),
+    }
+    if any(not isinstance(item, int) or item < 0 for item in result.values()):
+        raise RuntimeError("The general seed returned invalid counts.")
+    return result
+
+
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--status-only", action="store_true")
+    parser.add_argument("--diagnose-last-failure", action="store_true")
+    options = parser.parse_args()
+
     origin, password = read_runtime_secret()
     origin = validate_api_origin(origin)
 
@@ -137,14 +217,17 @@ def main():
     if not isinstance(bearer, str) or not bearer:
         raise RuntimeError("Platform login did not return an access token.")
 
-    status, before = api_request(
-        origin,
-        "GET",
-        "/api/admin/demo-data",
-        bearer=bearer,
-    )
-    if status != 200 or not isinstance(before.get("sembrada"), bool):
-        raise RuntimeError(f"Could not read general seed status (HTTP {status}).")
+    before = seed_status(origin, bearer)
+    if options.status_only:
+        result = {
+            "result": "status-only",
+            "seeded": before["sembrada"],
+            **counts(before),
+        }
+        if options.diagnose_last_failure:
+            result["recentErrors"] = recent_seed_errors()
+        print(json.dumps(result, separators=(",", ":")))
+        return
 
     # This is one idempotent call. An existing seed synchronizes synthetic
     # actor credentials/permissions and returns 409 without deleting history.
@@ -157,21 +240,21 @@ def main():
         timeout=600,
     )
     if status not in (200, 409) or result.get("sembrada") is not True:
+        after = seed_status(origin, bearer)
+        failure = {
+            "result": "failed",
+            "httpStatus": status,
+            "seededAfter": after["sembrada"],
+            **counts(after),
+        }
+        failure["recentErrors"] = recent_seed_errors()
+        print(json.dumps(failure, separators=(",", ":")), file=sys.stderr)
         raise RuntimeError(f"The general seed did not complete (HTTP {status}).")
 
-    counts = {
-        "operators": result.get("operadores"),
-        "commerces": result.get("comercios"),
-        "shipments": result.get("envios"),
-        "routes": result.get("rutas"),
-        "operations": result.get("operaciones"),
-    }
-    if any(not isinstance(value, int) or value < 0 for value in counts.values()):
-        raise RuntimeError("The general seed returned invalid counts.")
     print(json.dumps({
         "result": "created" if not before["sembrada"] else "synchronized-existing",
         "seededBefore": before["sembrada"],
-        **counts,
+        **counts(result),
     }, separators=(",", ":")))
 
 
