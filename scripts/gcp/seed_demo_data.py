@@ -147,12 +147,13 @@ def recent_seed_errors():
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return []
+        return {"logsAvailable": False, "matchingEvents": 0, "errors": []}
     if result.returncode != 0:
-        return []
+        return {"logsAvailable": False, "matchingEvents": 0, "errors": []}
 
     errors = []
-    for line in (result.stdout + "\n" + result.stderr).splitlines():
+    lines = (result.stdout + "\n" + result.stderr).splitlines()
+    for line in lines:
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
@@ -161,7 +162,8 @@ def recent_seed_errors():
         if not isinstance(properties, dict):
             continue
         path = str(properties.get("RequestPath", properties.get("Route", "")))
-        if "/api/admin/demo-data" not in path and "api/admin/demo-data" not in path:
+        message = str(event.get("Message", event.get("MessageTemplate", "")))
+        if not any(value in path or value in message for value in ("/api/admin/demo-data", "api/admin/demo-data")):
             continue
         exception = event.get("Exception", "")
         first_line = exception.splitlines()[0] if isinstance(exception, str) and exception else ""
@@ -179,8 +181,13 @@ def recent_seed_errors():
             "type": error_type,
             "sqlstate": sqlstate_match.group(1) if sqlstate_match else None,
             "constraint": constraint_match.group(1) if constraint_match else None,
+            "httpStatus": properties.get("StatusCode"),
         })
-    return errors[-5:]
+    return {
+        "logsAvailable": True,
+        "matchingEvents": len(errors),
+        "errors": errors[-5:],
+    }
 
 
 def counts(value):
