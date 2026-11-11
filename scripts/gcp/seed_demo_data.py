@@ -139,17 +139,37 @@ def seed_status(origin, bearer):
 def recent_seed_errors():
     """Return only error type and PostgreSQL identifiers from the target route."""
     try:
-        result = subprocess.run(
-            ["sudo", "-n", "docker", "logs", "--since=30m", "nexoruta-api"],
+        containers = subprocess.run(
+            [
+                "sudo", "-n", "docker", "ps",
+                "--filter", "label=com.docker.compose.service=api",
+                "--format", "{{.Names}}",
+            ],
             capture_output=True,
             text=True,
             timeout=20,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return {"logsAvailable": False, "matchingEvents": 0, "errors": []}
+        return {"logsAvailable": False, "reason": "container-discovery-failed", "matchingEvents": 0, "errors": []}
+    if containers.returncode != 0:
+        return {"logsAvailable": False, "reason": "container-discovery-failed", "matchingEvents": 0, "errors": []}
+    names = [line.strip() for line in containers.stdout.splitlines() if line.strip()]
+    if len(names) != 1 or not re.fullmatch(r"[A-Za-z0-9_.-]+", names[0]):
+        return {"logsAvailable": False, "reason": "api-container-not-unique", "matchingEvents": 0, "errors": []}
+
+    try:
+        result = subprocess.run(
+            ["sudo", "-n", "docker", "logs", "--since=30m", "--tail=1000", names[0]],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return {"logsAvailable": False, "reason": "container-logs-unavailable", "matchingEvents": 0, "errors": []}
     if result.returncode != 0:
-        return {"logsAvailable": False, "matchingEvents": 0, "errors": []}
+        return {"logsAvailable": False, "reason": "container-logs-unavailable", "matchingEvents": 0, "errors": []}
 
     errors = []
     lines = (result.stdout + "\n" + result.stderr).splitlines()
@@ -185,6 +205,7 @@ def recent_seed_errors():
         })
     return {
         "logsAvailable": True,
+        "reason": None,
         "matchingEvents": len(errors),
         "errors": errors[-5:],
     }
