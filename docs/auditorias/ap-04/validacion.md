@@ -83,3 +83,34 @@ Esta pasada encontró y corrigió un falso positivo al validar AP-04 autenticado
 - **Workflow de deploy:** `vm-controls.yml`, operación `update`, run `43076158807`, terminó `success`; el job `deploy` duró 8m15s. La publicación de fuente y la operación manual terminaron sin errores.
 - **Seed general:** `vm-controls.yml`, operación `seed-demo`, run `43078138229`, terminó `success` en 33s. El helper leyó en memoria el secreto runtime con la identidad de la VM e inició la sincronización usando `admin@nexoruta.test`; el contenido del secreto no se imprimió ni persistió.
 - **Alcance de esta pasada:** por instrucción, solo se comprobó el resultado de los workflows; no se hicieron llamadas HTTP, consultas de estado ni comprobaciones BrowserAct posteriores al deploy. El éxito del seed no acredita un ciclo AP-04: no se registraron hechos de devolución, transferencia física ni acuse. La captura pre-fix, el bloqueo de cobertura y las limitaciones del apartado anterior siguen vigentes; la card permanece `In progress`.
+
+## Actualización posterior: despliegue AP-04 y BrowserAct en GCP (11/11/2026)
+
+Esta actualización supersede, para la nueva fuente desplegada, la nota anterior de que faltaba comprobar BrowserAct tras el arreglo de recepción inicial.
+
+### Compilación
+
+- `NexoRuta.Commerce.csproj` compiló tras añadir el estado localizado de 404 y quitar el reintento para errores permanentes: 0 errores y 1 warning existente NU1510.
+- `NexoRuta.IntegrationTests` compiló con el filtro C31 actualizado: 0 errores y 3 warnings existentes (NU1510, xUnit2031 y EF1003). C31 no se ejecutó contra PostgreSQL durante esta pasada.
+
+### Workflow y HTTP
+
+- `vm-controls.yml` operation `update`, run `43082801986`: `publish_develop` y `deploy` completaron con `success`; el job de despliegue duró 8m08s. Fuentes fijadas: root `593095831d4b09e736df61b13f1f331e60d92225`, Backend `bac0b0b41c21993a515bacc420915d66a2fd3095`, Frontend `8974044e59f4b52940c5e16841174d0ca83f3460`, Mobile `53f6be2cdec48f48e30e390060feeaefb5be0ead`.
+- Tras autenticarse de nuevo, la navegación autenticada y `/_blazor/initializers`/`/_blazor/negotiate` devolvieron HTTP 200. Los envíos del filtro por botón y Enter se reflejaron en la pantalla.
+- En la sesión anterior vencida, BrowserAct observó varios 503 de `/_blazor/negotiate`; la recarga y reautenticación restablecieron el circuito. En esas páginas también apareció un GET 404 de `/js/portal-interactions.js`; no impidió las interacciones verificadas de AP-04 y queda como hallazgo transversal para triage.
+- No se consultó directamente el API de detalle, así que el resultado HTTP de esa llamada no se afirma aquí. El estado UI observado para el envío fuera del circuito es el 404 seguro documentado abajo.
+
+### Automatización BrowserAct y revisión visual
+
+- Con Commerce C2 autenticado, se filtró la referencia `AP04-GCP-20261111-bf71bf21`. La bandeja mostró “No hay devoluciones para estos filtros”. Se aplicó con el botón y repitió con Enter desde la referencia. Esto verifica que la recepción normal en depósito no se muestre como devolución.
+- En la ruta del detalle para el mismo envío, BrowserAct observó “No encontramos una devolución disponible para este envío.”, el enlace de retorno y ningún botón “Reintentar”. Captura revisada: `commerce-devoluciones-gcp-after-fix-detail-es.png` (1904 × 985).
+- La captura `commerce-devoluciones-gcp-detail-before-ui-fix.png` conserva el estado anterior al ajuste de Frontend: “Not Found” y un botón “Reintentar” para el mismo 404 permanente.
+- Captura revisada de filtros y estado vacío: `commerce-devoluciones-gcp-after-fix-filter-final.png` (1904 × 985). La navegación interactiva del filtro terminó en el estado esperado.
+- Se conservan las revisiones previas de la bandeja a 1440 px y 320 px (`commerce-devoluciones-gcp-after-fix-1440.png`, `commerce-devoluciones-gcp-after-fix-320.png`). Son anteriores al despliegue menor del mensaje de error del detalle, que no cambió la bandeja. La captura 720 CSS px/DPR 2 (`commerce-devoluciones-gcp-after-fix-zoom-equivalent.png`) es una aproximación de reflow y no equivale a zoom de texto nativo al 200 %.
+- BrowserAct inició con una sesión expirada y hubo reintentos de conexión; tras el login de C2 y una recarga limpia, navegar, aplicar filtros, enviar con Enter y renderizar el detalle funcionó. Se cerró la sesión al finalizar.
+
+### Limitaciones funcionales restantes
+
+- La prueba usa un envío sintético recibido normalmente en depósito, deliberadamente fuera del circuito AP-04. No valida un retorno elegible, filas de bultos, acuse, refresh/reapertura con devolución ni replay de una operación válida.
+- La planificación de ruta para ese escenario sigue bloqueada por la revisión de cobertura verificable. No se alteró custodia por SQL ni se inventó un hecho físico.
+- Siguen pendientes test C31 ejecutado en PostgreSQL, Compose local y persistencia tras reinicio, CI integrada, concurrencia/replay A/B, zoom de texto nativo al 200 %, estados de carga/error y un ciclo BrowserAct con devolución y acuse válidos. La card continúa `In progress`.
