@@ -133,3 +133,29 @@ Esta actualización supersede, para la nueva fuente desplegada, la nota anterior
 - **GCP:** `vm-controls.yml` `start` se despachó tres veces para el mismo root commit: runs `43097132554`, `43097559076` y `43097988044`. Los tres terminaron `startup_failure` antes de crear jobs; la API de Actions informa cero check runs/job logs. Se solicitó reejecutar `43097988044`, pero Actions no creó el intento 2 (`attempt=1`; la consulta al endpoint del intento 2 devolvió 404). Por tanto, el release anterior sigue siendo el último desplegado; no se publicó el backend nuevo ni se ejecutó `seed-demo` sobre este código.
 - **BrowserAct remoto:** no se comprobó la fixture ni el acuse en la app GCP porque el último release desplegado aún no contiene esta implementación. Las verificaciones BrowserAct previas documentadas arriba no cubren el nuevo escenario.
 - **Estado:** el seed quedó implementado y publicado como fuente, pero la validación runtime en Docker/WSL y GCP, el seed remoto, el flujo de acuse BrowserAct y el workflow de despliegue siguen pendientes. Mantener AP-04 `In progress`.
+
+## Validación local Docker/WSL previa al siguiente deploy (11/11/2026)
+
+Esta sección agrega el resultado local; no modifica los resultados históricos de GCP. La versión remota anterior todavía no incluye el commit Backend `ae488b7`.
+
+### Compilación, HTTP y seed
+
+- El API se publicó en Docker desde el código local con `dotnet publish` para .NET 10: 0 errores y el warning preexistente NU1510. Se reconstruyó una segunda vez después de corregir la preservación de credenciales de Plataforma.
+- El proyecto Compose aislado `ap04local`, con su propio volumen `ap04local_postgres_data`, completó bootstrap, migraciones, importación de catálogo y provisión RLS/runtime restringida. Se conservaron intactos los contenedores y volúmenes ajenos, incluido `nexoruta_postgres_data`.
+- Los readiness probes locales devolvieron API HTTP 200 y Commerce HTTP 200. Mapbox temporal quedó apagado; Geoapify real siguió desactivado.
+- El seed general respondió `sembrada=true`: 5 operadores, 5 comercios, 70 envíos, 35 rutas y 252 operaciones. La segunda ruta de seed también se ejecutó sobre datos existentes. La referencia reservada AP-04 permaneció única y no reabrió ni duplicó el acuse.
+- Una repetición reveló que el helper general cambiaba la contraseña del administrador de Plataforma a la contraseña compartida de actores demo. Se eliminó ese reseteo en `SincronizarActoresAsync`: la contraseña de Plataforma queda bajo `PlatformInitialization`/secreto. Tras reconstruir, se ejecutó el seed dos veces consecutivas; el login de Plataforma siguió válido en ambas.
+
+### Automatización local y verificación de datos
+
+- BrowserAct no pudo controlar el Chrome directo: `chrome-direct` expiró la autorización CDP (`230404`), y el Chrome BrowserAct aislado no puede alcanzar `localhost` dentro de WSL. Para terminar la prueba local sin publicar el servicio, se usó un perfil temporal de Chrome instalado en Windows con Playwright. En GCP la prueba volverá a usar el Chrome aislado BrowserAct autorizado.
+- En la sesión local se inició sesión como Commerce C2, se abrió `/devoluciones`, se encontró `AP04-GCP-DEV-C2-01` pendiente y se cargaron el detalle de un bulto y el formulario de acuse. El envío del formulario pasó a recibida. En una sesión nueva, el listado ya mostró `Recibida`.
+- La API autenticada confirmó después de dos repeticiones del seed: una fila AP-04, situación `Recibido`, cero pendientes, bulto `Recibido conforme`, resultado del acuse `Conforme`. Esto acredita que la fixture y el acuse sobreviven la repetición del seed. La automatización no observó el mensaje de confirmación antes de que terminara su espera; la persistencia se confirmó con la sesión posterior y la consulta de lectura al API.
+- Capturas locales revisadas visualmente a 1440 × 1000: `evidencia/commerce-devoluciones-local-list.png` (listado recibido) y `evidencia/commerce-devoluciones-local-detail-pending.png` (detalle con formulario habilitado). No se capturó el detalle recibido en esta ejecución.
+- La conexión Blazor WebSocket se cerró con código 1006 durante una recarga de detalle desde Chrome Windows hacia WSL. Por eso la lectura posterior del estado se comprobó en una nueva sesión/listado y por el API, no mediante una reapertura estable del detalle. El mapeo Commerce temporal a la interfaz WSL se restauró a loopback al terminar.
+
+### Fuentes y siguiente paso
+
+- Backend `27cfb34` agregó el cotejo físico al seed inicial, un calendario compatible con las rutas semanales, la validación temprana de líneas de transferencia y la fixture AP-04. Backend `ae488b7` preserva las credenciales de Plataforma. Ambos commits se publicaron en `develop`.
+- Aún falta actualizar el gitlink root al backend `ae488b7`, desplegar la fuente fijada con `vm-controls.yml` operation `update`, comprobar que `seed-demo` termina bien en GCP y recorrer bandeja, detalle, acuse y estado persistido con BrowserAct. No iniciar un workflow sobre el backend previamente desplegado.
+- Las verificaciones locales no sustituyen el replay multiinstancia A/B, Compose tras reinicio, CI integrado, teclado/responsive/zoom nativo ni los demás criterios de cierre del plan. Mantener AP-04 `In progress`.
