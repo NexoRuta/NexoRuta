@@ -437,7 +437,7 @@ class VmDeploymentTests(unittest.TestCase):
             for call in compose.call_args_list:
                 self.assertFalse(set(vm_deploy.SHARED).intersection(call.args))
 
-    def test_prepare_of_existing_session_preserves_brokers_and_keeps_password_out_of_arguments(self):
+    def test_prepare_of_existing_session_waits_for_shared_brokers_and_keeps_password_out_of_arguments(self):
         self.assertIn("prometheus-write-gateway", vm_deploy.SHARED)
         self.assertIn("prometheus-write-gateway", vm_deploy.OBSERVABILITY_CORE)
         runtime, integrations, hosting, images = self.configuration()
@@ -490,12 +490,17 @@ class VmDeploymentTests(unittest.TestCase):
                                       "redis_server_reconciled": False})
             up_calls = [call.args for call in deployment.compose.call_args_list if "up" in call.args]
             self.assertIn(("up", "-d", "--wait", "--wait-timeout", "300", "sql-proxy"), up_calls)
+            broker_reconcile = ("--profile", "shared", "up", "-d", "--no-deps", "--wait", "--wait-timeout", "300",
+                                "rabbitmq", "kafka", "mongo", "mailpit")
+            self.assertIn(broker_reconcile, up_calls)
             self.assertIn(("--profile", "shared", "up", "-d", "--no-deps", "--force-recreate",
                            "--wait", "--wait-timeout", "300", "proxy"), up_calls)
-            started = [call.args[-1] for call in deployment.execute.call_args_list if call.args[:2] == ("docker", "start")]
-            retained = {identifier for service, identifier in zip(services, identifiers)
-                        if service not in ("proxy", *vm_deploy.OBSERVABILITY_CORE)}
-            self.assertEqual(set(started), retained)
+            self.assertFalse(any(call.args[:2] == ("docker", "start")
+                                 for call in deployment.execute.call_args_list))
+            broker_reconcile_event = ("compose", *broker_reconcile)
+            first_kafka_command = next(index for index, event in enumerate(events)
+                                       if event[0] == "compose" and "exec" in event and "kafka" in event)
+            self.assertLess(events.index(broker_reconcile_event), first_kafka_command)
             self.assertIn(("--profile", "shared", "up", "-d", "--no-deps", "--force-recreate",
                            "--wait", "--wait-timeout", "300", *vm_deploy.OBSERVABILITY_CORE), up_calls)
             observability_reconcile = ("compose", "--profile", "shared", "up", "-d", "--no-deps",
