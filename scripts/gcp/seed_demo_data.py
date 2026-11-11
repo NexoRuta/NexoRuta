@@ -258,7 +258,7 @@ def main():
         return
 
     # This is one idempotent call. An existing seed synchronizes synthetic
-    # actor credentials/permissions and returns 409 without deleting history.
+    # actor credentials/permissions and returns 200 without deleting history.
     status, result = api_request(
         origin,
         "POST",
@@ -267,7 +267,7 @@ def main():
         payload={},
         timeout=600,
     )
-    if status not in (200, 409) or result.get("sembrada") is not True:
+    if status != 200 or result.get("sembrada") is not True:
         after = seed_status(origin, bearer)
         failure = {
             "result": "failed",
