@@ -1,0 +1,83 @@
+name: NexoRuta - seed synthetic general demo data
+run-name: NexoRuta general demo seed / ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexoruta-gcp-demo-session
+  queue: max
+
+jobs:
+  seed-demo:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: nexoruta-demo
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GCP_ZONE: ${{ vars.GCP_ZONE }}
+      GCP_STATE_BUCKET: ${{ vars.GCP_STATE_BUCKET }}
+      GCP_DELIVERY_BUCKET: ${{ vars.GCP_DELIVERY_BUCKET }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      GCP_BASE_DOMAIN: ${{ vars.GCP_BASE_DOMAIN }}
+      GCP_MANAGE_DNS: ${{ vars.GCP_MANAGE_DNS }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Validate GCP deployment identity
+        run: python3 scripts/gcp/github_environment.py validate deploy
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        id: auth
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          version: "590.0.0"
+      - name: Copy the seed helper to node A
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          VM_NAME: nexoruta-demo
+        run: >-
+          gcloud compute scp scripts/gcp/seed_demo_data.py
+          "$VM_NAME:~/nexoruta-seed-demo.py"
+          --project="$GCP_PROJECT_ID" --zone="$GCP_ZONE"
+          --tunnel-through-iap --quiet
+      - name: Run the general seed using the VM runtime identity
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          VM_NAME: nexoruta-demo
+        run: >-
+          gcloud compute ssh "$VM_NAME"
+          --project="$GCP_PROJECT_ID" --zone="$GCP_ZONE"
+          --tunnel-through-iap --quiet
+          --command="python3 ~/nexoruta-seed-demo.py"
+      - name: Remove the temporary seed helper
+        if: always()
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          VM_NAME: nexoruta-demo
+        run: >-
+          gcloud compute ssh "$VM_NAME"
+          --project="$GCP_PROJECT_ID" --zone="$GCP_ZONE"
+          --tunnel-through-iap --quiet
+          --command="rm -f ~/nexoruta-seed-demo.py" || true
+      - name: Remove this runner's OS Login SSH key
+        if: always() && steps.auth.outcome == 'success'
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: python3 scripts/gcp/ssh_keys.py cleanup
