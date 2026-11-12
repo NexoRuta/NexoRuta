@@ -208,6 +208,29 @@ def recent_seed_errors():
             exception_summary = re.sub(r"\bAP04-[A-Za-z0-9-]+\b", "<fixture>", exception_summary)
             exception_summary = exception_summary[:200]
         sqlstate_match = re.search(r"\b([0-9A-Z]{5}):", exception if isinstance(exception, str) else "")
+        database_match = re.search(
+            r"\b[0-9A-Z]{5}:\s*([^\r\n]+)",
+            exception if isinstance(exception, str) else "",
+        )
+        database_summary = database_match.group(1).strip() if database_match else None
+        if database_summary:
+            database_summary = re.sub(
+                r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
+                "<id>",
+                database_summary,
+            )
+            database_summary = re.sub(
+                r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+                "<email>",
+                database_summary,
+            )
+            database_summary = re.sub(
+                r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
+                "<ip>",
+                database_summary,
+            )
+            database_summary = re.sub(r"\bAP04-[A-Za-z0-9-]+\b", "<fixture>", database_summary)
+            database_summary = database_summary[:200]
         constraint_match = re.search(
             r'constraint\s+["\']([A-Za-z0-9_.-]{1,120})["\']',
             exception if isinstance(exception, str) else "",
@@ -220,6 +243,7 @@ def recent_seed_errors():
             "type": error_type,
             "summary": exception_summary or None,
             "sqlstate": sqlstate_match.group(1) if sqlstate_match else None,
+            "databaseMessage": database_summary,
             "constraint": constraint_match.group(1) if constraint_match else None,
             "httpStatus": properties.get("StatusCode"),
         })
