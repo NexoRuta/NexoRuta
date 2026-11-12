@@ -438,8 +438,13 @@ def remote_stage_error(output, node, operation):
 def wait_for_load_balancer_health(node, deadline, health):
     until = time.monotonic() + 300
     while time.monotonic() < until and time.time() < deadline:
-        if health(node):
-            return
+        try:
+            if health(node):
+                return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
+            print("NEXORUTA_LB_HEALTH_QUERY_ERROR " + json.dumps({
+                "node": node["NODE_ID"], "error_type": type(error).__name__,
+            }, sort_keys=True), flush=True)
         time.sleep(min(5, max(0, until - time.monotonic())))
     if time.time() >= deadline:
         raise RuntimeError("Session expired while waiting for load balancer health")
