@@ -55,3 +55,9 @@ Antes de publicar la raíz, develop avanzó de `98aab579…` a `690ca9673577ba1e
 Verificaciones locales: restore bloqueado y build Release de API/frontend; comparación estricta de 146 rutas; regresión del snapshot aprobada; suite frontend completa aprobada (**522 pruebas, ninguna fallida u omitida**) con OpenAPI vivo y navegadores habilitados. Las dos primeras suites completas expusieron la carrera de foco descrita; tras corregirla pasó la suite completa, conservando sus aserciones. Las regresiones reales de gestión/webhooks se ejecutan con el mismo par publicado y sus fixtures propios. La corrida integrada final y sus resultados se enlazan en la PR #77 para no generar otra revisión solo por actualizar el enlace de CI.
 
 El manifiesto histórico `scripts/cloud/checkpoint.json` no se usa para elegir fuentes: la autoridad es el HEAD raíz y sus gitlinks exactos, como exige la continuidad vigente.
+
+## Avance de la base durante CI
+
+Durante la corrida sobre `4f7b351…`, develop avanzó a `143105f178b7511006d040ec5a4e579d01c2ced8` y GitHub volvió a marcar conflicto. Se incorporó mediante otro merge en la misma rama. Su backend `3bd94953c032ed28ffb0a6bc518968fa87004541` tiene como padre directo el merge UX/UI `9cdad17bdc712324edc54abbb9ed1c897f50dcb4`: conserva ambas líneas y solo agrega tres líneas a `DatosDemoSeeder.cs` para persistir metadatos del borrador antes de publicarlo. No cambia el contrato ni los controladores API.
+
+El gitlink definitivo de Backend pasa por ello a `3bd94953c032ed28ffb0a6bc518968fa87004541`. Frontend conserva `723d02ba6cb5d0196a5181e4f4f076c115d7fe6d` y Mobile conserva `329dd3454704c0f45b615d609f469b7fd4b2dd5f`. Se vuelve a seguir el CI del nuevo HEAD; la corrida anterior no se presenta como la validación final.
