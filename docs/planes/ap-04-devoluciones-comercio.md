@@ -1,8 +1,8 @@
 # AP-04 — Plan de implementación de devoluciones del comercio
 
-Análisis inicial: 09/11/2026; actualización de ejecución: 11/11/2026 (America/Montevideo). Destinatario: agente de IA que implementa la feature. Estado: **implementación en curso, con validación parcial local/GCP; AP-04 permanece In progress**. Los resultados y límites verificados se registran en `docs/auditorias/ap-04/validacion.md`.
+Análisis inicial: 09/11/2026; actualización de ejecución: 12/11/2026 (America/Montevideo). Destinatario: agente de IA que implementa la feature. Estado: **implementación en develop, Integrated CI verde y aceptación pendiente; la card AP-04 está en Do tests**. Los resultados y límites verificados se registran en `docs/auditorias/ap-04/validacion.md`.
 
-Card consultada mediante MCP de Notion: [AP-04 — Consulta y gestión de devoluciones del comercio](https://app.notion.com/p/40a032f1caff816a8c01c160a9e10c18). Está en **In progress**, prioridad Media, módulo M02. Conservar ese estado durante el diseño/implementación; pasar a Do tests cuando toda la solución esté implementada y pendiente de aceptación, y a Done únicamente con los criterios de cierre comprobados.
+Card consultada mediante MCP de Notion: [AP-04 — Consulta y gestión de devoluciones del comercio](https://app.notion.com/p/40a032f1caff816a8c01c160a9e10c18). Estaba en **In progress** al comenzar; el 12/11 se movió a **Do tests** tras completar implementación/CI y registrar los gaps de aceptación. Prioridad Media, módulo M02. Pasar a Done solo cuando se prueben los criterios de cierre.
 
 ## 1. Fuentes y resultado requerido
 
@@ -421,3 +421,4 @@ Esta sección actualiza la ejecución de la fixture y reemplaza las instruccione
 - Se recompiló `NexoRuta.IntegrationTests` en Windows tras `dotnet restore --locked-mode`: 0 errores, 3 warnings preexistentes. Los arreglos del harness están en Backend `c2be99d` y raíz `1476b06`. Integrated CI `43169249651` terminó `success`: 735/735 pruebas de los tres shards, 0 omitidas, y prueba crítica adicional 1/1. Source policy, builds de Backend/Frontend/Mobile, infraestructura, Cloud SQL/migraciones, pruebas portables y Android pasaron.
 - El artefacto `backend-ap04-browser-shard-0` del run verde reporta cuatro checks AP-04 completados y cero errores: autenticación, lista pendiente única, acuse con observaciones, historial/API y reapertura persistida.
 - Con el gate verde y el recorrido de seed realizado, el estado de la card queda `Do tests`, no `Done`. Siguen pendientes el dataset que pruebe toda la matriz 307 y el replay dirigido/digests por nodo A/B del criterio 317. El run se puede consultar en GitHub Actions `43169249651`.
+- Repositorios en `develop` y gitlinks coherentes al publicar docs/evidencia: raíz `eb7d432f3b8499925d493a75e98fb894b6290c9a`, Backend `c2be99d3070accb724c700fd72595a5636de1cea`, Frontend `c34764eb46444007f69cb525df959a7850f7891d` y Mobile `329dd3454704c0f45b615d609f469b7fd4b2dd5f`. El CI corrió sobre raíz `1476b06`; el commit raíz posterior solo agrega documentación/evidencia y conserva los mismos gitlinks.
