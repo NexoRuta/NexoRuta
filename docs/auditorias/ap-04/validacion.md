@@ -184,3 +184,39 @@ Esta sección agrega el resultado local; no modifica los resultados históricos 
 ### Estado y límites
 
 AP-04 continúa `In progress`. Esta pasada valida el parche, despliegue, disponibilidad HTTP y el estado recibido persistido. Siguen pendientes los criterios de cierre previos del plan: CI integrada y replay entre instancias, teclado, estados de carga/error y validación visual responsive/zoom nativo al 200 %. No se ejecutó la suite de tests.
+
+## Validación local focalizada de cierre AP-04 (12/11/2026)
+
+Esta actualización supersede los pendientes locales descritos en las instantáneas anteriores cuando hay evidencia nueva. Backend y Frontend ya publicaron esta implementación en `develop`; el gitlink del principal y su CI integrado siguen pendientes. Este código todavía no forma parte del último release GCP.
+
+### Compilación
+
+- `dotnet build frontend/src/NexoRuta.Commerce/NexoRuta.Commerce.csproj -c Release --no-restore` compiló Commerce con 0 errores y 1 warning existente NU1510.
+- El runner de pruebas usó .NET SDK 10.0.401 y Playwright 1.62.1. El primer intento de compilar ApiClient.Tests no tenía en caché las dependencias SQLite transitivas; `dotnet restore ... --locked-mode` restauró el proyecto sin cambiar contratos ni locks, y el intento siguiente pasó.
+
+### HTTP, PostgreSQL y permisos
+
+- En el Compose aislado `ap04local`, API y Commerce respondieron `HTTP 200` en `/health/ready`; Docker informó API, Commerce, Redis y Postgres saludables. Se preservó el volumen propio del proyecto. Mailpit reinició con código 255, pero no participa en el flujo AP-04 y no afectó estos healthchecks ni las pruebas.
+- Contra PostgreSQL real de Testcontainers: C31 pasó sus 4 variantes (0 fallidas, 0 omitidas); la migración/grant para un propietario de Commerce preexistente pasó 1/1; la prueba de alta de un comercio nuevo con `devoluciones.gestionar` pasó 1/1.
+- La cobertura C31 ejercita API restringida, aislamiento Commerce ajeno por lista/detalle/acuse, acuse concurrente desde dos API factories, conflicto al reutilizarlo con otro actor, revocación y reautorización del replay, auditoría append-only, y ausencia de cambios de estado, versión o outbox al acusar. La migración parte de `20261108020000_CommerceSettlements` y verifica el rol protegido y su permiso existente tras migrar.
+- `CommerceReturnsContractPublishesCurrentRoutesAndVersionedCommands` pasó 1/1 contra el OpenAPI versionado del Frontend.
+
+### Automatización de navegador local
+
+- `AP04TransfiereAlComercioUnBultoDevueltoQuePermaneceEnDeposito` pasó 1/1, sin skips, contra PostgreSQL y Commerce con Kestrel. Recorrió transferencia de un `Devuelto/Deposito`, acuse con observaciones, detalle e historial; la automatización verificó la confirmación y el foco visible. Evidencia: `evidencia/ap04-local-integration/`.
+- El harness de Compose autenticó el comercio sintético, registró un acuse con observaciones y reinició únicamente API y Commerce; una sesión nueva vio el mismo acuse e historial. Evidencia y reporte: `evidencia/ap04-local-compose-faults/ap04-browser-report.json`.
+- La automatización recorrió listado, detalle recibido y detalle reabierto a 1440 y 320 CSS px, además de base de texto al 200 % en 320 CSS px: 9 vistas Axe, cero violaciones y cero errores de página. El reporte midió viewport/body/shell/main en 320 px; la feature ocupó 288 px y el detalle reabierto 256 px, sin overflow horizontal.
+- Se pausó la API aislada para activar el estado lento con `aria-busy` y aviso visible conservando las filas; se detuvo esa misma API para activar el error recuperable y botón de reintento. Ambas vistas están en `evidencia/ap04-local-compose-faults/`.
+
+### Revisión visual y teclado
+
+- Se revisaron capturas sintéticas de lista, detalle recibido y reapertura tras reinicio a 1440/320 px y texto base al 200 %. Se corrigieron el ajuste del título “Devoluciones”, el ancho de fechas y la paginación móvil.
+- El harness recorrió el enlace de salto con teclado y verificó el foco visible sobre el estado de confirmación tras guardar. La captura `evidencia/ap04-local-compose-faults/commerce-devoluciones-local-received-list-320-text-200.png` confirma título y controles legibles sin recorte; también se revisaron las capturas separadas de demora, error y detalle reabierto.
+- El 200 % se simuló aumentando la tipografía raíz CSS en el navegador de prueba; no se afirma que sea una validación de zoom nativo del navegador.
+
+### Límites que siguen abiertos
+
+- El criterio 307 queda pendiente: falta demostrar con un conjunto autenticado que cubra devoluciones totales, parciales, históricas y completadas, además de filtros y cursores de servidor en más de una página. La consulta implementa filtros/cursor en PostgreSQL y hay cobertura del caso parcial, pero esta ejecución no prueba toda esa matriz.
+- El CI integrado obligatorio aún no se ejecutó para los SHAs nuevos; por eso el criterio 314 y la promoción de la card no se consideran cerrados aunque los tests focalizados locales pasen.
+- GCP conserva el último despliegue documentado anteriormente. Falta publicar esta combinación exacta, obtener digests de las dos instancias y hacer replay identificando API A/B; no se afirma aceptación remota nueva en esta actualización.
+- El listado final de SHAs, gitlinks y resultado CI se agregará tras publicar los commits. No se actualizará la card a `Done` mientras sigan abiertos los criterios 307, 314 o 317.

@@ -157,6 +157,7 @@ jobs:
       NEXORUTA_SESSION_E2E_DIR: ${{ github.workspace }}/artifacts/browser/session
       NEXORUTA_GESTION_E2E_DIR: ${{ github.workspace }}/artifacts/browser/management
       NEXORUTA_WEBHOOK_E2E_DIR: ${{ github.workspace }}/artifacts/browser/webhooks
+      NEXORUTA_AP04_BROWSER_DIR: ${{ github.workspace }}/artifacts/browser/ap04
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -221,6 +222,13 @@ jobs:
             artifacts/browser/management/**/*.png
             artifacts/browser/webhooks/**
           if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: backend-ap04-browser-shard-${{ matrix.shard }}
+          path: artifacts/browser/ap04/**
+          if-no-files-found: ignore
           retention-days: 14
 
   frontend:

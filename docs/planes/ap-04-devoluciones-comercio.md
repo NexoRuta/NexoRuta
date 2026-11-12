@@ -303,17 +303,17 @@ Si las VMs están apagadas, `update` no las enciende; `start` inicia una sesión
 
 AP-04 podrá pasar a Done cuando se demuestre todo lo siguiente, en una combinación de fuentes identificada:
 
-- [ ] Fuente literal, interpretación de gestión y reglas de actor/estado documentadas y aceptadas para AP-04.
+- [x] Fuente literal, interpretación de gestión y reglas de actor/estado documentadas y aceptadas para AP-04.
 - [ ] Bandeja/detalle Commerce propios por operador, con devoluciones totales, parciales, históricas y completadas; filtros y paginación en servidor.
-- [ ] Acción de gestión Commerce persistente: acuse conforme/con observaciones, permisos vigentes, auditoría inmutable y reapertura.
-- [ ] Transferencia operativa correcta tanto para EnDevolucion/Deposito como para Devuelto/Deposito, sin confundir custodia con el agregado ni tocar bultos entregados.
-- [ ] Comandos atómicos/idempotentes y conflictos probados con dos APIs/actores y PostgreSQL real; replay vuelve a autorizar.
-- [ ] RLS/grants/migración cumplen aislamiento y se aplican a cuentas existentes/nuevas; ninguna lectura/escritura ajena por API o SQL runtime.
-- [ ] Historia, outbox y consumidores conservan significado; no hay reembolsos, cambios de tarifa, liberaciones o datos físicos inventados.
+- [x] Acción de gestión Commerce persistente: acuse conforme/con observaciones, permisos vigentes, auditoría inmutable y reapertura.
+- [x] Transferencia operativa correcta tanto para EnDevolucion/Deposito como para Devuelto/Deposito, sin confundir custodia con el agregado ni tocar bultos entregados.
+- [x] Comandos atómicos/idempotentes y conflictos probados con dos APIs/actores y PostgreSQL real; replay vuelve a autorizar.
+- [x] RLS/grants/migración cumplen aislamiento y se aplican a cuentas existentes/nuevas; ninguna lectura/escritura ajena por API o SQL runtime.
+- [x] Historia, outbox y consumidores conservan significado; no hay reembolsos, cambios de tarifa, liberaciones o datos físicos inventados.
 - [x] OpenAPI, ApiClient, Commerce y Backoffice actualizados juntos, sin aliases de compatibilidad innecesarios; rutas y campos clave verificados por el test de contrato versionado.
 - [ ] Tests pertinentes y CI integrado verdes, cantidades/omitidas comprobadas; test browser nuevo realmente ejecutado.
-- [ ] Revisión visual/teclado a 1440/320 px y texto 200 %, con estados lentos/errores activados y evidencia separada. `browser-act` está autorizado para revisar la app desde navegador local o GCP cuando se requieran comprobaciones; usar Chrome aislado, no el perfil personal, guardar capturas dentro de la auditoría AP-04 y cerrar la sesión al terminar. Complementar con el harness de navegador fijado del repositorio.
-- [ ] Circuito local Docker/WSL reproducible, reinicio sin pérdida de acuses y sin dependencia de archivos privados de otra máquina.
+- [x] Revisión visual/teclado a 1440/320 px y texto 200 %, con estados lentos/errores activados y evidencia separada. `browser-act` está autorizado para revisar la app desde navegador local o GCP cuando se requieran comprobaciones; usar Chrome aislado, no el perfil personal, guardar capturas dentro de la auditoría AP-04 y cerrar la sesión al terminar. Complementar con el harness de navegador fijado del repositorio.
+- [x] Circuito local Docker/WSL reproducible, reinicio sin pérdida de acuses y sin dependencia de archivos privados de otra máquina.
 - [ ] Aceptación GCP autorizada sobre release/digests correctos en ambos nodos, con HTTPS, permisos y replay; o pendiente operacional explícito que mantenga Do tests y no Done.
 - [ ] Documentación y evidencias publicables sin secretos/datos privados; SHAs de componentes y gitlinks de raíz coherentes.
 

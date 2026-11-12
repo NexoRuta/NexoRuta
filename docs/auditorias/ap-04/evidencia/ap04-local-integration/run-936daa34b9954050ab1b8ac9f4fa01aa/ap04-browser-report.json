@@ -1,0 +1,60 @@
+{
+  "checks": [
+    "Authenticated API lists one unique pending AP-04 fixture for Commerce.",
+    "Commerce records an acknowledgement with observations; detail and canonical history update; keyboard focus returns to the visible confirmation.",
+    "HTTP API confirms the saved acknowledgement and observation.",
+    "The reopened Commerce detail sees the persisted acknowledgement and history."
+  ],
+  "views": [
+    {
+      "name": "commerce-devoluciones-local-pending-list",
+      "width": 1440,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-pending-list",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-pending-list-text-200",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-pending-detail",
+      "width": 1440,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-pending-detail",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-pending-detail-text-200",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-reopened-detail",
+      "width": 1440,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-reopened-detail",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-reopened-detail-text-200",
+      "width": 320,
+      "violations": []
+    }
+  ],
+  "apiFaultInjection": [
+    "Skipped: AP04_FAULT_INJECTION is not enabled."
+  ],
+  "pageErrors": [],
+  "accessibilityViolations": []
+}
