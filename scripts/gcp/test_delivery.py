@@ -30,6 +30,16 @@ class DeliveryTests(unittest.TestCase):
                 delivery.wait_for_load_balancer_health({"NODE_ID": "a"}, 2000, lambda node: False)
         sleep.assert_called_once_with(5)
 
+    def test_load_balancer_health_retries_transient_query_errors(self):
+        health = Mock(side_effect=[subprocess.CalledProcessError(1, "gcloud"), False, True])
+        with (patch.object(delivery.time, "monotonic", side_effect=[0, 0, 0, 5, 5, 10]),
+              patch.object(delivery.time, "time", return_value=1000),
+              patch.object(delivery.time, "sleep") as sleep):
+            delivery.wait_for_load_balancer_health({"NODE_ID": "b"}, 2000, health)
+
+        self.assertEqual(health.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+
     def test_cache_bypass_skips_redis_smokes_and_requires_both_nodes_to_agree(self):
         inventory = [{"NODE_ID": "a"}, {"NODE_ID": "b"}]
         stage = Mock(side_effect=AssertionError("Redis must not be probed in bypass mode"))
