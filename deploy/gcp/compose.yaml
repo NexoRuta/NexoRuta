@@ -613,7 +613,8 @@ services:
     - --storage.tsdb.retention.size=4GB
     - --web.enable-remote-write-receiver
     restart: unless-stopped
-    mem_limit: 2g
+    # Recovery of the persisted WAL/WBL exceeds 2 GiB on VM A.
+    mem_limit: 4g
     ports:
     - ${NODE_PRIVATE_IP:?}:9090:9090
     volumes:
