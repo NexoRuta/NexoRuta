@@ -698,19 +698,14 @@ def prepare(args, deployment, runtime, integrations, hosting, redis_identity, ma
     def start_sql_and_shared_services():
         deployment.compose("up", "-d", "--wait", "--wait-timeout", "300", "sql-proxy")
         if args.node == "a":
-            existing = deployment.execute("docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=nexoruta-demo", capture=True).split()
-            existing_services = {}
-            for identifier in existing:
-                service = deployment.execute("docker", "inspect", "--format", '{{index .Config.Labels "com.docker.compose.service"}}', identifier, capture=True)
-                if service in SHARED:
-                    existing_services[service] = identifier
-            for service, identifier in existing_services.items():
-                if service != "proxy" and service not in OBSERVABILITY_CORE:
-                    deployment.execute("docker", "start", identifier)
-            missing = tuple(service for service in SHARED
-                            if service not in existing_services and service not in ("proxy", *OBSERVABILITY_CORE))
-            if missing:
-                deployment.compose("--profile", "shared", "up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", *missing)
+            # Resume brokers through Compose and wait for health before issuing
+            # topic commands. A raw `docker start` returns before Kafka is ready
+            # and can leave a restarted broker without its current network aliases.
+            brokers_and_mail = tuple(service for service in SHARED
+                                     if service not in ("proxy", *OBSERVABILITY_CORE))
+            if brokers_and_mail:
+                deployment.compose("--profile", "shared", "up", "-d", "--no-deps",
+                                   "--wait", "--wait-timeout", "300", *brokers_and_mail)
             # Recreate the observability core from this release's versioned config.
             # Compose preserves its named data volumes while replacing containers.
             deployment.measure("reconcile_observability_core", lambda: deployment.compose(

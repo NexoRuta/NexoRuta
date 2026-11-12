@@ -1,0 +1,247 @@
+# AP-04 — Informe de validación
+
+Fecha: 11/11/2026 (America/Montevideo). Último manifiesto desplegado en GCP: raíz `6d258a77d990bb3e6bc3aac53876ceb3a5f68d86`, backend `39cebff2cf5e0c49ce1d16bbdd99e0478b4e5be4`, frontend `49d44f347a75c473aa39fffda272b4e3a944b269` y mobile `53f6be2cdec48f48e30e390060feeaefb5be0ead`. El checkout local mantiene el cambio materializado preexistente `M mobile`; se preservó y no se publicó desde el workspace. Las pruebas funcionales utilizaron datos/credenciales sintéticos; el despliegue se hizo sobre el canal GCP develop compartido siguiendo el workflow completo. El detalle del workflow, seed y comprobación BrowserAct más recientes está en «Actualización posterior».
+
+## Compilación
+
+- La compilación completa de las soluciones Backend y Frontend pasó antes de los últimos ajustes. Después, el proyecto de integración Backend se volvió a compilar con el código final en WSL y el arranque del runtime sintético reconstruyó API, Backoffice, Commerce y Tracking; la prueba frontend de contrato volvió a compilar sus proyectos referenciados.
+- El test estático de contrato OpenAPI se compiló y ejecutó en Windows en modo serial: `dotnet test frontend/tests/NexoRuta.ApiClient.Tests/NexoRuta.ApiClient.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false --filter FullyQualifiedName~CommerceReturnsContractPublishesCurrentRoutesAndVersionedCommands`. Resultado: 1 aprobado.
+- Una ejecución inicial de ese test con paralelismo por defecto agotó memoria/recursos del host (MSBuild lanzó errores `OutOfMemoryException` y `Stack overflow`). Se detuvo esa ejecución y la repetición serial anterior terminó correctamente. No se eliminó caché, build output, base ni volumen para recuperar recursos.
+- Persisten warnings de paquetes/analyzers preexistentes (NU1510, xUnit/BL); no se registraron errores de compilación en la ejecución exitosa.
+
+## HTTP, PostgreSQL y contrato
+
+- `scripts/cloud/dev.py start` levantó un runtime efímero propio en WSL, en filesystem Linux: API `127.0.0.1:5000`, Backoffice `:5101`, Commerce `:5102` y Tracking `:5103`. `scripts/cloud/dev.py verify` pasó.
+- La verificación reportó PostgreSQL 18.6/PostGIS 3.7, 91 migraciones aplicadas y runtime `nexoruta_api_runtime` con `rolsuper=false` y `rolbypassrls=false`. Los roles y datos eran sintéticos; no se usó la base local persistente del usuario.
+- `GET http://127.0.0.1:5102/health/ready` respondió 200. El endpoint API de readiness y las páginas de los servicios del runtime quedaron disponibles.
+- `GET http://127.0.0.1:5000/openapi/v1.json` respondió 200. Se regeneró `frontend/contracts/nexoruta.openapi.json` directamente desde ese documento. El snapshot tiene los cinco endpoints AP-04 de lectura, historial, transferencia y acuse; no conserva `POST /api/deposito/envios/{id}/devolucion-comercio`.
+- El listado Commerce produjo inicialmente HTTP 500 por acceso directo a la identidad importada protegida por RLS. Se cambió la lectura para usar la función existente `nexoruta_app.list_import_shipment_references(...)` bajo la identidad/operador del contexto. Tras reconstruir, la página quedó en estado vacío sin error.
+
+## Automatización
+
+- Se ejecutó `C31_EntregaParcialRespetaPoliticaCustodiaPruebaReintentosYConflictoPorBulto` con `NEXORUTA_TEST_POSTGRES_MODE=native` contra PostgreSQL/PostGIS sintético: 3/3 variantes aprobadas. La rama de devolución probó transferencia del bulto no entregado, listado/detalle para el comercio, lectura con capacidad recalculada, rechazo HTTP 403 al quitar permiso, acuse, replay del mismo `ComandoId`, conflicto con contenido distinto y ausencia de cambios en resultado/custodia/versión del bulto por el acuse.
+- `CommerceReturnsContractPublishesCurrentRoutesAndVersionedCommands`: 1/1 aprobado; valida rutas nuevas, ausencia del alias retirado y campos clave de comando/versionado y capacidades del bulto.
+- No se ejecutaron todos los proyectos de test, CI integrado, el harness de browser tests del repositorio ni pruebas concurrentes entre dos instancias API.
+
+## BrowserAct y revisión visual
+
+- BrowserAct 1.6.2 autenticó Commerce con una cuenta sintética en `http://127.0.0.1:5102/devoluciones`. La navegación muestra Devoluciones; la página renderiza título, filtros de fechas/operador/situación/referencia, botón de actualización y el estado vacío accesible. No había una devolución sintética visible para revisar el detalle y acuse en UI.
+- La captura de escritorio está en `.local/ap04-evidence/commerce-devoluciones-desktop.png` (1366 px de ancho; viewport del navegador 1366 × 543). La revisión visual encontró jerarquía clara, controles etiquetados y buen uso del ancho disponible en esa captura.
+- La automatización observó reintentos repetidos a `/_blazor/negotiate`; el circuito InteractiveServer no llegó a estabilizar una conexión. Al enviar el filtro, el navegador navegó al GET nativo `/devoluciones?` y volvió a los filtros por defecto. Por eso no se considera validada la interacción del filtro: el entorno no demostró que el evento Blazor del componente se ejecutara. No se diagnosticó la causa del fallo de transporte.
+- En GCP se usó el Chrome local aislado de BrowserAct (`ap04-gcp-verification`), sin importar el perfil del usuario. La navegación a `/devoluciones` llegó al portal y redirigió a `/ingresar`. Se envió una vez el usuario/contraseña sintéticos publicados en `docs/demo/README.md`; el portal respondió «El correo o la contraseña no son correctos». No se repitió el intento ni se probaron credenciales alternativas. La cuenta no quedó autenticada, por lo que BrowserAct no llegó a la pantalla AP-04.
+- Captura de esa respuesta: `docs/auditorias/ap-04/evidencia/commerce-devoluciones-gcp-login-rejected.png` (1904 × 985). La inspección visual confirma el formulario de acceso y el mensaje genérico de error; no acredita la bandeja, los filtros, el detalle ni el acuse de devoluciones.
+- Tras el nuevo despliegue, BrowserAct volvió a abrir `/devoluciones`, siguió la redirección a `/ingresar` y renderizó el formulario de acceso sin error. La inspección visual confirma el portal Commerce y los controles etiquetados de correo, contraseña y envío; esta vista no acredita AP-04. Captura: `docs/auditorias/ap-04/evidencia/commerce-devoluciones-gcp-login-required.png` (1904 × 985). En esta pasada todavía no se envió una credencial.
+- No se verificaron 1440 px, 320 px, zoom de texto al 200 %, estados lentos/error forzados, teclado completo ni la acción de acuse en navegador. En local, la evidencia AP-04 acredita solo la pantalla vacía de escritorio; las capturas GCP acreditan únicamente el formulario de acceso, una con el error del intento anterior y otra sin credenciales.
+
+## Docker/WSL y GCP
+
+- No había Docker CLI disponible en Windows y el socket Docker de WSL no aceptó conexión ni como usuario ni como root. No se arrancaron contenedores ni se tocaron volúmenes. La validación local disponible fue `dev.py` sobre dependencias Linux sintéticas, no Compose.
+- El usuario autorizó el despliegue de AP-04 en GCP. Workflow `42957078788` terminó `success` el 11/11/2026, sobre `develop` y el root SHA `a2b56f22fd8240c0cb6ba73309d2efb2cdb14429`. Publicó el release completo `release-cf26779e0d964923b3c1d869a3538712` con seis imágenes construidas y cero digests reutilizados. Se registró el mismo release en los nodos A y B; ambos aplicaron las imágenes inmutables del manifiesto y sus checks directos pasaron. No se guardan aquí nombres de host, direcciones IP, claves ni configuración secreta.
+- Tras el despliegue inicial `42957078788`, se ejecutó otro `start` autorizado: workflow `42962778569`, `success`, sobre el root `58e8b170b8fdbc8516edda81bd4a1610c7779ce5`. Publicó y aplicó el release completo `release-5de601c6e4e24723bc6ce4550770da54`. Los pasos de migración y bootstrap en A, arranque/health directo de A y B, health del balanceador y `public_https_and_login_smoke` pasaron. La verificación final reportó `healthy`; las dos VMs usaron el release del mismo canal.
+- Después del `stop` `42964630303`, el usuario autorizó usar el seed general y se ejecutó `start` en el workflow `42967468460`. Terminó `success` sobre `develop`, root `81694be93d312935e784075d82a568fa57733a5b`; publicó `release-4d7a613a7f1c47ad9525e6bf6975e418` (seis imágenes construidas, cero digests reutilizados) y lo aplicó a los nodos A y B. Pasaron los health checks directos y del balanceador, HTTPS público y `public_https_and_login_smoke`; el nodo A reportó `healthy`. El workflow dejó las VMs activas con apagado automático a las 09:46:55 UTC.
+- Manifiesto de la release anterior `release-5de601c6e4e24723bc6ce4550770da54` (`42962778569`): raíz `58e8b170b8fdbc8516edda81bd4a1610c7779ce5`, backend `013e11eeeaf177a00e9fbf1ff96c054bd7226084`, frontend `49d44f347a75c473aa39fffda272b4e3a944b269` y mobile `53f6be2cdec48f48e30e390060feeaefb5be0ead`. Digests de esa release: API `sha256:14d33b7ee59f3eedec190494f4ef4ef7bbd2663bc604adf2bcfbc4ce3286e000`; worker `sha256:9eabf9a983020f2b785e2073b8b1696bdfefb0765dadfabad55209f86ad83e23`; Admin `sha256:5138050bb7add131b672efb830c8b36a679b61e31b74a4c9b9e5ca2eb0f7f45f`; Backoffice `sha256:e6bc0b8dcc26d0bcdcd5773233c167c7b5e02bd268c81fb1a7fe6b3d619fcb9d`; Commerce `sha256:de79682cedf0da5da72b4a689d6465fbc51fae070e0f49a81cb811b218b6d3ab`; Tracking `sha256:8e740061ef615b00922739b3a2b25df683298a4c95fe321497c05027abdc4092`. No se asumen esos digests para `release-4d7a613a7f1c47ad9525e6bf6975e418`; el run más reciente confirmó publicación y health, pero sus digests no aparecen en el log consultado.
+- La migración se aplicó desde A y pasó `vm_migrate_schema_migrations`, preflight SQL, provisión runtime/hosting y bootstrap. En este run no hubo errores Cloud SQL; los roles API/bootstrap/worker siguieron sin superusuario ni `BYPASSRLS`. El workflow público HTTPS y login smoke pasó. BrowserAct navegó la ruta Comercio, pero la credencial sintética documentada recibió rechazo y no se autenticó; la captura y el resultado están en la sección BrowserAct.
+- El workflow `vm-controls.yml` operation `stop` (`42964630303`) terminó `success`. Compute Engine confirmó ambas VMs `TERMINATED`; Cloud SQL quedó `RUNNABLE`. No se ejecutó el seed general `/api/admin/demo-data` ni se crearon envíos/acuse de prueba en Cloud SQL.
+- En el nuevo `start`, BrowserAct observó HTTP 503 durante el arranque y luego cargó el portal normalmente; el workflow terminó exitosamente. El seed general sigue sin ejecutarse: `POST /api/admin/demo-data` requiere una sesión de plataforma. La cuenta de plataforma de GCP se inicializa desde configuración privada del despliegue; no se inspeccionaron secretos ni se intentó adivinar su contraseña. El usuario autorizó el seed, pero falta acceso autenticado a esa cuenta o que el seed se ejecute con ella. No se creó evidencia física ni acuses.
+- Como el acceso de plataforma quedó pendiente, el usuario fue consultado y se cerró la ventana de cómputo: workflow `42969621808` (`stop`) terminó `success`; el log informa ambas VMs detenidas o ausentes y Cloud SQL aún ejecutándose. La sesión BrowserAct `ap04-gcp-20261111` se cerró; el Chrome aislado quedó en reposo.
+- La última consulta de Notion registrada (10/11/2026) mostraba `In progress`; no se actualizó el estado. Faltan aceptación funcional/visual autenticada con BrowserAct, replay explícito entre A/B, Compose local con reinicio/persistencia, CI integrado y pruebas responsive/interactivas.
+
+## Siguiente evidencia requerida
+
+1. Obtener acceso temporal autenticado a la cuenta de plataforma de GCP o pedir al responsable que ejecute una vez `POST /api/admin/demo-data` con esa cuenta. El usuario autorizó el seed general, que prepara datos sintéticos; todavía no se ejecutó porque el endpoint exige la política de plataforma y la credencial de GCP no está documentada. Luego iniciar sesión en Commerce con C1, autenticar BrowserAct y revisar `/devoluciones`, filtros, lista y detalle. No leer secretos ni volver a probar a ciegas el par C1 rechazado antes del seed.
+2. Cuando haya fixtures AP-04 sintéticas aisladas, repetir en navegador filtros, detalle por bulto, selección, acuse, refresh y reapertura. Revisar además viewports 1440/320 px, texto al 200 %, teclado y estados de carga/error.
+3. Repetir el circuito en Compose local sin limpiar volúmenes; inspeccionar reinicio conservando datos.
+4. Ejecutar el harness de navegador y la suite/CI integrada, registrando cantidades y pruebas omitidas.
+5. Probar replay/conflicto de forma explícita entre A y B con telemetría que identifique cada nodo; el health y el mismo release/digest no demuestran por sí solos concurrencia o replay multiinstancia.
+
+## Actualización posterior: deploy, seed y sesión autenticada (11/11/2026)
+
+Esta actualización complementa los resultados históricos anteriores. Donde una entrada previa diga que no se leyó el secreto, que C1 no pudo iniciar sesión o que el seed no se ejecutó, aplica a ese intento y queda supersedida por los resultados de esta sección. El secreto se usó solo en memoria a través de la identidad runtime de la VM; no se imprimió ni se persistió su contenido.
+
+- **Fuentes desplegadas:** root `6d258a77d990bb3e6bc3aac53876ceb3a5f68d86`, backend `39cebff2cf5e0c49ce1d16bbdd99e0478b4e5be4`, frontend `49d44f347a75c473aa39fffda272b4e3a944b269` y mobile `53f6be2cdec48f48e30e390060feeaefb5be0ead`.
+- **Workflow:** `vm-controls.yml` operation `update`, run `43062369357`, terminó `success` en `develop`. El pedido de esta pasada fue revisar que pasara el workflow; no se hizo una comprobación HTTP independiente del despliegue.
+- **Seed autorizado:** operation `seed-demo`, run `43064530696`, terminó `success` y devolvió `synchronized-existing`, `seededBefore=true`: 5 operadores, 5 comercios, 70 envíos, 35 rutas y 252 operaciones. El operador Commerce C1 tenía datos ya sembrados; se sincronizó su contraseña sintética con el secreto runtime. No se duplicaron registros ni se generaron hechos de devolución, transferencias físicas o acuses.
+- **Incidentes corregidos en el camino:** se habilitó acceso RLS de plataforma limitado a la identidad objetivo; también se selecciona la organización objetivo antes de resolver sus roles. El endpoint responde HTTP 200 cuando la sincronización idempotente termina, para evitar que el middleware transaccional revierta los cambios por recibir un 4xx. Las correcciones están en los SHAs desplegados arriba.
+- **BrowserAct, autenticación y renderizado:** C1 inició sesión en Commerce GCP y `/devoluciones` cargó sin redirección al login. Se observaron controles de fechas, operador, situación y referencia, botón de actualizar y aplicar filtros, y el mensaje vacío. Con el filtro predeterminado y con el rango 14/08/2026–11/11/2026 (89 días) el listado permaneció vacío. Evidencia visual revisada a 1904 × 985: `commerce-devoluciones-gcp-authenticated-empty.png` y `commerce-devoluciones-gcp-empty-89-days.png`. BrowserAct se ejecutó usando el Chrome aislado autorizado y la sesión se cerró al final.
+- **Qué demuestra y qué queda pendiente:** esta comprobación acredita acceso Commerce autenticado y la vista vacía de `/devoluciones` en GCP. No hay una devolución AP-04 sintética en el seed general, por lo que no se probaron lista con filas, detalle por bulto, acuse, refresh/reapertura con una devolución, estados de error/carga, tamaños 1440/320 px, teclado ni zoom 200 %. Tampoco se ejecutaron Compose local con reinicio/persistencia, pruebas de replay entre A/B o CI integrado. Mantener AP-04 abierta; la card sigue `In progress`.
+- **Próximos pasos:** provisionar fixtures AP-04 sintéticas por comandos de aplicación que representen hechos válidos; completar en BrowserAct los flujos de consulta, detalle y acuse sin simular hechos físicos mediante SQL directo; cubrir interacción responsive/teclado/zoom y estados de carga/error; ejecutar los criterios locales, de persistencia, CI y concurrencia que siguen pendientes. No mover la card hasta registrar la aceptación correspondiente.
+
+## Actualización posterior: clasificación de recepción inicial (11/11/2026)
+
+Esta pasada encontró y corrigió un falso positivo al validar AP-04 autenticado en GCP. No acredita una transferencia física ni un acuse.
+
+- **Reproducción BrowserAct:** después de recibir normalmente dos bultos sintéticos en depósito, `/devoluciones` listó el envío como `Histórica`, aunque mostraba cero bultos en todos los conteos. El detalle indicó estado `EnDeposito`, los dos bultos como “Fuera del circuito de devolución” y solo el evento `RecepcionDeposito`. Captura anterior al arreglo: `evidencia/commerce-devoluciones-gcp-false-history-before-fix.png` (1904 × 985). Esto demostró que la recepción inicial contaminaba el circuito AP-04.
+- **Corrección:** el backend filtra actividad de recepción de depósito y solo la considera devolución si el estado nuevo es `Devuelto` o `EnDevolucion`. La decisión operativa de devolución y la transferencia física permanecen como hechos válidos. El filtro se aplica en lista, elegibilidad del detalle e historial. Commit Backend develop: `bac0b0b` (`fix(ap04): exclude initial receipts from returns`).
+- **Regresión:** el test C31 ahora exige que una admisión recibida normalmente no aparezca en la lista antes de producir una devolución. El test no llegó a ejecutarse: WSL no tiene .NET SDK; en Windows se restauraron dependencias y compiló `NexoRuta.IntegrationTests` con cero errores y tres warnings existentes (NU1510, xUnit2031 y EF1003). La compilación no ejecuta PostgreSQL ni valida el SQL.
+- **Escenario GCP:** se creó un envío sintético AP-04 de dos bultos; ambos quedaron en custodia de depósito y sin resultado de devolución. La planificación de ruta falló con HTTP 409: no se encontró una revisión de cobertura verificable. El historial público de tarifa sí devuelve dos aplicaciones con revisión de zona 2; la discrepancia quedó pendiente. No se alteró la base mediante SQL, no se registró retorno/transferencia/acuses y no se afirmó una entrega física. La regla de entrega parcial se restauró a la configuración original mediante una nueva publicación; no quedó un borrador abierto.
+- **Despliegue y comprobación posterior:** pendientes en esta actualización; agregar aquí el run de workflow y la captura BrowserAct posterior al arreglo. La comprobación se limita a que el envío normal ya no aparezca como devolución.
+- **Limitaciones restantes:** no se completó un ciclo AP-04 válido con detalle/acuse en GCP por el bloqueo de cobertura. También siguen pendientes Compose local con reinicio, ejecución del test de integración en Linux, CI integrado, replay entre A/B, viewports 1440/320 px, zoom 200 %, teclado y estados lentos/error. La card permanece `In progress`.
+
+## Actualización posterior: deploy y seed general en GCP (11/11/2026)
+
+- **Fuente desplegada:** root `8e5ded9007c25029e5287bdde5c284b03ef1eec0`, backend `bac0b0b41c21993a515bacc420915d66a2fd3095`, frontend `49d44f347a75c473aa39fffda272b4e3a944b269` y mobile `53f6be2cdec48f48e30e390060feeaefb5be0ead`.
+- **Workflow de deploy:** `vm-controls.yml`, operación `update`, run `43076158807`, terminó `success`; el job `deploy` duró 8m15s. La publicación de fuente y la operación manual terminaron sin errores.
+- **Seed general:** `vm-controls.yml`, operación `seed-demo`, run `43078138229`, terminó `success` en 33s. El helper leyó en memoria el secreto runtime con la identidad de la VM e inició la sincronización usando `admin@nexoruta.test`; el contenido del secreto no se imprimió ni persistió.
+- **Alcance de esta pasada:** por instrucción, solo se comprobó el resultado de los workflows; no se hicieron llamadas HTTP, consultas de estado ni comprobaciones BrowserAct posteriores al deploy. El éxito del seed no acredita un ciclo AP-04: no se registraron hechos de devolución, transferencia física ni acuse. La captura pre-fix, el bloqueo de cobertura y las limitaciones del apartado anterior siguen vigentes; la card permanece `In progress`.
+
+## Actualización posterior: despliegue AP-04 y BrowserAct en GCP (11/11/2026)
+
+Esta actualización supersede, para la nueva fuente desplegada, la nota anterior de que faltaba comprobar BrowserAct tras el arreglo de recepción inicial.
+
+### Compilación
+
+- `NexoRuta.Commerce.csproj` compiló tras añadir el estado localizado de 404 y quitar el reintento para errores permanentes: 0 errores y 1 warning existente NU1510.
+- `NexoRuta.IntegrationTests` compiló con el filtro C31 actualizado: 0 errores y 3 warnings existentes (NU1510, xUnit2031 y EF1003). C31 no se ejecutó contra PostgreSQL durante esta pasada.
+
+### Workflow y HTTP
+
+- `vm-controls.yml` operation `update`, run `43082801986`: `publish_develop` y `deploy` completaron con `success`; el job de despliegue duró 8m08s. Fuentes fijadas: root `593095831d4b09e736df61b13f1f331e60d92225`, Backend `bac0b0b41c21993a515bacc420915d66a2fd3095`, Frontend `8974044e59f4b52940c5e16841174d0ca83f3460`, Mobile `53f6be2cdec48f48e30e390060feeaefb5be0ead`.
+- Tras autenticarse de nuevo, la navegación autenticada y `/_blazor/initializers`/`/_blazor/negotiate` devolvieron HTTP 200. Los envíos del filtro por botón y Enter se reflejaron en la pantalla.
+- En la sesión anterior vencida, BrowserAct observó varios 503 de `/_blazor/negotiate`; la recarga y reautenticación restablecieron el circuito. En esas páginas también apareció un GET 404 de `/js/portal-interactions.js`; no impidió las interacciones verificadas de AP-04 y queda como hallazgo transversal para triage.
+- No se consultó directamente el API de detalle, así que el resultado HTTP de esa llamada no se afirma aquí. El estado UI observado para el envío fuera del circuito es el 404 seguro documentado abajo.
+
+### Automatización BrowserAct y revisión visual
+
+- Con Commerce C2 autenticado, se filtró la referencia `AP04-GCP-20261111-bf71bf21`. La bandeja mostró “No hay devoluciones para estos filtros”. Se aplicó con el botón y repitió con Enter desde la referencia. Esto verifica que la recepción normal en depósito no se muestre como devolución.
+- En la ruta del detalle para el mismo envío, BrowserAct observó “No encontramos una devolución disponible para este envío.”, el enlace de retorno y ningún botón “Reintentar”. Captura revisada: `commerce-devoluciones-gcp-after-fix-detail-es.png` (1904 × 985).
+- La captura `commerce-devoluciones-gcp-detail-before-ui-fix.png` conserva el estado anterior al ajuste de Frontend: “Not Found” y un botón “Reintentar” para el mismo 404 permanente.
+- Captura revisada de filtros y estado vacío: `commerce-devoluciones-gcp-after-fix-filter-final.png` (1904 × 985). La navegación interactiva del filtro terminó en el estado esperado.
+- Se conservan las revisiones previas de la bandeja a 1440 px y 320 px (`commerce-devoluciones-gcp-after-fix-1440.png`, `commerce-devoluciones-gcp-after-fix-320.png`). Son anteriores al despliegue menor del mensaje de error del detalle, que no cambió la bandeja. La captura 720 CSS px/DPR 2 (`commerce-devoluciones-gcp-after-fix-zoom-equivalent.png`) es una aproximación de reflow y no equivale a zoom de texto nativo al 200 %.
+- BrowserAct inició con una sesión expirada y hubo reintentos de conexión; tras el login de C2 y una recarga limpia, navegar, aplicar filtros, enviar con Enter y renderizar el detalle funcionó. Se cerró la sesión al finalizar.
+
+### Limitaciones funcionales restantes
+
+- La prueba usa un envío sintético recibido normalmente en depósito, deliberadamente fuera del circuito AP-04. No valida un retorno elegible, filas de bultos, acuse, refresh/reapertura con devolución ni replay de una operación válida.
+- La planificación de ruta para ese escenario sigue bloqueada por la revisión de cobertura verificable. No se alteró custodia por SQL ni se inventó un hecho físico.
+- Siguen pendientes test C31 ejecutado en PostgreSQL, Compose local y persistencia tras reinicio, CI integrada, concurrencia/replay A/B, zoom de texto nativo al 200 %, estados de carga/error y un ciclo BrowserAct con devolución y acuse válidos. La card continúa `In progress`.
+
+## Actualización: nueva sesión GCP, seed y consulta BrowserAct (11/11/2026)
+
+- **Arranque de la demo:** al intentar volver a Commerce, `/` respondió 503 `unconditional drop overload`; GCP mostraba las dos VMs `TERMINATED`, coherente con el vencimiento de la sesión automática de cuatro horas. `vm-controls.yml` `start`, run `43090048785`, terminó `success` (job `deploy`: 9m39s) con release `release-98c273022b504feeb522d7062c948481`, root `8412c6160d937085e59e6699c6149f008c32e240`, backend `bac0b0b41c21993a515bacc420915d66a2fd3095`, frontend `8974044e59f4b52940c5e16841174d0ca83f3460` y mobile gitlink `53f6be2cdec48f48e30e390060feeaefb5be0ead`. Ambos nodos pasaron `apply`, salud del balanceador y HTTPS/login smoke; smoke Redis pasó desde A y B. El 503 anterior ocurrió con la sesión apagada, no durante el flujo AP-04.
+- **Seed general solicitado:** run `43092178888`, `seed-demo`, terminó `success` en 33 s. Resultado `synchronized-existing`, `seededBefore=true`: 5 operadores, 5 comercios, 70 envíos, 35 rutas y 252 operaciones. No duplicó datos y no generó retornos, transferencias ni acuses AP-04. El secreto se usó en memoria y no se imprimió ni persistió.
+- **BrowserAct Commerce C2:** después de reautenticar, `/devoluciones` cargó con los filtros activos y estado vacío en el rango predeterminado 13/10/2026–11/11/2026. El detalle de `01a1cc1b-f229-733b-8da7-bf69475c71a0`, con operador `Logística del Sur`, renderizó `No encontramos una devolución disponible para este envío.`. Capturas posteriores al nuevo `start`, revisadas visualmente: `evidencia/commerce-devoluciones-gcp-after-start-list.png` y `evidencia/commerce-devoluciones-gcp-after-start-detail.png` (1904 × 985).
+- **Backoffice:** buscar por código `AP04-GCP-RET-MN-01` encontró el bulto `01a1cc1b-f22a-7f20-aade-d0269eb451de`; mostraba `Admitido / Sin recepción` y las medidas declaradas. Captura full-page revisada: `evidencia/backoffice-recepcion-gcp-admitido-full.png`. El envío AP-04 sintético, creado desde Commerce, tiene dos bultos (`AP04-GCP-RET-MN-01`, `AP04-GCP-RET-MN-02`) y permanece admitido. La consulta anterior que mostraba 404 no se reprodujo después de reautenticar y arrancar la demo; su causa transitoria no se aisló.
+- **Integridad de hechos y límites:** no se confirmó la recepción porque no se observó presencia física, ni se registraron intento, devolución, traslado o acuse. El seed general no tiene una devolución apta para el ciclo. La opción `Ver seguimiento` de Mis envíos mostró un error genérico en esta visita; no se diagnosticó y queda fuera de AP-04. El circuito AP-04 completo con fila elegible, acuse y reapertura sigue sin probarse. No marcar la card Done: mantiene `In progress`.
+
+- Las sesiones BrowserAct de Commerce y Backoffice se cerraron después de guardar la evidencia; el Chrome aislado permanece disponible.
+
+## Implementación de fixture AP-04 y despliegue pendiente (11/11/2026)
+
+- **Backend:** se agregó la fixture idempotente `AP04-GCP-DEV-C2-01` a `DatosDemoSeeder.SembrarAsync`, tanto en primera ejecución como al sincronizar un seed existente. Usa Commerce C2 y Operador 1; crea la referencia importada V2 con el contrato/repositorio existente, y recorre cotejo, intentos espaciados, rendición, recepción, decisión operativa, devolución al depósito y transferencia al comercio. Queda pendiente de acuse. No modifica un acuse existente ni reinicia datos.
+- **Publicación de fuentes:** backend `4a8482466cab31df5e3e391997dc51e8945afce5` y raíz `d1e6b36da84ed00f83618286e3a8cfd0df9723bc` se publicaron en `develop`; el gitlink Mobile preexistente se preservó sin stage.
+- **Compilación local:** `dotnet build src/NexoRuta.Infrastructure/NexoRuta.Infrastructure.csproj --no-restore` terminó correctamente, con 0 errores y el warning preexistente NU1510. No se ejecutó la suite de tests ni una verificación local de Docker/WSL.
+- **GCP:** `vm-controls.yml` `start` se despachó tres veces para el mismo root commit: runs `43097132554`, `43097559076` y `43097988044`. Los tres terminaron `startup_failure` antes de crear jobs; la API de Actions informa cero check runs/job logs. Se solicitó reejecutar `43097988044`, pero Actions no creó el intento 2 (`attempt=1`; la consulta al endpoint del intento 2 devolvió 404). Por tanto, el release anterior sigue siendo el último desplegado; no se publicó el backend nuevo ni se ejecutó `seed-demo` sobre este código.
+- **BrowserAct remoto:** no se comprobó la fixture ni el acuse en la app GCP porque el último release desplegado aún no contiene esta implementación. Las verificaciones BrowserAct previas documentadas arriba no cubren el nuevo escenario.
+- **Estado:** el seed quedó implementado y publicado como fuente, pero la validación runtime en Docker/WSL y GCP, el seed remoto, el flujo de acuse BrowserAct y el workflow de despliegue siguen pendientes. Mantener AP-04 `In progress`.
+
+## Validación local Docker/WSL previa al siguiente deploy (11/11/2026)
+
+Esta sección agrega el resultado local; no modifica los resultados históricos de GCP. La versión remota anterior todavía no incluye el commit Backend `ae488b7`.
+
+### Compilación, HTTP y seed
+
+- El API se publicó en Docker desde el código local con `dotnet publish` para .NET 10: 0 errores y el warning preexistente NU1510. Se reconstruyó una segunda vez después de corregir la preservación de credenciales de Plataforma.
+- El proyecto Compose aislado `ap04local`, con su propio volumen `ap04local_postgres_data`, completó bootstrap, migraciones, importación de catálogo y provisión RLS/runtime restringida. Se conservaron intactos los contenedores y volúmenes ajenos, incluido `nexoruta_postgres_data`.
+- Los readiness probes locales devolvieron API HTTP 200 y Commerce HTTP 200. Mapbox temporal quedó apagado; Geoapify real siguió desactivado.
+- El seed general respondió `sembrada=true`: 5 operadores, 5 comercios, 70 envíos, 35 rutas y 252 operaciones. La segunda ruta de seed también se ejecutó sobre datos existentes. La referencia reservada AP-04 permaneció única y no reabrió ni duplicó el acuse.
+- Una repetición reveló que el helper general cambiaba la contraseña del administrador de Plataforma a la contraseña compartida de actores demo. Se eliminó ese reseteo en `SincronizarActoresAsync`: la contraseña de Plataforma queda bajo `PlatformInitialization`/secreto. Tras reconstruir, se ejecutó el seed dos veces consecutivas; el login de Plataforma siguió válido en ambas.
+
+### Automatización local y verificación de datos
+
+- BrowserAct no pudo controlar el Chrome directo: `chrome-direct` expiró la autorización CDP (`230404`), y el Chrome BrowserAct aislado no puede alcanzar `localhost` dentro de WSL. Para terminar la prueba local sin publicar el servicio, se usó un perfil temporal de Chrome instalado en Windows con Playwright. En GCP la prueba volverá a usar el Chrome aislado BrowserAct autorizado.
+- En la sesión local se inició sesión como Commerce C2, se abrió `/devoluciones`, se encontró `AP04-GCP-DEV-C2-01` pendiente y se cargaron el detalle de un bulto y el formulario de acuse. El envío del formulario pasó a recibida. En una sesión nueva, el listado ya mostró `Recibida`.
+- La API autenticada confirmó después de dos repeticiones del seed: una fila AP-04, situación `Recibido`, cero pendientes, bulto `Recibido conforme`, resultado del acuse `Conforme`. Esto acredita que la fixture y el acuse sobreviven la repetición del seed. La automatización no observó el mensaje de confirmación antes de que terminara su espera; la persistencia se confirmó con la sesión posterior y la consulta de lectura al API.
+- Capturas locales revisadas visualmente a 1440 × 1000: `evidencia/commerce-devoluciones-local-list.png` (listado recibido) y `evidencia/commerce-devoluciones-local-detail-pending.png` (detalle con formulario habilitado). No se capturó el detalle recibido en esta ejecución.
+- La conexión Blazor WebSocket se cerró con código 1006 durante una recarga de detalle desde Chrome Windows hacia WSL. Por eso la lectura posterior del estado se comprobó en una nueva sesión/listado y por el API, no mediante una reapertura estable del detalle. El mapeo Commerce temporal a la interfaz WSL se restauró a loopback al terminar.
+
+### Fuentes y siguiente paso
+
+- Backend `27cfb34` agregó el cotejo físico al seed inicial, un calendario compatible con las rutas semanales, la validación temprana de líneas de transferencia y la fixture AP-04. Backend `ae488b7` preserva las credenciales de Plataforma. Ambos commits se publicaron en `develop`.
+- Aún falta actualizar el gitlink root al backend `ae488b7`, desplegar la fuente fijada con `vm-controls.yml` operation `update`, comprobar que `seed-demo` termina bien en GCP y recorrer bandeja, detalle, acuse y estado persistido con BrowserAct. No iniciar un workflow sobre el backend previamente desplegado.
+- Las verificaciones locales no sustituyen el replay multiinstancia A/B, Compose tras reinicio, CI integrado, teclado/responsive/zoom nativo ni los demás criterios de cierre del plan. Mantener AP-04 `In progress`.
+
+## Actualización final: ajuste de pluralización y redeploy AP-04 (11/11/2026 local; eventos GCP del 12/11 UTC)
+
+### Fuente y despliegue
+
+- La revisión visual encontró que una devolución con un solo acuse pendiente decía `1 pendientes de acuse`. Commerce ahora muestra `pendiente` cuando el conteo es 1 y `pendientes` en los demás casos, en `frontend/src/NexoRuta.Commerce/Components/Features/Devoluciones/Pages/Devoluciones.razor`.
+- Frontend `d92a7cae72e7f94ff9562dd6611f3b5e28f1499f` y root `0dd503fba01e95d6b01c2e0a928c6b1a4d275154` se publicaron en `develop`; el backend fijado continúa en `7c2b6c680f7386b601d2be1b9049e50f90132704`.
+- `vm-controls.yml`, operación `update`, run `43127233264`: terminó `success`. `publish_develop` duró 4m26s y `deploy` 8m34s (12/11 00:30:39–00:39:13 UTC). La fixture AP-04 ya estaba sembrada y recibida; no se repitió el seed ni se alteraron datos.
+
+### Compilación, HTTP y automatización local
+
+- `dotnet build frontend/src/NexoRuta.Commerce/NexoRuta.Commerce.csproj --no-restore`: 0 errores; 1 warning preexistente NU1510.
+- Docker Compose del proyecto aislado `ap04local` compiló la imagen `commerce` con 0 errores. Persistió NU1510 y Compose avisó que Buildx no está instalado. Se recreó únicamente `ap04-local-commerce`; no se recrearon API, Postgres ni volúmenes.
+- Con la sesión WSL activa para evitar que el runtime local reiniciara contenedores entre comandos, readiness local de API y Commerce devolvió HTTP 200. Browser local inició sesión como Commerce C2, abrió la fila `AP04-GCP-DEV-C2-01` y su detalle recibido; no observó errores JavaScript. La fixture ya tenía el acuse definitivo, así que esta repetición no volvió a escribirlo. Capturas revisadas a 1440 × 1000: `evidencia/commerce-devoluciones-local-final-list.png` y `evidencia/commerce-devoluciones-local-final-detail-received.png`.
+
+### HTTP, BrowserAct y revisión visual en GCP
+
+- Readiness posterior al despliegue: API HTTP 200 y Commerce HTTP 200.
+- BrowserAct abrió Commerce C2, `/devoluciones` y el detalle AP-04. El listado mostró `Recibida` y cero pendientes; el detalle conservó el envío `Devuelto`, un bulto `Recibido conforme` y el evento `Acuse del comercio`. Recargar el detalle conservó ese estado. La sesión BrowserAct se cerró tras guardar evidencia.
+- Capturas posteriores a este deploy revisadas visualmente: `evidencia/commerce-devoluciones-gcp-final-current-list.png` y `evidencia/commerce-devoluciones-gcp-final-current-detail.png`. El ciclo completo pendiente → acuse conforme → recibido queda registrado en `evidencia/commerce-devoluciones-gcp-final-pending-list.png`, `evidencia/commerce-devoluciones-gcp-final-pending-detail.png`, `evidencia/commerce-devoluciones-gcp-final-ack-detail.png` y `evidencia/commerce-devoluciones-gcp-final-received-list.png`. Estas cuatro capturas del ciclo completo son del release previo al ajuste textual y conservan la etiqueta anterior del conteo 1; las capturas `final-current-*` son del release actual.
+- La fila persistente en GCP ya tenía acuse definitivo antes de este cambio. Por eso el navegador posterior al redeploy confirmó el plural para cero pendientes, pero no volvió a mostrar el caso singular `1 pendiente`; no se reinició ni modificó la fixture para forzar ese estado. La rama singular queda compilada, con revisión de código, pendiente de una captura visible en una futura fixture pendiente.
+
+### Estado y límites
+
+AP-04 continúa `In progress`. Esta pasada valida el parche, despliegue, disponibilidad HTTP y el estado recibido persistido. Siguen pendientes los criterios de cierre previos del plan: CI integrada y replay entre instancias, teclado, estados de carga/error y validación visual responsive/zoom nativo al 200 %. No se ejecutó la suite de tests.
+
+## Validación local focalizada de cierre AP-04 (12/11/2026)
+
+Esta actualización supersede los pendientes locales descritos en las instantáneas anteriores cuando hay evidencia nueva. Backend y Frontend ya publicaron esta implementación en `develop`; el gitlink del principal y su CI integrado siguen pendientes. Este código todavía no forma parte del último release GCP.
+
+### Compilación
+
+- `dotnet build frontend/src/NexoRuta.Commerce/NexoRuta.Commerce.csproj -c Release --no-restore` compiló Commerce con 0 errores y 1 warning existente NU1510.
+- El runner de pruebas usó .NET SDK 10.0.401 y Playwright 1.62.1. El primer intento de compilar ApiClient.Tests no tenía en caché las dependencias SQLite transitivas; `dotnet restore ... --locked-mode` restauró el proyecto sin cambiar contratos ni locks, y el intento siguiente pasó.
+
+### HTTP, PostgreSQL y permisos
+
+- En el Compose aislado `ap04local`, API y Commerce respondieron `HTTP 200` en `/health/ready`; Docker informó API, Commerce, Redis y Postgres saludables. Se preservó el volumen propio del proyecto. Mailpit reinició con código 255, pero no participa en el flujo AP-04 y no afectó estos healthchecks ni las pruebas.
+- Contra PostgreSQL real de Testcontainers: C31 pasó sus 4 variantes (0 fallidas, 0 omitidas); la migración/grant para un propietario de Commerce preexistente pasó 1/1; la prueba de alta de un comercio nuevo con `devoluciones.gestionar` pasó 1/1.
+- La cobertura C31 ejercita API restringida, aislamiento Commerce ajeno por lista/detalle/acuse, acuse concurrente desde dos API factories, conflicto al reutilizarlo con otro actor, revocación y reautorización del replay, auditoría append-only, y ausencia de cambios de estado, versión o outbox al acusar. La migración parte de `20261108020000_CommerceSettlements` y verifica el rol protegido y su permiso existente tras migrar.
+- `CommerceReturnsContractPublishesCurrentRoutesAndVersionedCommands` pasó 1/1 contra el OpenAPI versionado del Frontend.
+
+### Automatización de navegador local
+
+- `AP04TransfiereAlComercioUnBultoDevueltoQuePermaneceEnDeposito` pasó 1/1, sin skips, contra PostgreSQL y Commerce con Kestrel. Recorrió transferencia de un `Devuelto/Deposito`, acuse con observaciones, detalle e historial; la automatización verificó la confirmación y el foco visible. Evidencia: `evidencia/ap04-local-integration/`.
+- El harness de Compose autenticó el comercio sintético, registró un acuse con observaciones y reinició únicamente API y Commerce; una sesión nueva vio el mismo acuse e historial. Evidencia y reporte: `evidencia/ap04-local-compose-faults/ap04-browser-report.json`.
+- La automatización recorrió listado, detalle recibido y detalle reabierto a 1440 y 320 CSS px, además de base de texto al 200 % en 320 CSS px: 9 vistas Axe, cero violaciones y cero errores de página. El reporte midió viewport/body/shell/main en 320 px; la feature ocupó 288 px y el detalle reabierto 256 px, sin overflow horizontal.
+- Se pausó la API aislada para activar el estado lento con `aria-busy` y aviso visible conservando las filas; se detuvo esa misma API para activar el error recuperable y botón de reintento. Ambas vistas están en `evidencia/ap04-local-compose-faults/`.
+
+### Revisión visual y teclado
+
+- Se revisaron capturas sintéticas de lista, detalle recibido y reapertura tras reinicio a 1440/320 px y texto base al 200 %. Se corrigieron el ajuste del título “Devoluciones”, el ancho de fechas y la paginación móvil.
+- El harness recorrió el enlace de salto con teclado y verificó el foco visible sobre el estado de confirmación tras guardar. La captura `evidencia/ap04-local-compose-faults/commerce-devoluciones-local-received-list-320-text-200.png` confirma título y controles legibles sin recorte; también se revisaron las capturas separadas de demora, error y detalle reabierto.
+- El 200 % se simuló aumentando la tipografía raíz CSS en el navegador de prueba; no se afirma que sea una validación de zoom nativo del navegador.
+
+### Límites que siguen abiertos
+
+- El criterio 307 queda pendiente: falta demostrar con un conjunto autenticado que cubra devoluciones totales, parciales, históricas y completadas, además de filtros y cursores de servidor en más de una página. La consulta implementa filtros/cursor en PostgreSQL y hay cobertura del caso parcial, pero esta ejecución no prueba toda esa matriz.
+- El CI integrado obligatorio aún no se ejecutó para los SHAs nuevos; por eso el criterio 314 y la promoción de la card no se consideran cerrados aunque los tests focalizados locales pasen.
+- GCP conserva el último despliegue documentado anteriormente. Falta publicar esta combinación exacta, obtener digests de las dos instancias y hacer replay identificando API A/B; no se afirma aceptación remota nueva en esta actualización.
+- El listado final de SHAs, gitlinks y resultado CI se agregará tras publicar los commits. No se actualizará la card a `Done` mientras sigan abiertos los criterios 307, 314 o 317.
+
+## Cierre con seed general en GCP (12/11/2026)
+
+Esta sección sustituye los pendientes de ejecución que quedaron en las instantáneas anteriores. El ensayo se hizo sobre la aplicación desplegada y el seed general, sin mantener el proyecto aislado `ap04local`.
+
+### Fuentes, compilación y CI
+
+- El deploy GCP de `vm-controls.yml`, operación `start`, run `43164074196`, terminó `success` y publicó `release-402db30efd0348aa8bac1cc3e224f97f`. Fuentes del release: raíz `25231da6647cee925aab00413108eb7602905abf`, Backend `ae8b450c3d19711483fcd9bb48ac75317890f08f`, Frontend `c34764eb46444007f69cb525df959a7850f7891d` y Mobile `329dd3454704c0f45b615d609f469b7fd4b2dd5f`. El mismo release pasó aplicación y health directo en A y B; también pasaron el health del balanceador, HTTPS/login smoke y Redis cross-node smoke. No se capturaron aquí digests de imagen por nodo.
+- Se restauraron los paquetes del proyecto de integración con `dotnet restore ... --locked-mode`, sin cambiar los archivos de lock, y `dotnet build tests/NexoRuta.IntegrationTests/NexoRuta.IntegrationTests.csproj -c Release --no-restore` terminó con 0 errores y 3 warnings existentes (NU1510, xUnit2031, EF1003).
+- Los fallos del Integrated CI `43164585906` llevaron a corregir en Backend `2ec11a9163291d44634f7647665df5af80bd1476` el lookup dirigido por usuario y el cliente HTTP de C31 con Kestrel. El run `43167402519` dejó dos shards verdes y descubrió una expectativa que asumía un filtro RLS por rol. Se alineó con el alcance de la policy en Backend `c2be99d3070accb724c700fd72595a5636de1cea`; raíz `1476b06627bae51951447e4dd4ed2df84ec4b2ed` fija ese gitlink. Integrated CI `43169249651` terminó `success`: shards 0/1/2 pasaron 247/272/216 pruebas respectivamente, 735 en total, 0 fallidas y 0 omitidas; la prueba crítica de decisión operativa adicional pasó 1/1. Build Backend/Frontend/Mobile, migraciones Cloud SQL, infraestructura y source policy también pasaron. La falla QR del primer run no se reprodujo.
+- Aunque el run `43167402519` terminó rojo por la aserción RLS descrita, el artefacto `backend-ap04-browser-shard-0` confirmó autenticación Commerce, lista pendiente única, acuse con observaciones, actualización API/historial y reapertura. En el run verde `43169249651` se volvió a generar: los cuatro checks del reporte AP-04 pasaron y registró 0 errores.
+
+### Seed general y recorrido remoto
+
+- `seed-demo`, run `43165457098`, terminó `success` e informó `synchronized-existing`, `seededBefore=true`: 5 operadores, 5 comercios, 70 envíos, 35 rutas y 252 operaciones. No duplicó el seed base. Aseguró las referencias sintéticas `AP04-GCP-DEV-C2-01` y `AP04-GCP-DEV-C2-02`, ambas con una transferencia de devolución de un bulto; la primera estaba recibida y la segunda pendiente de acuse. El secreto de plataforma se consumió en runtime y no se imprimió ni guardó.
+- Se repitió `seed-demo` después del acuse, run `43168257113`, `success`, con el mismo resultado y cantidades (5/5/70/35/252). El código valida cada referencia reservada y retorna al encontrar la fixture existente; no vuelve a ejecutar la transferencia ni toca el acuse. El rerun no duplicó la fixture ni el seed base.
+- La API quedó disponible con readiness HTTP 200. BrowserAct inició sesión con Commerce C2 y comprobó la bandeja, filtro `Pendiente de acuse` por referencia, detalle, fila de bulto, envío `Devuelto`, eventos de devolución/transferencia, y un acuse conforme válido sobre el bulto sembrado. La confirmación indicó cero pendientes y `Recibido conforme`; recargar y reabrir conservó el acuse y el historial. En la lista ambas referencias quedaron `Recibida`.
+- En llamadas HTTP autenticadas, `limite=1` devolvió `AP04-GCP-DEV-C2-02` y un cursor; la segunda página devolvió `AP04-GCP-DEV-C2-01` y cursor terminal. El filtro `situacion=Recibido` devolvió ambas. Esto demuestra paginación real entre páginas sobre el conjunto semillado, no toda la matriz histórica/completa/parcial exigida por el criterio 307.
+- Capturas BrowserAct revisadas visualmente: `evidencia/commerce-devoluciones-gcp-general-seed-list.png`, `evidencia/commerce-devoluciones-gcp-general-seed-pending-filter.png`, `evidencia/commerce-devoluciones-gcp-general-seed-pending-detail.png`, `evidencia/commerce-devoluciones-gcp-general-seed-received-list.png`, `evidencia/commerce-devoluciones-gcp-general-seed-received-filter.png` y `evidencia/commerce-devoluciones-gcp-general-seed-received-detail.png`. La sesión se cerró después de guardar evidencia.
+
+### Limpieza y límites
+
+- A pedido del usuario se retiró el Compose aislado `ap04local`: 7 contenedores, volúmenes `ap04local_postgres_data`, `ap04local_api_dataprotection_keys`, `ap04local_redis_data`, `ap04local_tempo_data`, red `ap04local_default` e imágenes locales específicas de ese proyecto. Se comprobó que ya no queda ningún recurso con ese nombre/label. No se tocaron recursos Docker ajenos ni los screenshots/reportes históricos de auditoría.
+- El criterio 307 sigue parcialmente pendiente: el seed remoto prueba dos devoluciones de un bulto, el filtro, cursor y recorrido de acuse, pero no el conjunto total/parcial/histórico/completado. El criterio 317 también queda abierto: faltan digests de A/B y replay dirigido del mismo comando identificando cada nodo y su telemetría. No se afirma que el balanceador haya demostrado replay multiinstancia.
+- El despliegue quedó en la ventana de demo con apagado automático de cuatro horas; health y BrowserAct se verificaron durante esa ventana. Con implementación, seed y CI integrados completos, la card pasa a `Do tests`, no `Done`: siguen abiertas la matriz 307 y la comprobación dirigida A/B/digests del criterio 317.

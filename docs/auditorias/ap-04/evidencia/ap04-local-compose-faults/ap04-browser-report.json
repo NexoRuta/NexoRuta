@@ -1,0 +1,91 @@
+{
+  "checks": [
+    "Authenticated API lists one unique acknowledged AP-04 fixture for Commerce.",
+    "Already acknowledged fixture remains read-only; no second acknowledgement is offered.",
+    "HTTP API confirms the saved acknowledgement and observation.",
+    "Restarted only the AP-04 API and Commerce containers with project volumes preserved.",
+    "A fresh Commerce session after API/Commerce restarts sees the persisted acknowledgement and history."
+  ],
+  "views": [
+    {
+      "name": "commerce-devoluciones-local-received-list",
+      "width": 1440,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-received-list",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-received-list-text-200",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-received-detail",
+      "width": 1440,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-received-detail",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-received-detail-text-200",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-reopened-detail",
+      "width": 1440,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-reopened-detail",
+      "width": 320,
+      "violations": []
+    },
+    {
+      "name": "commerce-devoluciones-local-reopened-detail-text-200",
+      "width": 320,
+      "violations": []
+    }
+  ],
+  "responsiveMetrics": [
+    {
+      "name": "commerce-devoluciones-local-received-list",
+      "viewport": 320,
+      "body": 320,
+      "shell": 320,
+      "main": 320,
+      "page": 288,
+      "feature": 288
+    },
+    {
+      "name": "commerce-devoluciones-local-received-detail",
+      "viewport": 320,
+      "body": 320,
+      "shell": 320,
+      "main": 320,
+      "page": 288,
+      "feature": 288
+    },
+    {
+      "name": "commerce-devoluciones-local-reopened-detail",
+      "viewport": 320,
+      "body": 320,
+      "shell": 320,
+      "main": 320,
+      "page": 256,
+      "feature": 256
+    }
+  ],
+  "apiFaultInjection": [
+    "Paused only the isolated AP-04 API container; Commerce exposed aria-busy while refresh waited.",
+    "Stopped only the isolated AP-04 API container; Commerce exposed the recoverable API error state."
+  ],
+  "pageErrors": [],
+  "accessibilityViolations": []
+}

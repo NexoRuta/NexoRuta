@@ -5,11 +5,11 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: 'Start/update deploy the selected channel. Stop powers down the demo. Repair-ssh removes obsolete CI keys without operating the VMs.'
+        description: 'Start/update deploy the selected channel. Stop powers down the demo. Seed-demo creates or synchronizes general synthetic accounts and shipments; seed-status reads its status. Repair-ssh removes obsolete CI keys without operating the VMs.'
         required: true
         default: start
         type: choice
-        options: [start, update, stop, repair-ssh]
+        options: [start, update, stop, seed-demo, seed-status, repair-ssh]
 
 permissions:
   contents: read
@@ -111,9 +111,9 @@ jobs:
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       GCP_REGION: ${{ vars.GCP_REGION }}
       GCP_ZONE: ${{ vars.GCP_ZONE }}
+      GCP_SECONDARY_ZONE: ${{ vars.GCP_SECONDARY_ZONE || 'southamerica-west1-b' }}
       GCP_STATE_BUCKET: ${{ vars.GCP_STATE_BUCKET }}
       GCP_DELIVERY_BUCKET: ${{ vars.GCP_DELIVERY_BUCKET }}
-      GCP_SECONDARY_ZONE: ${{ vars.GCP_SECONDARY_ZONE || 'southamerica-west1-b' }}
       MONITOR_ALLOWED_EMAILS: ${{ vars.MONITOR_ALLOWED_EMAILS }}
       NEXORUTA_CACHE_ENABLED: ${{ vars.NEXORUTA_CACHE_ENABLED || 'true' }}
       MONITOR_GOOGLE_CLIENT_ID: ${{ secrets.MONITOR_GOOGLE_CLIENT_ID }}
@@ -176,6 +176,112 @@ jobs:
         run: python3 scripts/gcp/demo_session.py run
       - name: Remove this runner's OS Login SSH key
         if: always()
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: python3 scripts/gcp/ssh_keys.py cleanup
+
+  seed_demo:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/develop' &&
+      (inputs.operation == 'seed-demo' || inputs.operation == 'seed-status')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: nexoruta-demo
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GCP_ZONE: ${{ vars.GCP_ZONE }}
+      GCP_STATE_BUCKET: ${{ vars.GCP_STATE_BUCKET }}
+      GCP_DELIVERY_BUCKET: ${{ vars.GCP_DELIVERY_BUCKET }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      GCP_BASE_DOMAIN: ${{ vars.GCP_BASE_DOMAIN }}
+      GCP_MANAGE_DNS: ${{ vars.GCP_MANAGE_DNS }}
+      GCP_SECONDARY_ZONE: ${{ vars.GCP_SECONDARY_ZONE || 'southamerica-west1-b' }}
+      NEXORUTA_VM_NAME: nexoruta-demo
+      NEXORUTA_VM_NAME_B: nexoruta-demo-b
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Validate GCP deployment identity
+        run: python3 scripts/gcp/github_environment.py validate deploy
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        id: auth
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          version: "590.0.0"
+      - name: Copy the seed helper to node A
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: >-
+          gcloud compute scp scripts/gcp/seed_demo_data.py
+          "$NEXORUTA_VM_NAME:~/nexoruta-seed-demo.py"
+          --project="$GCP_PROJECT_ID" --zone="$GCP_ZONE"
+          --tunnel-through-iap --quiet
+      - name: Run the selected seed operation using the VM runtime identity
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          NEXORUTA_SEED_OPERATION: ${{ inputs.operation }}
+        run: |
+          case "$NEXORUTA_SEED_OPERATION" in
+            seed-demo) remote_command='python3 ~/nexoruta-seed-demo.py' ;;
+            seed-status) remote_command='python3 ~/nexoruta-seed-demo.py --status-only --diagnose-last-failure' ;;
+            *) echo "Unsupported seed operation." >&2; exit 2 ;;
+          esac
+          gcloud compute ssh "$NEXORUTA_VM_NAME" \
+            --project="$GCP_PROJECT_ID" --zone="$GCP_ZONE" \
+            --tunnel-through-iap --quiet \
+            --command="$remote_command"
+      - name: Copy the diagnostic helper to node B
+        if: inputs.operation == 'seed-status'
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: >-
+          gcloud compute scp scripts/gcp/seed_demo_data.py
+          "$NEXORUTA_VM_NAME_B:~/nexoruta-seed-demo.py"
+          --project="$GCP_PROJECT_ID" --zone="$GCP_SECONDARY_ZONE"
+          --tunnel-through-iap --quiet
+      - name: Read seed status and filtered errors from node B
+        if: inputs.operation == 'seed-status'
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: >-
+          gcloud compute ssh "$NEXORUTA_VM_NAME_B"
+          --project="$GCP_PROJECT_ID" --zone="$GCP_SECONDARY_ZONE"
+          --tunnel-through-iap --quiet
+          --command="python3 ~/nexoruta-seed-demo.py --status-only --diagnose-last-failure"
+      - name: Remove the diagnostic helper from node B
+        if: always() && inputs.operation == 'seed-status'
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: >-
+          gcloud compute ssh "$NEXORUTA_VM_NAME_B"
+          --project="$GCP_PROJECT_ID" --zone="$GCP_SECONDARY_ZONE"
+          --tunnel-through-iap --quiet
+          --command="rm -f ~/nexoruta-seed-demo.py" || true
+      - name: Remove the temporary seed helper
+        if: always()
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: >-
+          gcloud compute ssh "$NEXORUTA_VM_NAME"
+          --project="$GCP_PROJECT_ID" --zone="$GCP_ZONE"
+          --tunnel-through-iap --quiet
+          --command="rm -f ~/nexoruta-seed-demo.py" || true
+      - name: Remove this runner's OS Login SSH key
+        if: always() && steps.auth.outcome == 'success'
         env:
           CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: python3 scripts/gcp/ssh_keys.py cleanup
