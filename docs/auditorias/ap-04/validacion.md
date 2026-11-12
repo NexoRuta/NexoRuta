@@ -159,3 +159,28 @@ Esta sección agrega el resultado local; no modifica los resultados históricos 
 - Backend `27cfb34` agregó el cotejo físico al seed inicial, un calendario compatible con las rutas semanales, la validación temprana de líneas de transferencia y la fixture AP-04. Backend `ae488b7` preserva las credenciales de Plataforma. Ambos commits se publicaron en `develop`.
 - Aún falta actualizar el gitlink root al backend `ae488b7`, desplegar la fuente fijada con `vm-controls.yml` operation `update`, comprobar que `seed-demo` termina bien en GCP y recorrer bandeja, detalle, acuse y estado persistido con BrowserAct. No iniciar un workflow sobre el backend previamente desplegado.
 - Las verificaciones locales no sustituyen el replay multiinstancia A/B, Compose tras reinicio, CI integrado, teclado/responsive/zoom nativo ni los demás criterios de cierre del plan. Mantener AP-04 `In progress`.
+
+## Actualización final: ajuste de pluralización y redeploy AP-04 (11/11/2026 local; eventos GCP del 12/11 UTC)
+
+### Fuente y despliegue
+
+- La revisión visual encontró que una devolución con un solo acuse pendiente decía `1 pendientes de acuse`. Commerce ahora muestra `pendiente` cuando el conteo es 1 y `pendientes` en los demás casos, en `frontend/src/NexoRuta.Commerce/Components/Features/Devoluciones/Pages/Devoluciones.razor`.
+- Frontend `d92a7cae72e7f94ff9562dd6611f3b5e28f1499f` y root `0dd503fba01e95d6b01c2e0a928c6b1a4d275154` se publicaron en `develop`; el backend fijado continúa en `7c2b6c680f7386b601d2be1b9049e50f90132704`.
+- `vm-controls.yml`, operación `update`, run `43127233264`: terminó `success`. `publish_develop` duró 4m26s y `deploy` 8m34s (12/11 00:30:39–00:39:13 UTC). La fixture AP-04 ya estaba sembrada y recibida; no se repitió el seed ni se alteraron datos.
+
+### Compilación, HTTP y automatización local
+
+- `dotnet build frontend/src/NexoRuta.Commerce/NexoRuta.Commerce.csproj --no-restore`: 0 errores; 1 warning preexistente NU1510.
+- Docker Compose del proyecto aislado `ap04local` compiló la imagen `commerce` con 0 errores. Persistió NU1510 y Compose avisó que Buildx no está instalado. Se recreó únicamente `ap04-local-commerce`; no se recrearon API, Postgres ni volúmenes.
+- Con la sesión WSL activa para evitar que el runtime local reiniciara contenedores entre comandos, readiness local de API y Commerce devolvió HTTP 200. Browser local inició sesión como Commerce C2, abrió la fila `AP04-GCP-DEV-C2-01` y su detalle recibido; no observó errores JavaScript. La fixture ya tenía el acuse definitivo, así que esta repetición no volvió a escribirlo. Capturas revisadas a 1440 × 1000: `evidencia/commerce-devoluciones-local-final-list.png` y `evidencia/commerce-devoluciones-local-final-detail-received.png`.
+
+### HTTP, BrowserAct y revisión visual en GCP
+
+- Readiness posterior al despliegue: API HTTP 200 y Commerce HTTP 200.
+- BrowserAct abrió Commerce C2, `/devoluciones` y el detalle AP-04. El listado mostró `Recibida` y cero pendientes; el detalle conservó el envío `Devuelto`, un bulto `Recibido conforme` y el evento `Acuse del comercio`. Recargar el detalle conservó ese estado. La sesión BrowserAct se cerró tras guardar evidencia.
+- Capturas posteriores a este deploy revisadas visualmente: `evidencia/commerce-devoluciones-gcp-final-current-list.png` y `evidencia/commerce-devoluciones-gcp-final-current-detail.png`. El ciclo completo pendiente → acuse conforme → recibido queda registrado en `evidencia/commerce-devoluciones-gcp-final-pending-list.png`, `evidencia/commerce-devoluciones-gcp-final-pending-detail.png`, `evidencia/commerce-devoluciones-gcp-final-ack-detail.png` y `evidencia/commerce-devoluciones-gcp-final-received-list.png`. Estas cuatro capturas del ciclo completo son del release previo al ajuste textual y conservan la etiqueta anterior del conteo 1; las capturas `final-current-*` son del release actual.
+- La fila persistente en GCP ya tenía acuse definitivo antes de este cambio. Por eso el navegador posterior al redeploy confirmó el plural para cero pendientes, pero no volvió a mostrar el caso singular `1 pendiente`; no se reinició ni modificó la fixture para forzar ese estado. La rama singular queda compilada, con revisión de código, pendiente de una captura visible en una futura fixture pendiente.
+
+### Estado y límites
+
+AP-04 continúa `In progress`. Esta pasada valida el parche, despliegue, disponibilidad HTTP y el estado recibido persistido. Siguen pendientes los criterios de cierre previos del plan: CI integrada y replay entre instancias, teclado, estados de carga/error y validación visual responsive/zoom nativo al 200 %. No se ejecutó la suite de tests.
