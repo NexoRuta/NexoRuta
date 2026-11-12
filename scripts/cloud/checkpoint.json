@@ -1,18 +1,18 @@
 {
   "rootRepository": "https://github.com/NexoRuta/NexoRuta.git",
-  "rootBranch": "feat/gestion-liquidaciones-cuenta",
+  "rootBranch": "fix/uxui",
   "submodules": [
     {
       "path": "backend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Backend.git",
-      "branch": "feat/gestion-liquidaciones-cuenta",
-      "commit": "0d14dddb3b3ba6cc7c32389e415a8776e61bc370"
+      "branch": "fix/uxui",
+      "commit": "c786977580dc5fb01839ee8c9816118c7e8dbf1e"
     },
     {
       "path": "frontend",
       "repository": "https://github.com/NexoRuta/NexoRuta-Frontend.git",
-      "branch": "feat/gestion-liquidaciones-cuenta",
-      "commit": "fa94588955c9de877190b411ae6543fd4c3e9b98"
+      "branch": "fix/uxui",
+      "commit": "b994957d3ae30c3a6290e8d990b95ba00273232c"
     },
     {
       "path": "mobile",
@@ -23,5 +23,6 @@
   ],
   "initialRequiredCommit": "8991321593f9092e18aac83d6a9a11df4c388cb3",
   "integratedBaseCommit": "6001eb5cf6dba189f2be4d4777459b5bb554e7c9",
-  "preservedDevelopFollowupCommit": "14a17b67d6a61be8bf56d52bc026fd9e63458896"
+  "preservedDevelopFollowupCommit": "14a17b67d6a61be8bf56d52bc026fd9e63458896",
+  "uxuiBaseCommit": "d420dfefc70f0b4e789ae350d4d66bba9e4180a0"
 }

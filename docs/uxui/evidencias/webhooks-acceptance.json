@@ -1,0 +1,21 @@
+{
+  "scenarios": [
+    "Commerce configura → API confirma creación y cancelación → dos workers HTTP → Tracking valida firma → historial Entregado",
+    "Falla simulada 503, espera creciente y recuperación automática",
+    "Agotamiento en 3 intentos y reenvío manual desde Commerce con auditoría",
+    "Respuesta realmente interrumpida después del commit: reintento, misma identidad y un solo efecto",
+    "Conexión realmente rechazada y recuperación; reinicio del receptor conserva eventos y deduplicación",
+    "TCP acepta conexión pero no responde HTTP: timeout real y recuperación posterior",
+    "Reinicio de dos workers conserva y procesa pendientes",
+    "Repetición HTTP firmada aceptada como duplicado; payload alterado rechazado 401",
+    "Estados reales de carga, vacío, error HTTP 503 recuperable y usuario con permiso solo de consulta",
+    "Native Chromium zoom 200% verified by tabs.getZoom, viewport and pixel ratio; keyboard and no page overflow."
+  ],
+  "automatedVisualChecks": [
+    "1440px",
+    "320/375/768px no overflow",
+    "keyboard focus",
+    "200% receiver text"
+  ],
+  "pageErrors": []
+}
