@@ -1,0 +1,84 @@
+{
+  "date": "2026-11-12",
+  "scope": "AP-04 GCP develop only",
+  "deployment": {
+    "workflow": "vm-controls.yml",
+    "operation": "update",
+    "runId": "43248344301",
+    "releaseId": "release-e005ddda800b4ca886408cac7132e26d",
+    "source": {
+      "root": "b5317fd6e25bcfbc17186997578e4461cf794378",
+      "backend": "db38a2ac31d69e2a70411c283238e28400636d77",
+      "frontend": "c34764eb46444007f69cb525df959a7850f7891d",
+      "mobile": "329dd3454704c0f45b615d609f469b7fd4b2dd5f"
+    },
+    "seedRuns": ["43251028684", "43252893288"],
+    "seedResult": "synchronized-existing",
+    "seedCounts": {
+      "operators": 5,
+      "commerces": 5,
+      "shipments": 70,
+      "routes": 35,
+      "operations": 252
+    }
+  },
+  "apiImage": "southamerica-west1-docker.pkg.dev/nexoruta-demo-20261022/nexoruta/api@sha256:23d51c35a6bb17701033e3ff5c6984f1ce40c7f9aad0372f6496b425c0a18964",
+  "fixtureReference": "AP04-GCP-DEV-C2-01",
+  "syntheticCommand": {
+    "shipmentId": "01a1cd12-2b80-7fde-9418-16aa74d9ab03",
+    "transferId": "01a1cd12-36b8-7490-887f-dc98e85bd54d",
+    "commandId": "a31b3d64-d6ef-42ed-892d-c02c9a959a00",
+    "request": {
+      "versionTransferencia": 1,
+      "conforme": true,
+      "bultos": [
+        {
+          "bultoId": "01a1cd12-2b81-7fb9-9f81-36a789268e9a",
+          "versionBulto": 16,
+          "observacion": null
+        }
+      ]
+    },
+    "expectedResponse": {
+      "acuseId": "a31b3d64-d6ef-42ed-892d-c02c9a959a00",
+      "bultos": 1,
+      "resultado": "Conforme",
+      "registradoEnUtc": "2026-11-12T00:06:58.633328+00:00"
+    }
+  },
+  "directReplay": {
+    "nodeA": {
+      "nodeName": "a",
+      "httpStatus": 200,
+      "responseMatchesExpected": true,
+      "lokiRequestLogUtc": [
+        "2026-11-12T16:00:55.2452595+00:00",
+        "2026-11-12T16:02:34.3633319+00:00"
+      ]
+    },
+    "nodeB": {
+      "nodeName": "b",
+      "httpStatus": 200,
+      "responseMatchesExpected": true,
+      "lokiRequestLogUtc": [
+        "2026-11-12T16:03:33.0880526+00:00",
+        "2026-11-12T16:13:44.2794610+00:00"
+      ]
+    },
+    "restart": {
+      "restarted": "API container on node A",
+      "nodeAReadinessAfterRestart": 200,
+      "nodeBReadinessBeforeSurvivorReplay": 200,
+      "survivorReplayOnNodeB": "same command; same response; HTTP 200"
+    },
+    "telemetry": {
+      "source": "Loki structured application request logs",
+      "labels": ["node", "service"],
+      "route": "api/devoluciones/transferencias/{transferenciaId:guid}/acuses",
+      "status": 200,
+      "prometheusMetrics": "not verified; Prometheus returned HTTP 503 while replaying persistent WAL"
+    }
+  },
+  "githubCi": "not run for the seed fixture commit per user instruction; prior Integrated CI run 43169249651 was green",
+  "containsCredentials": false
+}
