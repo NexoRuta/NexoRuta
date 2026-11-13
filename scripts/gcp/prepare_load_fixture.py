@@ -69,7 +69,7 @@ def secret_version(token, project):
         raise RuntimeError("The current fixture secret exceeds the Secret Manager payload limit")
     try:
         version = re.fullmatch(
-            rf"projects/{re.escape(project)}/secrets/{re.escape(FIXTURE_SECRET)}/versions/([1-9][0-9]*)",
+            rf"projects/(?:{re.escape(project)}|[1-9][0-9]*)/secrets/{re.escape(FIXTURE_SECRET)}/versions/([1-9][0-9]*)",
             value.get("name", ""),
         )
         if not version:
