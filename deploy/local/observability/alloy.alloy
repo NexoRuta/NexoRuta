@@ -79,31 +79,31 @@ prometheus.exporter.blackbox "local_services" {
 
   target {
     name    = "api"
-    address = "http://api:8080/health/ready"
+    address = "http://api:8080/ready"
     module  = "http_2xx"
     labels  = { service = "api", node = "local" }
   }
   target {
     name    = "admin"
-    address = "http://admin:8080/health/ready"
+    address = "http://admin:8080/ready"
     module  = "http_2xx"
     labels  = { service = "admin", node = "local" }
   }
   target {
     name    = "backoffice"
-    address = "http://backoffice:8080/health/ready"
+    address = "http://backoffice:8080/ready"
     module  = "http_2xx"
     labels  = { service = "backoffice", node = "local" }
   }
   target {
     name    = "commerce"
-    address = "http://commerce:8080/health/ready"
+    address = "http://commerce:8080/ready"
     module  = "http_2xx"
     labels  = { service = "commerce", node = "local" }
   }
   target {
     name    = "tracking"
-    address = "http://tracking:8080/health/ready"
+    address = "http://tracking:8080/ready"
     module  = "http_2xx"
     labels  = { service = "tracking", node = "local" }
   }

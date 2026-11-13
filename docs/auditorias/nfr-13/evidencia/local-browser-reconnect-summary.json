@@ -1,0 +1,13 @@
+{
+  "tracking": true,
+  "publicRequest": true,
+  "duplicateRequest": true,
+  "backofficeDecision": true,
+  "liveKafkaSignalrUpdate": true,
+  "signalrAutomaticReconnectAfterEstablishedSocketLoss": true,
+  "signalrManualRecoveryAfterFailedInitialConnection": true,
+  "desktop": true,
+  "mobileWidth": 320,
+  "keyboard": true,
+  "axeViolations": 0
+}

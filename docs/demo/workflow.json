@@ -79,7 +79,7 @@
         "Crear tenant exclusivo de datos sintéticos o usar uno expresamente reservado a esta ejecución; no operar datos previos de otras pruebas. La simulación no acredita hechos físicos reales."
       ],
       "assertions": [
-        "/health/live y /health/ready responden200; portales muestran login/inicio correcto.",
+        "/live y /ready responden200; portales muestran login/inicio correcto.",
         "Ruta de hoy del operador; APK compatible y HTTPS válido. Sin Android: tramo nativo bloqueado."
       ],
       "outputs": [

@@ -112,7 +112,7 @@ x-web:
   healthcheck: &id006
     test:
     - CMD-SHELL
-    - curl -fsS http://localhost:8080/health/ready >/dev/null
+    - curl -fsS http://localhost:8080/ready >/dev/null
     interval: 10s
     timeout: 5s
     retries: 18
@@ -380,7 +380,7 @@ services:
     healthcheck:
       test:
       - CMD-SHELL
-      - curl -fsS http://localhost:8080/health/ready >/dev/null
+      - curl -fsS http://localhost:8080/ready >/dev/null
       interval: 10s
       timeout: 5s
       retries: 24
@@ -573,7 +573,7 @@ services:
     healthcheck:
       test:
       - CMD-SHELL
-      - curl -fsS http://localhost:8080/health/ready >/dev/null
+      - curl -fsS http://localhost:8080/ready >/dev/null
       interval: 10s
       timeout: 5s
       retries: 18

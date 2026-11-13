@@ -228,7 +228,7 @@ class Collector:
 
     def probe_services(self):
         for service, port in {**HTTP_PORTS, **self.config.get("service_ports", {})}.items():
-            path = "/api/health" if service == "monitor" else "/health/ready"
+            path = "/api/health" if service == "monitor" else "/ready"
             try:
                 with urllib.request.urlopen(f"http://{self.config['private_ip']}:{port}{path}", timeout=3) as response:
                     healthy = response.status == 200

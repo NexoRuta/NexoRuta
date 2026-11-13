@@ -170,7 +170,7 @@ def start():
     for port in [5000,5101,5102,5103]:
         for _ in range(90):
             try:
-                LOCAL_HTTP.open(f"http://127.0.0.1:{port}/health/ready",timeout=2);break
+                LOCAL_HTTP.open(f"http://127.0.0.1:{port}/ready",timeout=2);break
             except Exception: time.sleep(1)
         else: raise RuntimeError(f"Service {port} failed; inspect private logs in {STATE}")
     if os.environ.get("NEXORUTA_CLOUD_WEBHOOK_DEMO") == "1":

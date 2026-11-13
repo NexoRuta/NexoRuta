@@ -598,7 +598,7 @@ def error_location(error):
 
 def direct_health(private_ip, attempts=18):
     for name, port in DIRECT_PORTS.items():
-        path = "/api/health" if name == "monitor" else "/health/ready"
+        path = "/api/health" if name == "monitor" else "/ready"
         for attempt in range(attempts):
             try:
                 with urllib.request.urlopen(f"http://{private_ip}:{port}{path}", timeout=5) as response:
@@ -771,7 +771,7 @@ class MailSmokeError(RuntimeError):
 def smoke(runtime, check_accounts=True):
     endpoints = runtime["endpoints"]
     for name in ("api", "admin", "backoffice", "commerce", "tracking", "monitor"):
-        path = "/health/ready" if name in ("api", "tracking") else "/ingresar"
+        path = "/ready" if name in ("api", "tracking") else "/ingresar"
         if name == "monitor":
             path = "/api/health"
         url = endpoints[name] + path

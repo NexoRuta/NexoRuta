@@ -43,7 +43,9 @@ foreach ($case in $cases) {
 
 class SetupPowerShellTests(unittest.TestCase):
     def setUp(self):
-        self.shell = shutil.which("powershell.exe") or shutil.which("pwsh")
+        self.shell = shutil.which("pwsh")
+        if os.name == "nt":
+            self.shell = shutil.which("powershell.exe") or self.shell
         if not self.shell:
             self.skipTest("PowerShell is unavailable")
         self.directory = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="nexoruta argv ")))

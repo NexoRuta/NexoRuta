@@ -14,14 +14,14 @@ import runner
 class LoadRunnerDiagnosticTests(unittest.TestCase):
     def test_http_error_includes_status_and_endpoint_but_not_query_parameters(self):
         error = urllib.error.HTTPError(
-            "https://api.example.test/health/ready?access_token=private",
+            "https://api.example.test/ready?access_token=private",
             403, "Forbidden", {}, None,
         )
 
         message = runner.safe_http_error(error)
 
         self.assertEqual(
-            "Load test failed safely: HTTPError status=403 endpoint=api.example.test/health/ready",
+            "Load test failed safely: HTTPError status=403 endpoint=api.example.test/ready",
             message,
         )
         self.assertNotIn("access_token", message)

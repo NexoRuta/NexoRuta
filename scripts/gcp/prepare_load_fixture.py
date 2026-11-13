@@ -230,7 +230,7 @@ def main():
     origin = load_tests.application_origin(config)
     check_active = lambda: assert_preparation_active(config, token, run_id)
     check_active()
-    status, _ = api_request(origin, "", "GET", "/health/ready")
+    status, _ = api_request(origin, "", "GET", "/ready")
     if status != 200:
         raise RuntimeError("The remote application is not ready for fixture preparation")
     accounts = fixture_accounts(current, token, project)
