@@ -310,7 +310,7 @@ def immutable_manifest(config, run_id, profile, session_expires_at, fixture_vers
             if not running:
                 raise RuntimeError(f"The required {worker} service is not running on node {node['NODE_ID']}")
     origin = application_origin(config)
-    request = urllib.request.Request(origin + "/health/ready")
+    request = urllib.request.Request(origin + "/ready")
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             if response.status != 200:

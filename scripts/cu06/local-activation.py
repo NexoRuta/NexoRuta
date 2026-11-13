@@ -41,7 +41,7 @@ def prepare():
  try:
   for i in range(100):
    try:
-    with urllib.request.urlopen(base+'/health/live',timeout=1) as r:
+    with urllib.request.urlopen(base+'/live',timeout=1) as r:
      if r.status==200:break
    except OSError:time.sleep(.2)
   token=login(base,V['NEXORUTA_OPERADOR_MAIL']);role=(W/'role-id.txt').read_text().strip()
@@ -65,7 +65,7 @@ def stage():
    base='http://127.0.0.1:5189'
    for i in range(150):
     try:
-     with urllib.request.urlopen(base+'/health/live',timeout=1) as r:
+     with urllib.request.urlopen(base+'/live',timeout=1) as r:
       if r.status==200:break
     except OSError:time.sleep(.2)
     if child.poll() is not None:raise RuntimeError('Stage host exited; protected log retained')

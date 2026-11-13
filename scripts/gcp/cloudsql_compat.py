@@ -103,6 +103,11 @@ def main():
                 print("Disposable PostgreSQL migration diagnostic:\\n" + detail[-24000:], flush=True)
                 raise
             print("Migration chain passed with NOSUPERUSER/CREATEROLE/CREATEDB postgres.")
+            create_privilege = psql(
+                "SELECT has_schema_privilege('nexoruta_proof_deadline_fn', 'nexoruta_app', 'CREATE');"
+            ).stdout.strip()
+            if create_privilege != "f":
+                raise RuntimeError("Proof deadline function owner retained schema CREATE after migration")
             # Repeat all role/schema provisioning, including hosting, to exercise
             # ALTER OWNER and CREATE OR REPLACE against their final owners.
             for sql in ("runtime-roles.sql", "postflight.sql", "hosting.sql", "preflight.sql",

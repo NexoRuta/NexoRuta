@@ -292,7 +292,7 @@ def main():
     if operations_path:
         os.environ["NEXORUTA_LOAD_OPERATIONS_FILE"] = str(operations_path)
     # These are local, bounded probes from the isolated VPC before any user traffic.
-    check_endpoint(api_origin + "/health/ready")
+    check_endpoint(api_origin + "/ready")
     prom_origin = prom_write.removesuffix("/api/v1/write")
     check_endpoint(prom_origin + "/-/ready")
 

@@ -4,11 +4,11 @@ locals {
     b = { name = google_compute_instance.secondary.name, zone = var.secondary_zone, instance = google_compute_instance.secondary.self_link }
   }
   web_services = {
-    api        = { port = 18080, health_path = "/health/ready", affinity = false }
-    admin      = { port = 18081, health_path = "/health/ready", affinity = false }
-    backoffice = { port = 18082, health_path = "/health/ready", affinity = false }
-    commerce   = { port = 18083, health_path = "/health/ready", affinity = true }
-    tracking   = { port = 18084, health_path = "/health/ready", affinity = true }
+    api        = { port = 18080, health_path = "/ready", affinity = false }
+    admin      = { port = 18081, health_path = "/ready", affinity = false }
+    backoffice = { port = 18082, health_path = "/ready", affinity = true }
+    commerce   = { port = 18083, health_path = "/ready", affinity = true }
+    tracking   = { port = 18084, health_path = "/ready", affinity = true }
     monitor    = { port = 13000, health_path = "/api/health", affinity = false }
     mail       = { port = 18025, health_path = "/healthz", affinity = false }
   }

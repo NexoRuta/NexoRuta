@@ -23,7 +23,7 @@ Dashboard: `nexoruta-demo` en el Grafana existente. La fila **Caché distribuida
 
 ## Recuperación
 
-- La aplicación degrada a PostgreSQL si Redis falla; la caída de Redis no debe convertir `/health/ready` en una dependencia del balanceador. Confirmar lecturas del origen y errores de caché sin modificar PostgreSQL ni invalidar claves globalmente.
+- La aplicación degrada a PostgreSQL si Redis falla; la caída de Redis no debe convertir `/ready` en una dependencia del balanceador. Confirmar lecturas del origen y errores de caché sin modificar PostgreSQL ni invalidar claves globalmente.
 - Una vez completada la migración a B, para bypass deliberado durante una falla persistente, establecer `NEXORUTA_CACHE_ENABLED=false` en el entorno GitHub `nexoruta-demo` y ejecutar el workflow manual `vm-controls` con `update`. Los dos nodos deben confirmar el modo bypass; el deployer omite reconciliar Redis y las sondas Redis, actualiza las API para leer el origen PostgreSQL y conserva el límite de sesión existente. La monitorización sigue mostrando Redis no saludable. Volver a `true` y ejecutar otro `update` al resolver la causa; esa actualización exige nuevamente smoke TLS/AUTH desde A y B.
 - `stop` detiene ambas VM y el contenedor Redis de B. `start` levanta las VMs dentro del límite de cuatro horas; Redis vuelve vacío y se rellena desde PostgreSQL. Los datos de negocio no dependen de Redis.
 - No usar `FLUSHALL`, `FLUSHDB`, `KEYS`, `CONFIG` ni `SHUTDOWN` con credenciales runtime. El ACL limita el usuario a comandos de caché y claves bajo el namespace de NexoRuta.

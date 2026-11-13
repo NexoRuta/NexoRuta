@@ -22,7 +22,7 @@ with (w/'stage-host.log').open('wb') as log:
  try:
   for i in range(150):
    try:
-    if req('/health/live')[0]==200:break
+    if req('/live')[0]==200:break
    except OSError:pass
    if process.poll() is not None:raise RuntimeError('Stage host failed; protected stage-host.log contains diagnostics')
    time.sleep(.2)

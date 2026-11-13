@@ -98,7 +98,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if self.path == "/health/ready":
+        if self.path == "/ready":
             self.respond(200)
             return
         with PEER.lock:

@@ -86,7 +86,7 @@ docker compose down
 
 | Servicio | Dirección local | Uso y límites |
 | --- | --- | --- |
-| API | `http://localhost:5000` | Login en `POST /api/auth/login`; las rutas privadas usan `Authorization: Bearer`. El comercio selecciona un operador disponible por envío. Salud en `/health/live` y `/health/ready`; OpenAPI en [`/openapi/v1.json`](http://localhost:5000/openapi/v1.json). |
+| API | `http://localhost:5000` | Login en `POST /api/auth/login`; las rutas privadas usan `Authorization: Bearer`. El comercio selecciona un operador disponible por envío. Salud en `/live` y `/ready`; OpenAPI en [`/openapi/v1.json`](http://localhost:5000/openapi/v1.json). |
 | Backoffice | `http://localhost:5101` | Portal autenticado del operador: su organización, usuarios/roles propios y envíos asignados. |
 | Admin | `http://localhost:5104` | Operaciones de plataforma: alta/consulta/estado de organizaciones y resolución de solicitudes. Ver [guía de plataforma](backend/docs/workflow/platform-administration.md). |
 | Commerce | `http://localhost:5102` | Registro, alta propia y autogestión de la organización de comercio, usuarios/roles, envíos y consulta. |

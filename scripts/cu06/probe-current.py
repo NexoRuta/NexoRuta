@@ -22,7 +22,7 @@ def start(folder,dll,env):
 def ready(url,child):
  for i in range(150):
   try:
-   with urllib.request.urlopen(url+'health/live',timeout=1) as r:
+   with urllib.request.urlopen(url+'live',timeout=1) as r:
     if r.status==200:return
   except OSError:pass
   if child.poll() is not None:raise RuntimeError('Published fixture host failed; protected startup log retained')
@@ -39,7 +39,7 @@ try:
  env.update({'ASPNETCORE_URLS':bo,'Api__BaseAddress':api,'DataProtection__KeysDirectory':str(w/'fixture-bo-keys')});child=start('backoffice','NexoRuta.Backoffice.dll',env)
  for i in range(150):
   try:
-   with urllib.request.urlopen(bo+'health/ready',timeout=1) as r:
+   with urllib.request.urlopen(bo+'ready',timeout=1) as r:
     if r.status==200:break
   except OSError:pass
   if child.poll() is not None:raise RuntimeError('Published Backoffice startup failed')
