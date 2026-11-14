@@ -340,6 +340,16 @@ class DeliveryTests(unittest.TestCase):
             "Node a stage prepare failed (HTTPError)",
         )
 
+    def test_drain_skips_node_already_absent_from_its_load_balancer_group(self):
+        node = {"NODE_ID": "a", "VM_NAME": "nexoruta-demo"}
+        with patch.object(session, "gcloud", return_value="[]") as gcloud:
+            self.assertFalse(delivery.drain_node_from_group(node))
+        self.assertEqual(gcloud.call_count, 1)
+        self.assertEqual(gcloud.call_args.args[:5],
+                         (node, "compute", "instance-groups", "unmanaged", "list-instances"))
+        self.assertIn("nexoruta-demo-a", gcloud.call_args.args)
+        self.assertTrue(gcloud.call_args.kwargs["capture"])
+
     def test_deployment_drains_and_stops_both_nodes_before_migrating(self):
         release = "release-" + "a" * 32
         nodes = [
@@ -371,6 +381,8 @@ class DeliveryTests(unittest.TestCase):
                         result["endpoints"] = {"api": "https://api.example.test"}
                     return json.dumps(result)
                 return ""
+            if args[:4] == ("compute", "instance-groups", "unmanaged", "list-instances"):
+                return json.dumps([{"instance": f"/zones/test/instances/{node['VM_NAME']}"}])
             operation = next((item for item in args if item in ("remove-instances", "add-instances")), None)
             if operation:
                 events.append((operation, node["NODE_ID"]))

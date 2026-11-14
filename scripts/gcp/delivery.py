@@ -435,6 +435,23 @@ def remote_stage_error(output, node, operation):
     return f"Node {node} stage {operation} failed without a structured report"
 
 
+def drain_node_from_group(node):
+    group = f"nexoruta-demo-{node['NODE_ID']}"
+    members = json.loads(session.gcloud(node, "compute", "instance-groups", "unmanaged", "list-instances",
+                                        group, "--format=json", capture=True))
+    if not isinstance(members, list):
+        raise RuntimeError(f"Could not verify node {node['NODE_ID']} load-balancer membership")
+    if not any(isinstance(member, dict) and isinstance(member.get("instance"), str)
+               and member["instance"].endswith("/" + node["VM_NAME"]) for member in members):
+        print("NEXORUTA_LB_DRAIN " + json.dumps({
+            "node": node["NODE_ID"], "status": "already_absent",
+        }), flush=True)
+        return False
+    session.gcloud(node, "compute", "instance-groups", "unmanaged", "remove-instances", group,
+                   f"--instances={node['VM_NAME']}")
+    return True
+
+
 def wait_for_load_balancer_health(node, deadline, health):
     until = time.monotonic() + 300
     while time.monotonic() < until and time.time() < deadline:
@@ -596,8 +613,7 @@ def deploy(config, release):
     groups = {node["NODE_ID"]: f"nexoruta-demo-{node['NODE_ID']}" for node in inventory}
     def drain_nodes():
         def remove(node):
-            session.gcloud(node, "compute", "instance-groups", "unmanaged", "remove-instances", groups[node["NODE_ID"]],
-                f"--instances={node['VM_NAME']}")
+            drain_node_from_group(node)
         with ThreadPoolExecutor(max_workers=len(inventory)) as executor:
             pending = [executor.submit(remove, node) for node in inventory]
             for future in pending:
