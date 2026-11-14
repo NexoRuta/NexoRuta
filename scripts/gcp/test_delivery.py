@@ -130,6 +130,11 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(by_title["Series de telemetría de caché"]["fieldConfig"]["defaults"]["noValue"],
                          "Sin telemetría")
         self.assertIn("Redis B: salud TLS/AUTH", by_title)
+        rabbit_queue = by_title["Mensajes pendientes por cola RabbitMQ"]
+        rabbit_query = rabbit_queue["targets"][0]["expr"]
+        self.assertIn("rabbitmq_detailed_queue_messages", rabbit_query)
+        self.assertIn("nexoruta_gcp_rabbit_queue_pending", rabbit_query)
+        self.assertIn("label_replace", rabbit_query)
 
         gcp_row = next(panel for panel in dashboard["panels"]
                        if panel.get("title") == "Infraestructura GCP · Prometheus")

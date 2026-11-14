@@ -781,7 +781,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "max by (queue) (rabbitmq_detailed_queue_messages)",
+        "expr": "max by (queue) (rabbitmq_detailed_queue_messages) or label_replace(max by (node) (nexoruta_gcp_rabbit_queue_pending{node=~\"$node\"}), \"queue\", \"RabbitMQ GCP · $1\", \"node\", \"(.*)\")",
           "refId": "A",
           "legendFormat": "{{queue}}"
         }
