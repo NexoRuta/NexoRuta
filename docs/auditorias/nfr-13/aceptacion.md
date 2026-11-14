@@ -110,7 +110,7 @@ Esta actualización reemplaza como estado vigente las cifras y gates operativos 
 
 | Categoría | Resultado observado |
 | --- | --- |
-| Automatización de scripts GCP | `wsl.exe --cd /mnt/c/Users/ignac/code/utec/NexoRuta python3 -m unittest discover -s scripts/gcp -p 'test_*.py'`: 263 tests, 0 fallidos, 3 omitidos por capacidades/plataforma opcionales; código de salida 0. |
+| Automatización de scripts GCP | `wsl.exe --cd /mnt/c/Users/ignac/code/utec/NexoRuta python3 -m unittest discover -s scripts/gcp -p 'test_*.py'`: 265 tests, 0 fallidos, 3 omitidos por capacidades/plataforma opcionales; código de salida 0. Se repitió tras integrar los commits recientes de `develop`. |
 | Alcance | Incluye los nuevos casos para deadline absoluto de la sesión tras recuperar una VM y omisión del backend apagado en `get-health`. El fixture temporal expirado se reemplazó por una fecha futura dinámica y se volvió a ejecutar toda la suite. |
 
 ### Validación GCP
@@ -122,7 +122,7 @@ Esta actualización reemplaza como estado vigente las cifras y gates operativos 
 | Pérdida API A/B | Los dos escenarios pasaron y restauraron ambos backends: API A 29,964 s y API B 32,183 s. Evidencias `gcp-api-a-2026-11-14-final.json` y `gcp-api-b-2026-11-14-final.json`. |
 | Pérdida VM A/B | Los dos escenarios pasaron y restauraron el par: VM A 8,266 s y VM B 7,612 s. Cuando Compute omitió el backend detenido de `get-health`, el verificador lo aceptó solo con ambos backends sanos en preflight y el superviviente sano. Evidencias `gcp-vm-a-2026-11-14-final.json` y `gcp-vm-b-2026-11-14-final.json`. |
 | Estabilidad | El observador se inició a las 18:47:08 UTC y se cerró por instrucción del usuario a las 19:04:12 UTC: 1.023,2 s, 18/31 lotes y 54/54 probes HTTP 200. **No completa el intervalo de 30 minutos requerido**; no usar como aprobación de operación sostenida. El resumen está en `evidencia/gcp-stability-2026-11-14.json`; no conserva latencia individual por muestra. |
-| Inventario al cierre de medición | Observado a las 19:08:15 UTC: VM A/B `RUNNING`, ambos backends `HEALTHY`, sesión activa, Cloud SQL `RUNNABLE`/`ZONAL`. Se conserva el plazo original 20:19:23 UTC. Evidencia `evidencia/gcp-inventario-final-2026-11-14.json`. Por instrucción expresa del usuario, las VMs permanecen encendidas. |
+| Inventario al cierre de medición | Observado a las 19:08:15 UTC y confirmado tras el push a las 19:11:48 UTC: VM A/B `RUNNING`, ambos backends `HEALTHY`, sesión activa, Cloud SQL `RUNNABLE`/`ZONAL`. Se conserva el plazo original 20:19:23 UTC. Evidencias `evidencia/gcp-inventario-final-2026-11-14.json` y `evidencia/gcp-inventario-postpush-2026-11-14.json`. Por instrucción expresa del usuario, las VMs permanecen encendidas. |
 | Respaldo | Cloud SQL continúa con backups automáticos deshabilitados. El backup bajo demanda y la restauración aislada probados en el corte anterior no sustituyen una política automática ni la comparación de datos de negocio. |
 
 ### Límites y gates pendientes
