@@ -1,6 +1,6 @@
 # NFR-12 / §6.12 — Implementación y evidencia de observabilidad
 
-Fecha: 14/11/2026. Estado: **implementado y validado localmente; el GCP actual está sano, pero el release desplegado no incluye estos cambios NFR-12. Falta integrar/publicar el cambio y aceptación en dispositivo**.
+Fecha: 14/11/2026. Estado: **implementado, validado localmente y publicado en `develop` (root `dfb5f00`, Backend `5b6f0f9`, Mobile `9097670`); GCP sigue en el release anterior. Falta desplegar y aceptación en dispositivo**.
 
 El alcance corresponde al requisito facilitado por el usuario: Serilog estructurado, OpenTelemetry para métricas/trazas, correlación Mobile→API→worker y un tablero con media/p95/p99 HTTP, errores, cola, pendientes Mobile, avisos comerciales fallidos y aciertos del caché.
 
@@ -8,7 +8,7 @@ El alcance corresponde al requisito facilitado por el usuario: Serilog estructur
 
 La implementación completa las brechas de contexto SQL/Kafka/HTTP, añade el snapshot persistente de sincronización Mobile, conecta `worker-webhooks` a OTLP en Compose local y GCP, y amplía el dashboard y las alertas compartidas. Se conservaron el UID del dashboard (`nexoruta-demo`), los datasources, las políticas RLS y las migraciones históricas.
 
-“Validado localmente” aquí significa compilación, pruebas con PostgreSQL desechable, Compose validado sin arrancar los servicios del usuario y revisión del dashboard en un stack de observabilidad aislado con métricas sintéticas. La comprobación GCP del 14/11 confirma salud del release remoto actual, no de este cambio local.
+“Validado localmente” aquí significa compilación, pruebas con PostgreSQL desechable, Compose validado sin arrancar los servicios del usuario y revisión del dashboard en un stack de observabilidad aislado con métricas sintéticas. La comprobación GCP del 14/11 confirma salud del release remoto anterior; estos commits ya están publicados en `develop`, pero aún no están desplegados en GCP.
 
 ## 2. Cambios implementados
 
@@ -70,7 +70,7 @@ El stack efímero usó Grafana `127.0.0.1:33000`, Prometheus `127.0.0.1:39090` y
 - [ ] Revisar tablero con tráfico real de la aplicación local, logs/trazas reales y receptor controlado; el ensayo BrowserAct de esta sesión usa exclusivamente series sintéticas.
 - [ ] Verificar accesibilidad/reflow del dashboard a 320 px y zoom 200%; el navegador disponible se revisó a su viewport de escritorio.
 - [ ] Definir y configurar los orígenes HTTPS permitidos por el equipo en `WEBHOOK_ALLOWED_ORIGINS` para el smoke de webhooks GCP, manteniendo la política de egress restringida.
-- [ ] Integrar/publicar estos cambios sobre el `develop` actual antes de un `update` GCP. Este checkout local está 30 commits detrás de `origin/develop` y el cambio NFR-12 permanece sin commit; no desplegarlo desde esta punta vieja.
+- [ ] Ejecutar `vm-controls.yml` con `operation=update` sobre `develop` para desplegar los commits publicados y comprobar su release en ambos nodos.
 - [ ] Después del release NFR-12, comprobar ambos workers (incluido `worker-webhooks`), Collector/scrape, HTTPS/login y series Mobile/webhook recientes en ambos nodos.
 
-No se actualizó ningún gitlink para la implementación local. La comprobación del release existente no sustituye la verificación del futuro release NFR-12. La aceptación en navegador tampoco sustituye la prueba nativa.
+El root `develop` publica los gitlinks Backend `5b6f0f9` y Mobile `9097670`; el gitlink de Frontend no cambió. La comprobación del release existente no sustituye la verificación del futuro release NFR-12. La aceptación en navegador tampoco sustituye la prueba nativa.
