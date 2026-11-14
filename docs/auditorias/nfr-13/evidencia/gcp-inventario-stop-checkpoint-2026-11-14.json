@@ -1,0 +1,38 @@
+{
+  "api_backends": [
+    {
+      "health": "HEALTHY",
+      "instance": "nexoruta-demo-b"
+    }
+  ],
+  "database": {
+    "automated_backups": false,
+    "availability": "ZONAL",
+    "name": "nexoruta-demo-db",
+    "state": "RUNNABLE"
+  },
+  "nodes": [
+    {
+      "boot_disk": "nexoruta-demo",
+      "machine_type": "n4-custom-6-16384",
+      "name": "nexoruta-demo",
+      "node": "a",
+      "status": "RUNNING",
+      "zone": "southamerica-west1-a"
+    },
+    {
+      "boot_disk": "nexoruta-demo-b",
+      "machine_type": "n4-custom-6-16384",
+      "name": "nexoruta-demo-b",
+      "node": "b",
+      "status": "RUNNING",
+      "zone": "southamerica-west1-b"
+    }
+  ],
+  "observed_at": "2026-11-14T04:09:33.517274+00:00",
+  "project": "nexoruta-demo-20261022",
+  "session": {
+    "active": true,
+    "remaining_seconds": 13840
+  }
+}

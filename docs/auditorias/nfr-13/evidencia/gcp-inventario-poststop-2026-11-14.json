@@ -1,0 +1,33 @@
+{
+  "api_backends": [],
+  "database": {
+    "automated_backups": false,
+    "availability": "ZONAL",
+    "name": "nexoruta-demo-db",
+    "state": "RUNNABLE"
+  },
+  "nodes": [
+    {
+      "boot_disk": "nexoruta-demo",
+      "machine_type": "n4-custom-6-16384",
+      "name": "nexoruta-demo",
+      "node": "a",
+      "status": "TERMINATED",
+      "zone": "southamerica-west1-a"
+    },
+    {
+      "boot_disk": "nexoruta-demo-b",
+      "machine_type": "n4-custom-6-16384",
+      "name": "nexoruta-demo-b",
+      "node": "b",
+      "status": "TERMINATED",
+      "zone": "southamerica-west1-b"
+    }
+  ],
+  "observed_at": "2026-11-14T06:06:12.530817+00:00",
+  "project": "nexoruta-demo-20261022",
+  "session": {
+    "active": false,
+    "error_type": "RuntimeError"
+  }
+}
