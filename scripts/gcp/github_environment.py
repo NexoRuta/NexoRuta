@@ -1,12 +1,14 @@
 """Read public app settings from Compose and credentials from GitHub Secrets."""
 
 import json
+import ipaddress
 import os
 from pathlib import Path
 import re
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 
 import demo_session as session
 
@@ -90,6 +92,11 @@ def validate(job):
         errors.append("NEXORUTA_CACHE_ENABLED")
     if job == "deploy" and os.environ.get("DEMO_OPERATION") in ("start", "update"):
         try:
+            parse_webhook_allowed_origins(os.environ.get("WEBHOOK_ALLOWED_ORIGINS", ""))
+        except ValueError as error:
+            errors.append(str(error))
+    if job == "deploy" and os.environ.get("DEMO_OPERATION") in ("start", "update"):
+        try:
             monitor_settings()
         except ValueError as error:
             errors.append(str(error))
@@ -109,6 +116,42 @@ def monitor_settings():
     return {"monitor_allowed_emails": emails, "monitor_google_client_id": client, "monitor_google_client_secret": secret}
 
 
+def parse_webhook_allowed_origins(raw):
+    values = [value.strip() for value in re.split(r"[;,]", raw) if value.strip()]
+    if len(values) > 50:
+        raise ValueError("WEBHOOK_ALLOWED_ORIGINS supports at most 50 exact HTTPS origins")
+    origins = set()
+    for value in values:
+        try:
+            parsed = urllib.parse.urlsplit(value)
+            port = parsed.port
+        except ValueError as error:
+            raise ValueError("WEBHOOK_ALLOWED_ORIGINS must contain exact HTTPS origins") from error
+        if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+                or parsed.netloc.endswith(":") or parsed.path not in ("", "/") or parsed.query or parsed.fragment
+                or port == 0):
+            raise ValueError("WEBHOOK_ALLOWED_ORIGINS must contain exact HTTPS origins without paths or credentials")
+        hostname = parsed.hostname
+        if ":" in hostname:
+            try:
+                hostname = "[" + str(ipaddress.IPv6Address(hostname)) + "]"
+            except ipaddress.AddressValueError as error:
+                raise ValueError("WEBHOOK_ALLOWED_ORIGINS contains an invalid host") from error
+        else:
+            try:
+                hostname = hostname.encode("idna").decode("ascii").lower()
+            except UnicodeError as error:
+                raise ValueError("WEBHOOK_ALLOWED_ORIGINS contains an invalid host") from error
+            if len(hostname) > 253 or any(
+                not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+                for label in hostname.split(".")
+            ):
+                raise ValueError("WEBHOOK_ALLOWED_ORIGINS contains an invalid host")
+        authority = hostname if port in (None, 443) else f"{hostname}:{port}"
+        origins.add("https://" + authority)
+    return sorted(origins, key=str.casefold)
+
+
 def integrations():
     public = app_environment()
     cache_enabled = os.environ.get("NEXORUTA_CACHE_ENABLED", "true").strip().lower()
@@ -122,11 +165,14 @@ def integrations():
         "smtp_username": os.environ.get("SMTP_USERNAME", ""),
         "smtp_password": os.environ.get("SMTP_PASSWORD", ""),
         "geoapify_api_key": os.environ.get("GEOAPIFY_API_KEY", ""),
+        "webhook_allowed_origins": parse_webhook_allowed_origins(os.environ.get("WEBHOOK_ALLOWED_ORIGINS", "")),
         "mapbox_public_token": public["MAPBOX_PUBLIC_TOKEN"],
         "cache_enabled": cache_enabled,
     }
     for name, value in result.items():
-        if any(character in value for character in ("\r", "\n", "\x00")):
+        entries = value if isinstance(value, list) else [value]
+        if any(not isinstance(entry, str) or any(character in entry for character in ("\r", "\n", "\x00"))
+               for entry in entries):
             raise ValueError(f"Invalid multiline application configuration: {name.upper()}")
     if bool(result["smtp_username"]) != bool(result["smtp_password"]):
         raise ValueError("Configure both SMTP_USERNAME and SMTP_PASSWORD secrets, or neither")

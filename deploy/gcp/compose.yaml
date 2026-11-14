@@ -43,6 +43,7 @@ x-api-env: &id001
   Hosting__TrustedNetworks: ${TRUSTED_NETWORKS:?}
   AllowedHosts: ${ALLOWED_HOSTS:?}
   ConnectionStrings__RateLimits: ${API_CONNECTION:?}
+  Webhooks__AllowedOrigins: ${WEBHOOK_ALLOWED_ORIGINS:-}
 x-worker:
   image: ${WORKER_IMAGE:?}
   entrypoint: &id002
@@ -56,6 +57,7 @@ x-worker:
     DOTNET_ENVIRONMENT: Production
     ConnectionStrings__Postgres: ${WORKER_CONNECTION:?}
     Messaging__Transport: RabbitMq
+    Webhooks__AllowedOrigins: ${WEBHOOK_ALLOWED_ORIGINS:-}
     RabbitMq__Host: ${SERVICES_HOST:?}
     RabbitMq__Username: nexoruta
     RabbitMq__Password: ${RABBIT_PASSWORD:?}
@@ -466,6 +468,29 @@ services:
       RELEASE_ID: ${RELEASE_ID:?}
       Logging__LogLevel__Microsoft.AspNetCore: Warning
       Logging__LogLevel__System.Net.Http.HttpClient: Warning
+    volumes: *id004
+    healthcheck: *id005
+  worker-webhooks:
+    image: ${WORKER_IMAGE:?}
+    entrypoint: *id002
+    restart: unless-stopped
+    mem_limit: 768m
+    cpu_shares: 256
+    stop_grace_period: 30s
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__Postgres: ${WORKER_CONNECTION:?}
+      Messaging__Transport: HttpWebhooks
+      Webhooks__AllowedOrigins: ${WEBHOOK_ALLOWED_ORIGINS:-}
+      OpenTelemetry__Enabled: 'true'
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      NODE_NAME: ${NODE_NAME:?}
+      RELEASE_ID: ${RELEASE_ID:?}
+      ConnectionStrings__DataProtection: ${KEYS_API_CONNECTION:?}
+      DataProtection__CertificatePath: /data/hosting.pfx
+      DataProtection__CertificatePassword: ${HOSTING_CERT_PASSWORD:?}
+      Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: Warning
     volumes: *id004
     healthcheck: *id005
   admin:

@@ -13,6 +13,8 @@ from unittest.mock import Mock, patch
 import delivery
 import integration
 import demo_session as session
+import github_environment
+import monitor_agent
 import vm_deploy
 
 
@@ -161,6 +163,44 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn("tls-port 6378", redis_config)
         self.assertIn('save ""', redis_config)
         self.assertIn("maxmemory 256mb", redis_config)
+
+    def test_http_webhook_worker_is_wired_into_local_and_remote_lifecycle(self):
+        root = Path(__file__).parents[2]
+        base_local = (root / "compose.yaml").read_text(encoding="utf-8")
+        local = (root / "compose.override.yaml").read_text(encoding="utf-8")
+        local_demo = (root / "compose.webhooks-demo.yaml").read_text(encoding="utf-8")
+        remote = (root / "deploy/gcp/compose.yaml").read_text(encoding="utf-8")
+        alerts = (root / "deploy/observability/prometheus/alerts.yaml").read_text(encoding="utf-8")
+
+        self.assertIn("worker-webhooks:", local)
+        self.assertRegex(local, r"worker-webhooks:\n\s+environment: \*otel-settings")
+        self.assertRegex(local, r"worker-webhooks:[\s\S]{0,240}rls-role-provisioner:")
+        self.assertRegex(base_local, r"worker-webhooks:[\s\S]{0,700}healthcheck:")
+        self.assertIn("Webhooks__AllowedOrigins: ${NEXORUTA_WEBHOOK_ALLOWED_ORIGINS:-}", base_local)
+        self.assertIn("Webhooks__DevelopmentReceiverUrl", local_demo)
+        self.assertIn("worker-webhooks:", remote)
+        self.assertIn("Webhooks__AllowedOrigins: ${WEBHOOK_ALLOWED_ORIGINS:-}", remote)
+        self.assertIn("Messaging__Transport: HttpWebhooks", remote)
+        self.assertIn("worker-webhooks", vm_deploy.APPS)
+        self.assertIn("worker-webhooks", monitor_agent.APPLICATIONS)
+        self.assertIn('"worker-webhooks"', (root / "scripts/gcp/load_tests.py").read_text(encoding="utf-8"))
+        self.assertIn("worker-webhooks", alerts)
+        self.assertIn("NexoRutaCommerceWebhookTerminalFailures", alerts)
+        self.assertIn("NexoRutaMobileSyncSnapshotUnavailable", alerts)
+
+    def test_webhook_origins_are_exact_https_origins_and_flow_to_compose(self):
+        self.assertEqual(github_environment.parse_webhook_allowed_origins(
+            "https://merchant.example.test:443; https://events.example.test:8443/"),
+            ["https://events.example.test:8443", "https://merchant.example.test"])
+        self.assertEqual(github_environment.parse_webhook_allowed_origins(""), [])
+        for invalid in (
+            "http://merchant.example.test", "https://merchant.example.test/hooks",
+            "https://user@merchant.example.test", "https://merchant.example.test?token=x",
+            "https://merchant.example.test:", "https://*.example.test", "https://[broken-ipv6",
+            "https://merchant..example.test", "https://-merchant.example.test",
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                github_environment.parse_webhook_allowed_origins(invalid)
 
     def test_load_test_dashboard_is_in_the_gcp_delivery_bundle(self):
         root = Path(__file__).parents[2]

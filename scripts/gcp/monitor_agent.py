@@ -18,7 +18,7 @@ from vm_deploy import BASE, secret, token
 
 PROJECT = "nexoruta-demo"
 APPLICATIONS = ("api", "admin", "backoffice", "commerce", "tracking", "grafana",
-                "worker-rabbit", "worker-kafka", "worker-push", "sql-proxy", "otel-collector", "alloy")
+                "worker-rabbit", "worker-kafka", "worker-push", "worker-webhooks", "sql-proxy", "otel-collector", "alloy")
 INFRASTRUCTURE = (
     "rabbitmq", "kafka", "mongo", "mailpit", "proxy", "prometheus", "prometheus-write-gateway",
     "gcp-metrics-collector", "loki", "tempo"

@@ -27,7 +27,7 @@ import urllib.parse
 import urllib.request
 
 BASE = Path("/srv/nexoruta")
-APPS = ("api", "worker-rabbit", "worker-kafka", "worker-push", "admin", "backoffice", "commerce", "tracking",
+APPS = ("api", "worker-rabbit", "worker-kafka", "worker-push", "worker-webhooks", "admin", "backoffice", "commerce", "tracking",
         "grafana", "otel-collector", "alloy")
 SHARED = ("rabbitmq", "kafka", "mongo", "mailpit", "proxy", "prometheus", "prometheus-write-gateway",
           "gcp-metrics-collector", "loki", "tempo")
@@ -246,6 +246,7 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
         "SMTP_SSL": str(integrations["smtp_ssl"]).lower(), "SMTP_FROM": integrations["smtp_from"],
         "SMTP_USERNAME": integrations.get("smtp_username", ""), "SMTP_PASSWORD": integrations.get("smtp_password", ""),
         "GEOAPIFY_API_KEY": integrations.get("geoapify_api_key", ""),
+        "WEBHOOK_ALLOWED_ORIGINS": ";".join(integrations.get("webhook_allowed_origins", [])),
     }
     for name, url in endpoints.items():
         parsed = urllib.parse.urlsplit(url)

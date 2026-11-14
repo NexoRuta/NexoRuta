@@ -58,6 +58,14 @@ services:
       otel-collector:
         condition: service_started
 
+  worker-webhooks:
+    environment: *otel-settings
+    depends_on:
+      rls-role-provisioner:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+
   local-bootstrap:
     depends_on:
       rls-role-provisioner:

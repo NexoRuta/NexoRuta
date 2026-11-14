@@ -108,6 +108,7 @@ services:
       OpenTelemetry__Enabled: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://dashboard:18889
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      Webhooks__AllowedOrigins: ${NEXORUTA_WEBHOOK_ALLOWED_ORIGINS:-}
       Jwt__SigningKeyBase64: ${NEXORUTA_JWT_KEY_BASE64:?Falta clave JWT}
     ports:
       - "5000:8080"
@@ -191,8 +192,15 @@ services:
       Messaging__Transport: HttpWebhooks
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_worker_runtime;Password=${NEXORUTA_WORKER_DB_PASSWORD:?Set the restricted worker role password}"
       DataProtection__KeysDirectory: /var/nexoruta/data-protection-keys
+      Webhooks__AllowedOrigins: ${NEXORUTA_WEBHOOK_ALLOWED_ORIGINS:-}
     volumes:
       - api_dataprotection_keys:/var/nexoruta/data-protection-keys:ro
+    healthcheck:
+      test: ["CMD-SHELL", "grep -aq 'NexoRuta.Worker.dll' /proc/1/cmdline"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy

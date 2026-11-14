@@ -379,7 +379,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Percentil 95 de operaciones locales pendientes observadas durante sincronizaciones móviles en los últimos cinco minutos.",
+      "description": "Suma del último backlog reportado por instalaciones con datos recibidos en los últimos cinco minutos. max elimina duplicados entre nodos.",
       "fieldConfig": {
         "defaults": {
           "decimals": 0,
@@ -416,14 +416,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, node, service_name) (rate(nexoruta_mobile_sync_pending_bucket{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
+          "expr": "max by (node, service_name) (nexoruta_mobile_sync_pending{node=~\"$node\",service_name=~\"$otel_service\"})",
           "instant": true,
-          "legendFormat": "{{service_name}}",
+          "legendFormat": "{{service_name}} · {{node}}",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Operaciones móviles pendientes · p95 por servicio",
+      "title": "Operaciones móviles pendientes · reportes vigentes",
       "type": "stat"
     },
     {
@@ -483,7 +483,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "El contador existe, pero el flujo de avisos a comercios todavía no está registrado; aparecerá sin datos hasta que el flujo emita un fallo.",
+      "description": "Los contadores muestran fallos recientes de workers e intentos HTTP fallidos. Las entregas que agotaron reintentos se muestran por separado en su estado persistido.",
       "fieldConfig": {
         "defaults": {
           "decimals": 0,
@@ -532,14 +532,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "round(sum by (node, service_name) (increase(nexoruta_commerce_notifications_failed_total{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
+          "expr": "round(sum by (node, service_name) (increase(nexoruta_commerce_notification_attempts_failed_total{node=~\"$node\",service_name=~\"$otel_service\"}[5m])))",
           "instant": true,
-          "legendFormat": "{{service_name}} · notificaciones",
+          "legendFormat": "{{service_name}} · intento HTTP fallido",
           "range": false,
           "refId": "B"
         }
       ],
-      "title": "Fallos de workers y avisos a comercios · 5 min",
+      "title": "Fallos de workers e intentos HTTP · 5 min",
       "type": "stat"
     },
     {
@@ -662,7 +662,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Percentil 99 de operaciones locales pendientes en sincronizaciones durante los últimos 15 minutos.",
+      "description": "Fresh: reporte recibido en cinco minutos. Stale: instalación conocida sin reporte vigente. Disponibilidad 0 indica que no se pudo consultar el snapshot en PostgreSQL; con 1 y cero instalaciones no hay reportes todavía. La edad máxima permite ver cuánto lleva desconectada la instalación más antigua retenida (30 días).",
       "fieldConfig": {
         "defaults": {
           "min": 0,
@@ -696,12 +696,50 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le, node, service_name) (rate(nexoruta_mobile_sync_pending_bucket{node=~\"$node\",service_name=~\"$otel_service\"}[15m])))",
-          "refId": "A",
-          "legendFormat": "{{service_name}}"
+          "expr": "max by (service_name) (nexoruta_mobile_sync_installations_fresh{node=~\"$node\",service_name=~\"$otel_service\"})",
+          "instant": true,
+          "legendFormat": "Frescas",
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "max by (service_name) (nexoruta_mobile_sync_installations_stale{node=~\"$node\",service_name=~\"$otel_service\"})",
+          "instant": true,
+          "legendFormat": "Vencidas",
+          "range": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "max by (service_name) (nexoruta_mobile_sync_snapshot_available{node=~\"$node\",service_name=~\"$otel_service\"})",
+          "instant": true,
+          "legendFormat": "Snapshot disponible",
+          "range": false,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "max by (service_name) (nexoruta_mobile_sync_oldest_report_age{node=~\"$node\",service_name=~\"$otel_service\"})",
+          "instant": true,
+          "legendFormat": "Edad del reporte más antiguo",
+          "range": false,
+          "refId": "D"
         }
       ],
-      "title": "Operaciones móviles pendientes · p99 por servicio",
+      "title": "Instalaciones Mobile · frescas / vencidas",
       "type": "stat"
     },
     {
@@ -785,7 +823,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 38,
+        "y": 44,
         "w": 24,
         "h": 8
       },
@@ -828,7 +866,7 @@
       "description": "Eventos JSON de la aplicación con correlación y acceso a la traza cuando se propagó trace_id.",
       "gridPos": {
         "x": 0,
-        "y": 46,
+        "y": 52,
         "w": 24,
         "h": 14
       },
@@ -865,7 +903,7 @@
       "description": "Salida stdout/stderr de cada servicio del proyecto Compose, incluidos aplicación, base de datos, colas y observabilidad.",
       "gridPos": {
         "x": 0,
-        "y": 60,
+        "y": 66,
         "w": 24,
         "h": 12
       },
@@ -914,7 +952,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 72,
+        "y": 78,
         "w": 24,
         "h": 7
       },
@@ -960,7 +998,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 79,
+        "y": 85,
         "w": 24,
         "h": 8
       },
@@ -2572,6 +2610,57 @@
       ],
       "title": "Infraestructura GCP · Prometheus",
       "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Estado actual de las entregas comerciales consultado desde PostgreSQL. max deduplica el mismo snapshot observado por ambos nodos.",
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "noValue": "Sin datos",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 38,
+        "w": 24,
+        "h": 6
+      },
+      "id": 33,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "max by (state) (nexoruta_commerce_webhooks_deliveries{node=~\"$node\",service_name=~\"$otel_service\",state=~\"pending|retry_or_processing|delivered|failed\"})",
+          "instant": true,
+          "legendFormat": "{{state}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Avisos HTTP a comercios · estado actual persistido",
+      "type": "stat"
     }
   ],
   "refresh": "1m",

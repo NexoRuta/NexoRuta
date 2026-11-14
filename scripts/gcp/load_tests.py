@@ -300,7 +300,7 @@ def immutable_manifest(config, run_id, profile, session_expires_at, fixture_vers
         if any(states != ["HEALTHY"] for states in by_vm.values()):
             raise RuntimeError(f"The {service_name} backend does not report both VMs healthy")
     for node in nodes:
-        for worker in ("worker-rabbit", "worker-kafka", "worker-push", "otel-collector", "alloy"):
+        for worker in ("worker-rabbit", "worker-kafka", "worker-push", "worker-webhooks", "otel-collector", "alloy"):
             running = session.gcloud(
                 node, "compute", "ssh", node["VM_NAME"], "--tunnel-through-iap",
                 "--command=sudo docker ps -q --filter label=com.docker.compose.project=nexoruta-demo "

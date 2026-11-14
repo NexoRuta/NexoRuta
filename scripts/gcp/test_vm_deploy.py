@@ -291,6 +291,7 @@ class VmDeploymentTests(unittest.TestCase):
         integrations = {"smtp_host": "mailpit", "smtp_port": 1025, "smtp_ssl": False,
                         "smtp_from": "demo@example.test", "monitor_google_client_id": "oauth-client",
                         "monitor_google_client_secret": "private-oauth", "monitor_allowed_emails": ["reader@example.test"],
+                        "webhook_allowed_origins": ["https://merchant.example.test", "https://events.example.test"],
                         "cache_enabled": "true"}
         hosting = {"grafana_secret_key": "private-grafana-key", "certificate_password": "private-pfx",
                    "certificate_pfx": "cGZ4"}
@@ -325,6 +326,8 @@ class VmDeploymentTests(unittest.TestCase):
             self.assertIn("Username=nexoruta_keys_" + ring + ";", values["KEYS_" + ring.upper() + "_CONNECTION"])
         self.assertEqual(values["MONITOR_ROLE_EXPRESSION"], "contains(['reader@example.test'], email) && 'Viewer' || 'None'")
         self.assertEqual(values["JWT_KEY"], runtime["keys"]["jwt"])
+        self.assertEqual(values["WEBHOOK_ALLOWED_ORIGINS"],
+                         "https://merchant.example.test;https://events.example.test")
 
     def test_shared_environment_rejects_open_google_access_and_default_proxy_routes(self):
         runtime, integrations, hosting, images = self.configuration()

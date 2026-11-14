@@ -79,3 +79,42 @@ tests:
       - eval_time: 15m
         alertname: NexoRutaDistributedCacheErrorsHigh
         exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'nexoruta_commerce_webhooks_deliveries{service_name="NexoRuta.Worker.HttpWebhooks",node="a",state="failed"}'
+        values: '0 0 1 1 1 0 0 0'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: NexoRutaCommerceWebhookTerminalFailures
+        exp_alerts:
+          - exp_labels:
+              alertname: NexoRutaCommerceWebhookTerminalFailures
+              service_name: NexoRuta.Worker.HttpWebhooks
+              severity: warning
+            exp_annotations:
+              summary: 'Hay avisos a comercios en estado terminal Fallido'
+              description: 'La consulta agregada de PostgreSQL detecta entregas HTTP que agotaron sus reintentos o fallaron definitivamente.'
+      - eval_time: 7m
+        alertname: NexoRutaCommerceWebhookTerminalFailures
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'nexoruta_mobile_sync_snapshot_available{service_name="NexoRuta.Worker.HttpWebhooks",node="a"}'
+        values: '0 0 0 0 0 1 1'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: NexoRutaMobileSyncSnapshotUnavailable
+        exp_alerts:
+          - exp_labels:
+              alertname: NexoRutaMobileSyncSnapshotUnavailable
+              service_name: NexoRuta.Worker.HttpWebhooks
+              node: a
+              severity: warning
+            exp_annotations:
+              summary: 'No se puede verificar el backlog Mobile'
+              description: 'El worker HTTP no publicó un snapshot de sincronización disponible en los últimos cinco minutos.'
+      - eval_time: 7m
+        alertname: NexoRutaMobileSyncSnapshotUnavailable
+        exp_alerts: []
