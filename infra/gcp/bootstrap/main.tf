@@ -153,7 +153,7 @@ resource "google_service_account" "load_preparer" {
 resource "google_project_iam_custom_role" "load_fixture_preparer" {
   role_id     = "nexorutaLoadFixturePreparer"
   title       = "Resolve the public demo address for OPT-06 fixture preparation"
-  permissions = ["compute.addresses.get"]
+  permissions = ["compute.globalAddresses.get"]
 }
 
 resource "google_project_iam_member" "load_fixture_preparer" {

@@ -39,6 +39,12 @@ class BootstrapTests(unittest.TestCase):
                 bootstrap.main()
         self.assertEqual(command.call_count, 1)
 
+    def test_load_fixture_preparer_has_global_address_permission(self):
+        repository = Path(__file__).resolve().parents[2]
+        terraform = (repository / "infra/gcp/bootstrap/main.tf").read_text(encoding="utf-8")
+        self.assertIn('permissions = ["compute.globalAddresses.get"]', terraform)
+        self.assertNotIn('permissions = ["compute.addresses.get"]', terraform)
+
 
 if __name__ == "__main__":
     unittest.main()
