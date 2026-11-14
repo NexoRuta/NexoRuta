@@ -107,6 +107,60 @@ class SessionSafetyTests(unittest.TestCase):
         self.vm["status"] = "TERMINATED"
         session.check_existing(self.vm, "start")
 
+    def test_new_start_normalizes_an_expired_absolute_deadline_in_place(self):
+        stopped = dict(self.vm)
+        stopped["status"] = "TERMINATED"
+        stopped["scheduling"] = {
+            "terminationTime": "2026-10-21T19:00:00Z",
+            "instanceTerminationAction": "STOP",
+            "automaticRestart": False,
+            "onHostMaintenance": "TERMINATE",
+        }
+        normalized = dict(stopped)
+        normalized["scheduling"] = {
+            "maxRunDuration": {"seconds": "14400"},
+            "instanceTerminationAction": "STOP",
+            "automaticRestart": False,
+            "onHostMaintenance": "TERMINATE",
+        }
+        node = session.node_configs({})[0]
+        with (patch.object(session, "instance", return_value=stopped),
+              patch.object(session, "gcloud", side_effect=[None, json.dumps(normalized)]) as gcloud):
+            session.ensure_start_schedule(node)
+        self.assertEqual(gcloud.call_count, 2)
+        self.assertEqual(gcloud.call_args_list[0].args[1:], (
+            "compute", "instances", "set-scheduling", node["VM_NAME"],
+            "--clear-termination-time", "--max-run-duration=14400s",
+            "--instance-termination-action=STOP", "--no-restart-on-failure",
+            "--maintenance-policy=TERMINATE",
+        ))
+        self.assertEqual(gcloud.call_args_list[1].args[1:5], (
+            "compute", "instances", "describe", node["VM_NAME"],
+        ))
+
+    def test_new_start_does_not_touch_an_already_normalized_vm(self):
+        stopped = dict(self.vm)
+        stopped["status"] = "TERMINATED"
+        stopped["scheduling"] = {**self.vm["scheduling"], "onHostMaintenance": "TERMINATE"}
+        node = session.node_configs({})[0]
+        with (patch.object(session, "instance", return_value=stopped),
+              patch.object(session, "gcloud") as gcloud):
+            session.ensure_start_schedule(node)
+        gcloud.assert_not_called()
+
+    def test_new_start_refuses_to_reconcile_a_running_or_unmanaged_vm(self):
+        node = session.node_configs({})[0]
+        with patch.object(session, "instance", return_value=self.vm), patch.object(session, "gcloud") as gcloud:
+            with self.assertRaisesRegex(RuntimeError, "already running"):
+                session.ensure_start_schedule(node)
+            gcloud.assert_not_called()
+        self.vm["status"] = "TERMINATED"
+        self.vm["labels"] = {}
+        with patch.object(session, "instance", return_value=self.vm), patch.object(session, "gcloud") as gcloud:
+            with self.assertRaisesRegex(RuntimeError, "not labeled"):
+                session.ensure_start_schedule(node)
+            gcloud.assert_not_called()
+
     def test_reported_deadline_must_match_four_hour_policy(self):
         session.check_deadline(self.vm, self.now)
         self.vm["resourceStatus"]["scheduling"]["terminationTimestamp"] = "2026-10-22T19:00:00Z"

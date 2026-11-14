@@ -136,6 +136,43 @@ def check_existing(vm, operation):
         raise RuntimeError(f"VM is {status}; wait for its current operation to finish.")
 
 
+def ensure_start_schedule(node):
+    vm = instance(node)
+    if vm is None:
+        return
+    check_existing(vm, "start")
+    if vm.get("status") != "TERMINATED":
+        raise RuntimeError("A new session can only normalize scheduling on a stopped VM.")
+
+    scheduling = vm.get("scheduling", {})
+    run_duration = int(scheduling.get("maxRunDuration", {}).get("seconds", 0))
+    if (run_duration == MAX_SECONDS
+            and not scheduling.get("terminationTime")
+            and scheduling.get("instanceTerminationAction") == "STOP"
+            and scheduling.get("automaticRestart") is False
+            and scheduling.get("onHostMaintenance") == "TERMINATE"):
+        return
+
+    gcloud(
+        node, "compute", "instances", "set-scheduling", node["VM_NAME"],
+        "--clear-termination-time", f"--max-run-duration={MAX_SECONDS}s",
+        "--instance-termination-action=STOP", "--no-restart-on-failure",
+        "--maintenance-policy=TERMINATE",
+    )
+    updated = json.loads(gcloud(
+        node, "compute", "instances", "describe", node["VM_NAME"],
+        "--format=json", capture=True,
+    ))
+    updated_scheduling = updated.get("scheduling", {})
+    if (updated.get("status") != "TERMINATED"
+            or updated_scheduling.get("terminationTime")
+            or int(updated_scheduling.get("maxRunDuration", {}).get("seconds", 0)) != MAX_SECONDS
+            or updated_scheduling.get("instanceTerminationAction") != "STOP"
+            or updated_scheduling.get("automaticRestart") is not False
+            or updated_scheduling.get("onHostMaintenance") != "TERMINATE"):
+        raise RuntimeError("The stopped VM scheduling policy did not normalize to the four-hour STOP policy.")
+
+
 def check_plan(plan, operation="start"):
     for resource in plan.get("resource_changes", []):
         if operation == "stop" and "create" in resource["change"]["actions"]:
@@ -310,6 +347,8 @@ def run(config):
     now = dt.datetime.now(dt.timezone.utc).timestamp()
     measure("set_provisioning_lease", lambda: write_lease(config, now + MAX_SECONDS + 1800, now + 1800))
     try:
+        for node in nodes:
+            measure("prepare_vm_start_schedule", lambda node=node: ensure_start_schedule(node), node=node["NODE_ID"])
         with ThreadPoolExecutor(max_workers=2) as executor:
             database = executor.submit(measure, "start_cloud_sql", lambda: start_database(config))
             tofu_setup = executor.submit(initialize_tofu, config)
