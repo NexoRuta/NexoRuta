@@ -1,6 +1,6 @@
 # Checkpoint de ejecución NFR-13 — 14/11/2026
 
-**Corte:** 2026-11-14 04:09 UTC. **Estado:** implementación integrada; aceptación GCP pendiente. La última sesión quedó en estado parcial y tiene parada automática prevista; no se ejecutó baseline ni prueba de fallos.
+**Corte:** 2026-11-14 06:06 UTC. **Estado:** implementación integrada; aceptación GCP pendiente. La sesión parcial quedó apagada y verificada; no se ejecutó baseline ni prueba de fallos.
 
 Este checkpoint registra la continuidad de la ejecución. No modifica el manifiesto histórico `scripts/cloud/checkpoint.json`, que sigue siendo un inventario de fuentes y no un estado de tarea.
 
@@ -28,12 +28,13 @@ El correctivo acepta el nombre canónico que Secret Manager devolvió como `proj
 - PR #79 ya integrado en `develop` con SHA `b439ea8195297ab2ae512bd24cafd92a9d0841bb`.
 - Workflow manual de nueva sesión/redeploy: run [`43554138598`](https://github.com/NexoRuta/NexoRuta/actions/runs/43554138598), ref `develop`, SHA `b439ea8195297ab2ae512bd24cafd92a9d0841bb`. `publish_develop` terminó correctamente; el job `deploy` fue cancelado a las 04:08:19 UTC mientras ejecutaba `Run the requested manual VM operation`. No considerar el deploy completo ni asumir que ambos nodos tienen la misma release.
 - Inventario read-only a las 04:09:33 UTC: ambas VM `RUNNING`; SQL `RUNNABLE`; solo el backend B aparece `HEALTHY`; sesión activa con 13 840 segundos restantes. La lease implica cierre automático esperado cerca de las 08:00 UTC. Evidencia: `evidencia/gcp-inventario-stop-checkpoint-2026-11-14.json`.
-- Se solicitó el apagado coordinado con workflow [`43554645544`](https://github.com/NexoRuta/NexoRuta/actions/runs/43554645544), pero terminó fallido a las 04:08:47 UTC con `Another demo control operation holds the shared lock`. No alcanzó a modificar las VMs. Por indicación del usuario, no se reintentará: dejar vencer la lease y verificar mañana que el cierre automático se completó. Si no están `TERMINATED` luego de su vencimiento, apagar mediante `vm-controls.yml` antes de continuar.
+- El primer intento de apagado coordinado, workflow [`43554645544`](https://github.com/NexoRuta/NexoRuta/actions/runs/43554645544), terminó fallido a las 04:08:47 UTC con `Another demo control operation holds the shared lock`; no alcanzó a modificar las VMs. Se esperó al vencimiento del lock antes del nuevo intento descrito a continuación.
+- Ante la instrucción posterior de apagar las VMs, workflow [`43555996545`](https://github.com/NexoRuta/NexoRuta/actions/runs/43555996545) ejecutó `operation=stop` y terminó `success` a las 04:20:13 UTC. Verificación read-only más reciente a las 06:06:12 UTC: A/B `TERMINATED`, API backends vacíos, SQL `RUNNABLE`, `session.active=false`; no quedó lock. Evidencia: `evidencia/gcp-inventario-poststop-2026-11-14.json`.
 - No se ejecutó baseline, carga, escenario de fallo ni prueba de estabilidad en esta ventana. La corrida anterior `43466857758` fue abortada antes de escribir datos; la corrección de Secret Manager ya está integrada, lista para el próximo intento.
 
 ## Continuar desde aquí
 
-1. Confirmar que la sesión de este checkpoint venció y ambas VM quedaron `TERMINATED`; si no, detenerlas con `vm-controls.yml` antes de continuar. La evidencia más reciente aún las muestra encendidas y solo B `HEALTHY`.
+1. El estado actual está confirmado: ambas VM `TERMINATED`, sin lease y SQL `RUNNABLE`. Antes de retomar, seguir la continuidad Cloud y abrir una ventana nueva desde `develop` mediante el workflow autorizado.
 2. Abrir una nueva sesión con el workflow autorizado desde `develop`; comprobar que termina `success`. No usar el release histórico ni la corrida cancelada como deploy válido.
 3. Obtener la release nueva y el origen actual del resumen del run. Repetir `python scripts/gcp/verify_nfr13.py inspect --output docs/auditorias/nfr-13/evidencia/gcp-inventario-poststart-2026-11-14.json`. Exigir lease activa con margen suficiente, A/B `RUNNING`, ambos API backends `HEALTHY`, SQL `RUNNABLE`, misma release en los dos nodos y `/ready`, `/live`, `/health` HTTP 200.
 4. Reintentar baseline con el código correctivo ya integrado: `gh workflow run load-tests.yml --repo NexoRuta/NexoRuta --ref develop -f operation=run -f profile=baseline`. Perfil: máximo 5 usuarios sintéticos y 15 minutos medidos. Registrar el run ID y confirmar resultado final `passed`; no considerar el intento anterior como carga ejecutada.
