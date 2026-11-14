@@ -22,6 +22,26 @@ class PrepareLoadFixtureTests(unittest.TestCase):
         self.assertEqual((fixture, json.dumps(fixture).encode(), "12"), actual)
         self.assertEqual("GET", request.call_args.args[1])
 
+    def test_secret_read_accepts_gcp_canonical_project_number(self):
+        fixture = {"fixtureStatus": "ready", "accounts": []}
+        body = json.dumps({
+            "name": "projects/1090571196455/secrets/nexoruta-load-fixtures/versions/12",
+            "payload": {"data": base64.b64encode(json.dumps(fixture).encode()).decode()},
+        }).encode()
+        with patch.object(prepare, "google_request", return_value=(200, body)):
+            actual = prepare.secret_version("token", "demo-project")
+
+        self.assertEqual((fixture, json.dumps(fixture).encode(), "12"), actual)
+
+    def test_secret_read_rejects_a_different_project_id(self):
+        body = json.dumps({
+            "name": "projects/other-project/secrets/nexoruta-load-fixtures/versions/12",
+            "payload": {"data": base64.b64encode(b"{}").decode()},
+        }).encode()
+        with patch.object(prepare, "google_request", return_value=(200, body)):
+            with self.assertRaisesRegex(RuntimeError, "invalid version name"):
+                prepare.secret_version("token", "demo-project")
+
     def test_preparation_guard_requires_the_matching_active_session_lease(self):
         now = 1_000
         run_id = "00000000-0000-4000-8000-000000000099"
