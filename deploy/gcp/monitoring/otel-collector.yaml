@@ -31,7 +31,8 @@ exporters:
     resource_constant_labels:
       included: [service.name, service.instance.id, node]
     wal:
-      directory: /var/lib/otelcol/prometheusremotewrite
+      # Preserve the pre-upgrade WAL on disk; start a fresh queue after it wedges on rejected samples.
+      directory: /var/lib/otelcol/prometheusremotewrite-v2
     retry_on_failure:
       max_elapsed_time: 5m
   otlp/tempo:

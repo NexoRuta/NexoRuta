@@ -151,6 +151,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn("processors: [memory_limiter, filter/drop_stale_metrics, resource/node, batch]", collector)
         self.assertIn("limit_mib: 384", collector)
         self.assertIn("spike_limit_mib: 64", collector)
+        self.assertIn("directory: /var/lib/otelcol/prometheusremotewrite-v2", collector)
         collector_image = "otel/opentelemetry-collector-contrib:0.165.0"
         self.assertIn(f"  otel-collector:\n    image: {collector_image}", compose)
         self.assertIn(f"  otel-collector:\n    image: {collector_image}", local)
