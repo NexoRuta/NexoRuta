@@ -706,7 +706,7 @@ services:
     profiles:
     - shared
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.164.0
+    image: otel/opentelemetry-collector-contrib:0.165.0
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     restart: unless-stopped
     user: "0:0"

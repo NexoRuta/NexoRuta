@@ -118,7 +118,7 @@ services:
       - ./deploy/local/observability/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.164.0
+    image: otel/opentelemetry-collector-contrib:0.165.0
     restart: unless-stopped
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
