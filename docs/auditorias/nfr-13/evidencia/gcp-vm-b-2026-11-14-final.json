@@ -1,0 +1,239 @@
+{
+  "backend_transition": {
+    "observations": [
+      [
+        {
+          "health": "HEALTHY",
+          "instance": "nexoruta-demo"
+        }
+      ]
+    ],
+    "survivor": "nexoruta-demo",
+    "survivor_health": "HEALTHY",
+    "target": "nexoruta-demo-b",
+    "target_health": "NOT_REPORTED"
+  },
+  "baseline": {
+    "recovery_seconds": null,
+    "samples": [
+      {
+        "at": "2026-11-14T18:07:56.398874+00:00",
+        "duration_ms": 126,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:07:57.522822+00:00",
+        "duration_ms": 123,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:07:58.635801+00:00",
+        "duration_ms": 113,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:07:59.769093+00:00",
+        "duration_ms": 133,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:08:00.910052+00:00",
+        "duration_ms": 140,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:08:02.031436+00:00",
+        "duration_ms": 121,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:08:03.155254+00:00",
+        "duration_ms": 123,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:08:04.265326+00:00",
+        "duration_ms": 109,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:08:05.379534+00:00",
+        "duration_ms": 113,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:08:06.497410+00:00",
+        "duration_ms": 117,
+        "error_type": null,
+        "status": 200
+      }
+    ],
+    "stable_successes": 10
+  },
+  "channel": "develop",
+  "fault_effective_at": "2026-11-14T18:09:08.515803+00:00",
+  "fault_observation": {
+    "recovery_seconds": 7.612,
+    "stable_successes": 10
+  },
+  "fault_requested_at": "2026-11-14T18:08:13.945602+00:00",
+  "fault_samples": [
+    {
+      "at": "2026-11-14T18:09:16.127618+00:00",
+      "duration_ms": 148,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T18:09:17.258591+00:00",
+      "duration_ms": 130,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T18:09:18.380545+00:00",
+      "duration_ms": 121,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T18:09:19.501807+00:00",
+      "duration_ms": 121,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T18:09:20.616082+00:00",
+      "duration_ms": 114,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T18:09:21.723537+00:00",
+      "duration_ms": 107,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T18:09:22.836624+00:00",
+      "duration_ms": 113,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T18:09:23.956393+00:00",
+      "duration_ms": 119,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T18:09:25.073355+00:00",
+      "duration_ms": 117,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T18:09:26.196741+00:00",
+      "duration_ms": 123,
+      "error_type": null,
+      "status": 200
+    }
+  ],
+  "fault_target": {
+    "vm": "nexoruta-demo-b",
+    "zone": "southamerica-west1-b"
+  },
+  "finished_at": "2026-11-14T18:10:38.570942+00:00",
+  "node": "b",
+  "project": "nexoruta-demo-20261022",
+  "recovery": {
+    "api_backends": [
+      {
+        "health": "HEALTHY",
+        "instance": "nexoruta-demo"
+      },
+      {
+        "health": "HEALTHY",
+        "instance": "nexoruta-demo-b"
+      }
+    ],
+    "samples": [
+      {
+        "at": "2026-11-14T18:09:47.474837+00:00",
+        "duration_ms": 145,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:09:48.585734+00:00",
+        "duration_ms": 110,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:09:49.696266+00:00",
+        "duration_ms": 110,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:09:50.818174+00:00",
+        "duration_ms": 122,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:09:51.938992+00:00",
+        "duration_ms": 120,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:09:53.055724+00:00",
+        "duration_ms": 116,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:09:54.178404+00:00",
+        "duration_ms": 122,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:09:55.298562+00:00",
+        "duration_ms": 120,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:09:56.428203+00:00",
+        "duration_ms": 129,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T18:09:57.563796+00:00",
+        "duration_ms": 135,
+        "error_type": null,
+        "status": 200
+      }
+    ],
+    "stable_successes": 10
+  },
+  "release": "release-2c9f1ca79ad547548b2f79662c922f1a",
+  "restored": true,
+  "scenario": "vm",
+  "session_remaining_seconds": 7724,
+  "started_at": "2026-11-14T18:07:56.272803+00:00",
+  "status": "passed"
+}

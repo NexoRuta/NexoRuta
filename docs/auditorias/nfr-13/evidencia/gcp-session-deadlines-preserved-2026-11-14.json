@@ -1,0 +1,24 @@
+﻿{
+    "observed_at_utc":  "2026-11-14T18:01:46.1732520+00:00",
+    "session_expires_at":  "2026-11-14T20:19:23.0650000+00:00",
+    "nodes":  [
+                  {
+                      "name":  "nexoruta-demo",
+                      "status":  "RUNNING",
+                      "termination_timestamp":  "2026-11-14T20:19:23.083282Z",
+                      "termination_time":  null,
+                      "max_run_duration_seconds":  "14400",
+                      "termination_action":  "STOP",
+                      "automatic_restart":  false
+                  },
+                  {
+                      "name":  "nexoruta-demo-b",
+                      "status":  "RUNNING",
+                      "termination_timestamp":  "2026-11-14T20:19:23Z",
+                      "termination_time":  "2026-11-14T20:19:23Z",
+                      "max_run_duration_seconds":  null,
+                      "termination_action":  "STOP",
+                      "automatic_restart":  false
+                  }
+              ]
+}

@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "status": "interrupted_by_user",
+  "started_at_utc": "2026-11-14T18:47:08.832067+00:00",
+  "ended_at_utc": "2026-11-14T19:04:12+00:00",
+  "planned_duration_seconds": 1800,
+  "observed_duration_seconds": 1023.2,
+  "cadence_seconds": 60,
+  "completed_sample_batches": 18,
+  "expected_sample_batches": 31,
+  "api_origin": "https://api.34-49-146-66.sslip.io",
+  "routes": [
+    "/live",
+    "/ready",
+    "/health"
+  ],
+  "observed_probe_results": {
+    "batches_with_all_routes_http_200": 18,
+    "route_probes_http_200": 54,
+    "route_probes_failed": 0
+  },
+  "preflight": {
+    "observed_at_utc": "2026-11-14T18:45:34.3673349+00:00",
+    "project": "nexoruta-demo-20261022",
+    "release": "release-2c9f1ca79ad547548b2f79662c922f1a",
+    "vms": [
+      {
+        "node": "a",
+        "status": "RUNNING",
+        "termination_time": "2026-11-14T20:19:23Z"
+      },
+      {
+        "node": "b",
+        "status": "RUNNING",
+        "termination_time": "2026-11-14T20:19:23Z"
+      }
+    ],
+    "api_backends": [
+      {
+        "node": "a",
+        "health": "HEALTHY"
+      },
+      {
+        "node": "b",
+        "health": "HEALTHY"
+      }
+    ],
+    "database": {
+      "state": "RUNNABLE",
+      "availability": "ZONAL"
+    },
+    "session_expires_at_utc": "2026-11-14T20:19:23Z",
+    "telemetry": {
+      "expected_release_matches_a_b": true,
+      "api_oom_max": 0,
+      "api_restarts_max": 0,
+      "last_sample_age_seconds_at_start": {
+        "a": 49.35,
+        "b": 6.41
+      },
+      "degraded_optional_services": [
+        "redis: service_up=0 on A and B; API readiness remained healthy"
+      ]
+    }
+  },
+  "limitation": "The 30-minute stability acceptance window was not completed. This partial observation is not acceptance evidence for the sustained-operation criterion.",
+  "interruption_reason": "The user asked to finish without waiting for the 30-minute observation.",
+  "evidence_source": "The monitoring process emitted sample 18/31 at 2026-11-14T19:04:12Z; samples 1-17 were observed during the same process. Per-sample latencies were not retained in this summary."
+}

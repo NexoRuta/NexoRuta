@@ -1,0 +1,90 @@
+{
+    "workflow_run":  43616743052,
+    "root_sha":  "4b478f068494a3794257605a67b7ab5a3dd5e1b6",
+    "release":  "release-2c9f1ca79ad547548b2f79662c922f1a",
+    "api_origin":  "https://api.34-49-146-66.sslip.io",
+    "observed_at_utc":  "2026-11-14T17:01:43+00:00",
+    "prometheus":  {
+                       "applied_releases":  [
+                                                {
+                                                    "node":  "b",
+                                                    "release":  "release-2c9f1ca79ad547548b2f79662c922f1a",
+                                                    "sample_age_seconds":  0.0
+                                                },
+                                                {
+                                                    "node":  "a",
+                                                    "release":  "release-2c9f1ca79ad547548b2f79662c922f1a",
+                                                    "sample_age_seconds":  0.0
+                                                }
+                                            ],
+                       "container_oom":  [
+                                             {
+                                                 "node":  "b",
+                                                 "value":  "0"
+                                             },
+                                             {
+                                                 "node":  "a",
+                                                 "value":  "0"
+                                             }
+                                         ],
+                       "container_restarts":  [
+                                                  {
+                                                      "node":  "b",
+                                                      "value":  "0"
+                                                  },
+                                                  {
+                                                      "node":  "a",
+                                                      "value":  "0"
+                                                  }
+                                              ],
+                       "last_sample_age_seconds":  [
+                                                       {
+                                                           "age_seconds":  132.01,
+                                                           "node":  "b",
+                                                           "series_age_seconds":  0.0
+                                                       },
+                                                       {
+                                                           "age_seconds":  151.59,
+                                                           "node":  "a",
+                                                           "series_age_seconds":  0.0
+                                                       }
+                                                   ],
+                       "max_panel_sample_age_seconds":  0.01,
+                       "observed_at_utc":  "2026-11-14T17:01:43+00:00",
+                       "panel_query":  "min by (node, service) (nexoruta_gcp_service_up{node=~\".*\",service=~\".*\"} or probe_success{node=~\".*\",service=~\".*\"})",
+                       "panel_series":  23,
+                       "panel_series_by_node":  {
+                                                    "a":  12,
+                                                    "b":  11
+                                                },
+                       "query_status":  {
+                                            "last_sample":  "success",
+                                            "oom":  "success",
+                                            "panel":  "success",
+                                            "releases":  "success",
+                                            "restarts":  "success"
+                                        },
+                       "services":  [
+                                        "admin",
+                                        "api",
+                                        "backoffice",
+                                        "commerce",
+                                        "kafka_tcp",
+                                        "mongo_ping",
+                                        "mongo_tcp",
+                                        "monitor",
+                                        "rabbitmq_tcp",
+                                        "redis",
+                                        "smtp_tcp",
+                                        "tracking"
+                                    ],
+                       "unhealthy_panel_series":  [
+
+                                                  ]
+                   },
+    "visual_review":  {
+                          "status":  "not_verified",
+                          "error":  "230404: chrome-direct CDP permission retry window expired after 20.0s",
+                          "tool":  "BrowserAct chrome-direct"
+                      }
+}

@@ -1,0 +1,14 @@
+﻿{
+    "workflow_run":  43618895927,
+    "load_test_run_id":  "f03727a8-fadd-46e7-9070-187516d69991",
+    "observed_at_utc":  "2026-11-14T17:18:36.7711238+00:00",
+    "browser":  "BrowserAct isolated Chrome",
+    "requested_url":  "https://monitor.34-49-146-66.sslip.io/d/nexoruta-load-tests?from=now-2h\u0026to=now\u0026var-run_id=f03727a8-fadd-46e7-9070-187516d69991",
+    "rendered_url":  "https://monitor.34-49-146-66.sslip.io/login",
+    "page_title":  "Grafana",
+    "visual_result":  "Grafana Welcome screen and Sign in with Google button rendered; no parser error was visible",
+    "dashboard_verified_visually":  false,
+    "limitation":  "Google OAuth is required. No authenticated identity was available in the isolated browser, so the dashboard panel itself was not inspected.",
+    "screenshot":  "grafana-oauth-login-2026-11-14-43618895927.png",
+    "no_credentials_entered":  true
+}

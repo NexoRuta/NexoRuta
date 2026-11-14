@@ -1,0 +1,72 @@
+﻿{
+    "workflow_run":  43618895927,
+    "load_test_run_id":  "f03727a8-fadd-46e7-9070-187516d69991",
+    "release":  "release-2c9f1ca79ad547548b2f79662c922f1a",
+    "observed_at_utc":  "2026-11-14T17:19:20.1178507+00:00",
+    "checks":  [
+                   {
+                       "uri":  "https://api.34-49-146-66.sslip.io/live",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://api.34-49-146-66.sslip.io/ready",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://api.34-49-146-66.sslip.io/health",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://admin.34-49-146-66.sslip.io/live",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://admin.34-49-146-66.sslip.io/ready",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://admin.34-49-146-66.sslip.io/health",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://backoffice.34-49-146-66.sslip.io/live",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://backoffice.34-49-146-66.sslip.io/ready",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://backoffice.34-49-146-66.sslip.io/health",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://commerce.34-49-146-66.sslip.io/live",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://commerce.34-49-146-66.sslip.io/ready",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://commerce.34-49-146-66.sslip.io/health",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://tracking.34-49-146-66.sslip.io/live",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://tracking.34-49-146-66.sslip.io/ready",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://tracking.34-49-146-66.sslip.io/health",
+                       "status":  200
+                   },
+                   {
+                       "uri":  "https://monitor.34-49-146-66.sslip.io/api/health",
+                       "status":  200
+                   }
+               ]
+}

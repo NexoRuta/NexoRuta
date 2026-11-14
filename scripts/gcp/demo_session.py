@@ -157,17 +157,29 @@ def check_plan(plan, operation="start"):
 def check_deadline(vm, now=None):
     now = now or dt.datetime.now(dt.timezone.utc)
     scheduling = vm.get("scheduling", {})
-    if (
-        vm.get("status") != "RUNNING"
-        or int(scheduling.get("maxRunDuration", {}).get("seconds", 0)) != MAX_SECONDS
-        or scheduling.get("instanceTerminationAction") != "STOP"
-        or scheduling.get("automaticRestart") is not False
-    ):
+    run_duration = int(scheduling.get("maxRunDuration", {}).get("seconds", 0))
+    termination_time = scheduling.get("terminationTime")
+    if (vm.get("status") != "RUNNING"
+            or scheduling.get("instanceTerminationAction") != "STOP"
+            or scheduling.get("automaticRestart") is not False):
+        raise RuntimeError("The VM does not have the required bounded STOP policy.")
+    if termination_time:
+        if run_duration:
+            raise RuntimeError("The VM cannot combine a fixed termination time and run duration.")
+        try:
+            configured_deadline = dt.datetime.fromisoformat(termination_time.replace("Z", "+00:00"))
+        except (AttributeError, TypeError, ValueError):
+            raise RuntimeError("The VM has an invalid configured termination time.") from None
+        if configured_deadline.tzinfo is None:
+            raise RuntimeError("The VM termination time must include a timezone.")
+    elif run_duration != MAX_SECONDS:
         raise RuntimeError("The VM does not have the required four-hour STOP policy.")
     timestamp = vm.get("resourceStatus", {}).get("scheduling", {}).get("terminationTimestamp")
     if not timestamp:
         raise RuntimeError("Google Cloud did not report a VM termination timestamp.")
     deadline = dt.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    if termination_time and abs((deadline - configured_deadline).total_seconds()) > 2:
+        raise RuntimeError("The VM termination timestamp differs from its configured session deadline.")
     remaining = (deadline - now).total_seconds()
     if not 0 < remaining <= MAX_SECONDS + 60:
         raise RuntimeError("The reported termination timestamp exceeds this session's limit.")

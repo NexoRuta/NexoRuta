@@ -1,3 +1,4 @@
+import datetime as dt
 import unittest
 from unittest.mock import patch
 
@@ -101,11 +102,40 @@ class VerifyNfr13SafetyTests(unittest.TestCase):
              {"instance": "nexoruta-demo-b", "health": "HEALTHY"}],
         ])
         result = verifier.wait_backend_transition(
-            verifier.configuration(), "a", read_health=lambda _: next(states),
+            verifier.configuration(), "a",
+            pre_fault_health=[
+                {"instance": "nexoruta-demo", "health": "HEALTHY"},
+                {"instance": "nexoruta-demo-b", "health": "HEALTHY"},
+            ], read_health=lambda _: next(states),
             clock=lambda: now[0], sleeper=lambda seconds: now.__setitem__(0, now[0] + seconds),
         )
         self.assertEqual(result["target_health"], "UNHEALTHY")
         self.assertEqual(result["survivor"], "nexoruta-demo-b")
+
+    def test_backend_transition_accepts_omitted_faulted_vm_after_healthy_preflight(self):
+        now = [0.0]
+        result = verifier.wait_backend_transition(
+            verifier.configuration(), "b",
+            pre_fault_health=[
+                {"instance": "nexoruta-demo", "health": "HEALTHY"},
+                {"instance": "nexoruta-demo-b", "health": "HEALTHY"},
+            ], read_health=lambda _: [{"instance": "nexoruta-demo", "health": "HEALTHY"}],
+            clock=lambda: now[0], sleeper=lambda seconds: now.__setitem__(0, now[0] + seconds),
+        )
+        self.assertEqual(result["target_health"], "NOT_REPORTED")
+        self.assertEqual(result["survivor"], "nexoruta-demo")
+        self.assertEqual(
+            result["observations"],
+            [[{"instance": "nexoruta-demo", "health": "HEALTHY"}]],
+        )
+
+    def test_backend_transition_requires_both_backends_healthy_in_preflight(self):
+        with self.assertRaises(ValueError):
+            verifier.wait_backend_transition(
+                verifier.configuration(), "b",
+                pre_fault_health=[{"instance": "nexoruta-demo", "health": "HEALTHY"}],
+                read_health=lambda _: self.fail("fault observations must not start"),
+            )
 
     def test_wrong_fault_confirmation_fails_before_lock_or_cloud_access(self):
         with patch.object(verifier.control_lock, "control_lock", side_effect=AssertionError("unexpected lock")):
@@ -136,13 +166,46 @@ class VerifyNfr13SafetyTests(unittest.TestCase):
 
     def test_running_vm_recovery_never_restarts_or_changes_the_session(self):
         node = verifier.demo_session.node_configs(verifier.configuration())[0]
+        session_expires_at = (
+            dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1)
+        ).timestamp()
+        termination_time = dt.datetime.fromtimestamp(
+            session_expires_at, dt.timezone.utc,
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
         vm = {"name": node["VM_NAME"], "zone": "zones/" + node["GCP_ZONE"],
               "status": "RUNNING", "machineType": "zones/z1/machineTypes/" + verifier.EXPECTED_MACHINE_TYPE,
-              "labels": dict(verifier.EXPECTED_LABELS)}
+              "labels": dict(verifier.EXPECTED_LABELS),
+              "scheduling": {"maxRunDuration": {"seconds": "14400"},
+                             "instanceTerminationAction": "STOP", "automaticRestart": False},
+              "resourceStatus": {"scheduling": {"terminationTimestamp": termination_time}}}
         with (patch.object(verifier.demo_session, "instance", return_value=vm),
               patch.object(verifier.demo_session, "gcloud") as gcloud):
-            verifier.start_vm(node)
+            verifier.start_vm(node, session_expires_at)
         gcloud.assert_not_called()
+
+    def test_stopped_vm_recovery_sets_the_original_deadline_before_start(self):
+        node = verifier.demo_session.node_configs(verifier.configuration())[1]
+        session_expires_at = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1)).timestamp()
+        termination_time = dt.datetime.fromtimestamp(
+            session_expires_at, dt.timezone.utc,
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        stopped = {"name": node["VM_NAME"], "zone": "zones/" + node["GCP_ZONE"],
+                   "status": "TERMINATED",
+                   "machineType": "zones/z1/machineTypes/" + verifier.EXPECTED_MACHINE_TYPE,
+                   "labels": dict(verifier.EXPECTED_LABELS)}
+        running = {**stopped, "status": "RUNNING",
+                   "scheduling": {"terminationTime": termination_time,
+                                  "instanceTerminationAction": "STOP", "automaticRestart": False},
+                   "resourceStatus": {"scheduling": {"terminationTimestamp": termination_time}}}
+        with (patch.object(verifier.demo_session, "instance", side_effect=[stopped, running, running]),
+              patch.object(verifier.demo_session, "gcloud") as gcloud):
+            verifier.start_vm(node, session_expires_at)
+        calls = [call.args for call in gcloud.call_args_list]
+        self.assertEqual(calls[0][1:4], ("compute", "instances", "set-scheduling"))
+        self.assertIn("--clear-max-run-duration", calls[0])
+        self.assertIn("--termination-time=" + termination_time, calls[0])
+        self.assertIn("--instance-termination-action=STOP", calls[0])
+        self.assertEqual(calls[1][1:4], ("compute", "instances", "start"))
 
     def test_reports_contain_only_the_sanitized_report_payload(self):
         self.assertEqual(verifier.OBSERVATION_SECONDS, 90)

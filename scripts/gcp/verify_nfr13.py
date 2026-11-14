@@ -309,11 +309,14 @@ class ObservationError(RuntimeError):
         self.samples = samples
 
 
-def wait_backend_transition(config, failed_node, *, timeout=RECOVERY_SECONDS,
+def wait_backend_transition(config, failed_node, *, pre_fault_health, timeout=RECOVERY_SECONDS,
                             check_lock=None, clock=time.monotonic, sleeper=time.sleep,
                             read_health=backend_health):
     target = "nexoruta-demo" if failed_node == "a" else "nexoruta-demo-b"
     survivor = "nexoruta-demo-b" if failed_node == "a" else "nexoruta-demo"
+    initial_states = {item["instance"]: item["health"] for item in pre_fault_health}
+    if initial_states.get(target) != "HEALTHY" or initial_states.get(survivor) != "HEALTHY":
+        raise ValueError("Both API backends must be healthy before fault observation")
     deadline = clock() + timeout
     observations = []
     while clock() < deadline:
@@ -322,8 +325,13 @@ def wait_backend_transition(config, failed_node, *, timeout=RECOVERY_SECONDS,
         health = read_health(config)
         observations.append(health)
         states = {item["instance"]: item["health"] for item in health}
-        if states.get(target) not in (None, "HEALTHY") and states.get(survivor) == "HEALTHY":
-            return {"target": target, "target_health": states[target], "survivor": survivor,
+        target_health = states.get(target)
+        # Compute Engine get-health omits instances that are not visible to the
+        # load-balancing system. Pre-fault health proves this backend was present;
+        # a missing result after the injected failure is therefore an ejection.
+        if (target_health in (None, "UNHEALTHY") and states.get(survivor) == "HEALTHY"):
+            return {"target": target, "target_health": target_health or "NOT_REPORTED",
+                    "survivor": survivor,
                     "survivor_health": states[survivor], "observations": observations}
         sleeper(5)
     raise ObservationError("The load balancer did not mark the faulted backend unhealthy with its peer healthy",
@@ -385,19 +393,43 @@ def vm_status(node):
     return value.get("status")
 
 
-def start_vm(node, timeout=900, *, check_lock=None, clock=time.monotonic, sleeper=time.sleep):
+def start_vm(node, session_expires_at, timeout=900, *, check_lock=None,
+             clock=time.monotonic, sleeper=time.sleep):
     status = vm_status(node)
     if status == "TERMINATED":
+        remaining = session_expires_at - time.time()
+        if remaining < 30 or remaining > demo_session.MAX_SECONDS + 60:
+            raise RuntimeError("The original demo session deadline cannot be preserved for VM recovery")
         if check_lock:
             check_lock()
+        deadline = dt.datetime.fromtimestamp(session_expires_at, dt.timezone.utc)
+        termination_time = deadline.strftime("%Y-%m-%dT%H:%M:%SZ")
+        demo_session.gcloud(
+            node, "compute", "instances", "set-scheduling", node["VM_NAME"],
+            "--clear-max-run-duration", f"--termination-time={termination_time}",
+            "--instance-termination-action=STOP", "--no-restart-on-failure",
+        )
         demo_session.gcloud(node, "compute", "instances", "start", node["VM_NAME"])
     elif status != "RUNNING":
         raise RuntimeError("Cannot restore a VM while Compute reports an in-progress/unknown state")
+    else:
+        current = demo_session.instance(node)
+        current_deadline = dt.datetime.fromisoformat(
+            demo_session.check_deadline(current).replace("Z", "+00:00"),
+        ).timestamp()
+        if abs(current_deadline - session_expires_at) > 120:
+            raise RuntimeError("The running VM no longer matches the original session deadline")
     deadline = clock() + timeout
     while clock() < deadline:
         if check_lock:
             check_lock()
         if vm_status(node) == "RUNNING":
+            current = demo_session.instance(node)
+            current_deadline = dt.datetime.fromisoformat(
+                demo_session.check_deadline(current).replace("Z", "+00:00"),
+            ).timestamp()
+            if abs(current_deadline - session_expires_at) > 120:
+                raise RuntimeError("The recovered VM does not match the original session deadline")
             return
         sleeper(5)
     raise RuntimeError("The original demo VM did not return to RUNNING within 15 minutes")
@@ -441,16 +473,21 @@ def execute_fault(config, *, kind, node_id, expected_release, origin, confirmati
                 identifier = api_container_id(node)
                 report["fault_target"] = {"service": "api", "container_id_prefix": identifier[:12]}
                 fault_attempted = True
-                fault_started = time.monotonic()
+                report["fault_requested_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
                 kill_api(node, identifier)
+                fault_started = time.monotonic()
+                report["fault_effective_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
             else:
                 report["fault_target"] = {"vm": node["VM_NAME"], "zone": node["GCP_ZONE"]}
                 fault_attempted = True
-                fault_started = time.monotonic()
+                report["fault_requested_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
                 demo_session.gcloud(node, "compute", "instances", "stop", node["VM_NAME"])
+                fault_started = time.monotonic()
+                report["fault_effective_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
             try:
                 transition = wait_backend_transition(
-                    config, node_id, check_lock=lease.check,
+                    config, node_id, pre_fault_health=preflight["api_backends"],
+                    check_lock=lease.check,
                 )
                 observation = wait_stable(
                     preflight["origin"], since=fault_started, check_lock=lease.check,
@@ -462,6 +499,7 @@ def execute_fault(config, *, kind, node_id, expected_release, origin, confirmati
                 fault_observation_error = error
                 report["fault_samples"] = error.samples if isinstance(error.samples, list) else []
                 report["fault_error_type"] = type(error).__name__
+                report["fault_error_message"] = str(error)
             except Exception as error:
                 fault_observation_error = error
                 report["fault_error_type"] = type(error).__name__
@@ -478,10 +516,10 @@ def execute_fault(config, *, kind, node_id, expected_release, origin, confirmati
                 demo_session.ACTIVE_CONTROL_LOCK = None
                 try:
                     if kind == "vm":
-                        start_vm(node)
+                        start_vm(node, preflight["lease"]["expires_at"])
                     else:
                         if vm_status(node) == "TERMINATED":
-                            start_vm(node)
+                            start_vm(node, preflight["lease"]["expires_at"])
                         restore_api(node, expected_release)
                     recovered = wait_stable(preflight["origin"], observation_limit=300)
                     healthy = wait_all_backends_healthy(config)

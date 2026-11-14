@@ -1,0 +1,196 @@
+{
+  "baseline": {
+    "recovery_seconds": null,
+    "samples": [
+      {
+        "at": "2026-11-14T17:38:26.095962+00:00",
+        "duration_ms": 125,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:38:27.206774+00:00",
+        "duration_ms": 110,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:38:28.327335+00:00",
+        "duration_ms": 120,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:38:29.436175+00:00",
+        "duration_ms": 108,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:38:30.598258+00:00",
+        "duration_ms": 162,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:38:31.719712+00:00",
+        "duration_ms": 121,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:38:32.841219+00:00",
+        "duration_ms": 121,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:38:33.956433+00:00",
+        "duration_ms": 115,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:38:35.088395+00:00",
+        "duration_ms": 131,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:38:36.207880+00:00",
+        "duration_ms": 119,
+        "error_type": null,
+        "status": 200
+      }
+    ],
+    "stable_successes": 10
+  },
+  "channel": "develop",
+  "fault_error_type": "ObservationError",
+  "fault_samples": [
+    [
+      {
+        "health": "HEALTHY",
+        "instance": "nexoruta-demo"
+      }
+    ],
+    [
+      {
+        "health": "HEALTHY",
+        "instance": "nexoruta-demo"
+      }
+    ],
+    [
+      {
+        "health": "HEALTHY",
+        "instance": "nexoruta-demo"
+      }
+    ],
+    [
+      {
+        "health": "HEALTHY",
+        "instance": "nexoruta-demo"
+      }
+    ],
+    [
+      {
+        "health": "HEALTHY",
+        "instance": "nexoruta-demo"
+      }
+    ],
+    [
+      {
+        "health": "HEALTHY",
+        "instance": "nexoruta-demo"
+      }
+    ]
+  ],
+  "fault_target": {
+    "vm": "nexoruta-demo-b",
+    "zone": "southamerica-west1-b"
+  },
+  "finished_at": "2026-11-14T17:42:05.008542+00:00",
+  "node": "b",
+  "project": "nexoruta-demo-20261022",
+  "recovery": {
+    "api_backends": [
+      {
+        "health": "HEALTHY",
+        "instance": "nexoruta-demo"
+      },
+      {
+        "health": "HEALTHY",
+        "instance": "nexoruta-demo-b"
+      }
+    ],
+    "samples": [
+      {
+        "at": "2026-11-14T17:41:05.933070+00:00",
+        "duration_ms": 129,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:41:07.092428+00:00",
+        "duration_ms": 159,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:41:08.211566+00:00",
+        "duration_ms": 118,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:41:09.333241+00:00",
+        "duration_ms": 121,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:41:10.450230+00:00",
+        "duration_ms": 116,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:41:11.573674+00:00",
+        "duration_ms": 123,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:41:12.695791+00:00",
+        "duration_ms": 122,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:41:13.821705+00:00",
+        "duration_ms": 125,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:41:14.927341+00:00",
+        "duration_ms": 105,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:41:16.050306+00:00",
+        "duration_ms": 122,
+        "error_type": null,
+        "status": 200
+      }
+    ],
+    "stable_successes": 10
+  },
+  "release": "release-2c9f1ca79ad547548b2f79662c922f1a",
+  "restored": true,
+  "scenario": "vm",
+  "session_remaining_seconds": 9438,
+  "started_at": "2026-11-14T17:38:25.971336+00:00",
+  "status": "failed_acceptance"
+}

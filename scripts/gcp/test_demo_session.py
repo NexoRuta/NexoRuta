@@ -113,11 +113,23 @@ class SessionSafetyTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "exceeds"):
             session.check_deadline(self.vm, self.now)
 
+    def test_absolute_session_deadline_is_valid_after_vm_restart(self):
+        self.vm["scheduling"].pop("maxRunDuration")
+        self.vm["scheduling"]["terminationTime"] = "2026-10-21T19:00:00Z"
+        self.assertEqual(session.check_deadline(self.vm, self.now), "2026-10-21T19:00:00Z")
+
+    def test_absolute_session_deadline_must_match_compute_timestamp(self):
+        self.vm["scheduling"].pop("maxRunDuration")
+        self.vm["scheduling"]["terminationTime"] = "2026-10-21T18:00:00Z"
+        with self.assertRaisesRegex(RuntimeError, "differs"):
+            session.check_deadline(self.vm, self.now)
+
     def test_missing_or_unsafe_stop_policy_is_rejected(self):
         for key, value in (
             ("instanceTerminationAction", "DELETE"),
             ("automaticRestart", True),
             ("maxRunDuration", {"seconds": "28800"}),
+            ("terminationTime", "2026-10-21T19:00:00Z"),
         ):
             with self.subTest(key=key), patch.dict(self.vm["scheduling"], {key: value}):
                 with self.assertRaises(RuntimeError):

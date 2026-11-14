@@ -1,0 +1,28 @@
+﻿{
+    "observed_at_utc":  "2026-11-14T17:57:50.7815160+00:00",
+    "release":  "release-2c9f1ca79ad547548b2f79662c922f1a",
+    "channel":  "develop",
+    "status":  "preflight_blocked",
+    "fault_attempted":  false,
+    "reason":  "VM four-hour deadline and shared session lease do not match",
+    "session_lease_expires_at_utc":  "2026-11-14T20:19:23.065Z",
+    "session_remaining_seconds":  8518,
+    "load_test_lease_status":  "completed",
+    "control_lock":  "free",
+    "nodes":  [
+                  {
+                      "node":  "a",
+                      "status":  "RUNNING",
+                      "termination_timestamp":  "2026-11-14T20:19:23.083282Z",
+                      "max_run_duration_seconds":  14400
+                  },
+                  {
+                      "node":  "b",
+                      "status":  "RUNNING",
+                      "termination_timestamp":  "2026-11-14T21:40:55.393158Z",
+                      "max_run_duration_seconds":  14400
+                  }
+              ],
+    "diagnosis":  "VM B restart recomputed maxRunDuration from its new start time, while the original shared session lease and VM A deadline stayed fixed. No fault was injected in this blocked attempt.",
+    "resolution":  "Set VM B terminationTime to the existing lease expiry before the next start; preserve the original deadline."
+}

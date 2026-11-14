@@ -1,0 +1,261 @@
+{
+  "backend_transition": {
+    "observations": [
+      [
+        {
+          "health": "HEALTHY",
+          "instance": "nexoruta-demo"
+        },
+        {
+          "health": "HEALTHY",
+          "instance": "nexoruta-demo-b"
+        }
+      ],
+      [
+        {
+          "health": "HEALTHY",
+          "instance": "nexoruta-demo"
+        },
+        {
+          "health": "HEALTHY",
+          "instance": "nexoruta-demo-b"
+        }
+      ],
+      [
+        {
+          "health": "HEALTHY",
+          "instance": "nexoruta-demo"
+        },
+        {
+          "health": "UNHEALTHY",
+          "instance": "nexoruta-demo-b"
+        }
+      ]
+    ],
+    "survivor": "nexoruta-demo",
+    "survivor_health": "HEALTHY",
+    "target": "nexoruta-demo-b",
+    "target_health": "UNHEALTHY"
+  },
+  "baseline": {
+    "recovery_seconds": null,
+    "samples": [
+      {
+        "at": "2026-11-14T17:35:48.665900+00:00",
+        "duration_ms": 117,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:35:49.783290+00:00",
+        "duration_ms": 117,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:35:50.914978+00:00",
+        "duration_ms": 131,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:35:52.030483+00:00",
+        "duration_ms": 115,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:35:53.149352+00:00",
+        "duration_ms": 118,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:35:54.269203+00:00",
+        "duration_ms": 119,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:35:55.386003+00:00",
+        "duration_ms": 116,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:35:56.497231+00:00",
+        "duration_ms": 111,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:35:57.615565+00:00",
+        "duration_ms": 118,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:35:58.730838+00:00",
+        "duration_ms": 115,
+        "error_type": null,
+        "status": 200
+      }
+    ],
+    "stable_successes": 10
+  },
+  "channel": "develop",
+  "fault_observation": {
+    "recovery_seconds": 36.408,
+    "stable_successes": 10
+  },
+  "fault_samples": [
+    {
+      "at": "2026-11-14T17:36:49.664152+00:00",
+      "duration_ms": 118,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T17:36:50.785637+00:00",
+      "duration_ms": 121,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T17:36:51.893021+00:00",
+      "duration_ms": 107,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T17:36:53.003392+00:00",
+      "duration_ms": 110,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T17:36:54.135092+00:00",
+      "duration_ms": 131,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T17:36:55.247934+00:00",
+      "duration_ms": 112,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T17:36:56.360132+00:00",
+      "duration_ms": 112,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T17:36:57.468104+00:00",
+      "duration_ms": 107,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T17:36:58.599786+00:00",
+      "duration_ms": 131,
+      "error_type": null,
+      "status": 200
+    },
+    {
+      "at": "2026-11-14T17:36:59.726670+00:00",
+      "duration_ms": 127,
+      "error_type": null,
+      "status": 200
+    }
+  ],
+  "fault_target": {
+    "container_id_prefix": "3006c30bd789",
+    "service": "api"
+  },
+  "finished_at": "2026-11-14T17:37:33.808848+00:00",
+  "node": "b",
+  "project": "nexoruta-demo-20261022",
+  "recovery": {
+    "api_backends": [
+      {
+        "health": "HEALTHY",
+        "instance": "nexoruta-demo"
+      },
+      {
+        "health": "HEALTHY",
+        "instance": "nexoruta-demo-b"
+      }
+    ],
+    "samples": [
+      {
+        "at": "2026-11-14T17:37:16.267520+00:00",
+        "duration_ms": 119,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:37:17.383716+00:00",
+        "duration_ms": 116,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:37:18.503474+00:00",
+        "duration_ms": 119,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:37:19.641954+00:00",
+        "duration_ms": 138,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:37:20.757618+00:00",
+        "duration_ms": 115,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:37:21.873777+00:00",
+        "duration_ms": 116,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:37:22.992259+00:00",
+        "duration_ms": 118,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:37:24.113141+00:00",
+        "duration_ms": 120,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:37:25.221969+00:00",
+        "duration_ms": 108,
+        "error_type": null,
+        "status": 200
+      },
+      {
+        "at": "2026-11-14T17:37:26.348859+00:00",
+        "duration_ms": 126,
+        "error_type": null,
+        "status": 200
+      }
+    ],
+    "stable_successes": 10
+  },
+  "release": "release-2c9f1ca79ad547548b2f79662c922f1a",
+  "restored": true,
+  "scenario": "api-container",
+  "session_remaining_seconds": 9709,
+  "started_at": "2026-11-14T17:35:48.549191+00:00",
+  "status": "passed"
+}

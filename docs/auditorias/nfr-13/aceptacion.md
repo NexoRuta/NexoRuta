@@ -1,6 +1,6 @@
 # NFR-13 — Estado de implementación y aceptación
 
-**Estado: implementación local parcial; NFR-13 no aceptado.** Este informe no declara `Done` ni acredita disponibilidad real en GCP.
+**Estado vigente al 14/11/2026: implementación aplicada y verificada localmente y en GCP; aceptación NFR-13 pendiente.** Este informe no declara `Done`: quedan gates operativos y de cobertura descritos en la actualización más reciente.
 
 ## Fuentes inspeccionadas
 
@@ -101,3 +101,39 @@ Los componentes siguen publicados en sus ramas candidatas; la raíz debe fijar e
 | Recuperación SQL | El backup bajo demanda `1794544830182` sigue `SUCCESSFUL`; su restauración aislada `nexoruta-nfr13-restore-check` permanece `STOPPED` después de comprobar que contiene las bases `nexoruta` y `grafana`. |
 
 La sesión GCP, el despliegue del conjunto exacto, la carga base, los cuatro ensayos de falla, la ventana posterior de estabilidad y la reconciliación operativa aún no se ejecutaron. No se reporta un resultado GCP verde a partir del inventario estático. El usuario autorizó iniciar y probar las VM; esta etapa se realizará después del CI de la raíz y con el backup/restauración aislada ya disponibles.
+
+## Actualización de ejecución — 14/11/2026
+
+Esta actualización reemplaza como estado vigente las cifras y gates operativos del corte del 13/11. No elimina el historial ni cambia la definición de terminado de la card. La aceptación permanece pendiente.
+
+### Validación local
+
+| Categoría | Resultado observado |
+| --- | --- |
+| Automatización de scripts GCP | `wsl.exe --cd /mnt/c/Users/ignac/code/utec/NexoRuta python3 -m unittest discover -s scripts/gcp -p 'test_*.py'`: 263 tests, 0 fallidos, 3 omitidos por capacidades/plataforma opcionales; código de salida 0. |
+| Alcance | Incluye los nuevos casos para deadline absoluto de la sesión tras recuperar una VM y omisión del backend apagado en `get-health`. El fixture temporal expirado se reemplazó por una fecha futura dinámica y se volvió a ejecutar toda la suite. |
+
+### Validación GCP
+
+| Categoría | Resultado observado |
+| --- | --- |
+| Línea base | Workflow `43618895927`, release `release-2c9f1ca79ad547548b2f79662c922f1a`: 4.492 solicitudes, 0 errores, 0 resultados inesperados y 0 iteraciones descartadas. La etapa nominal duró 960 s; p95 55,392 ms y p99 67,864 ms. `docs/auditorias/nfr-13/evidencia/gcp-load-baseline-2026-11-14-43618895927.json`. |
+| Salud durante la carga | 16 endpoints revisados, todos HTTP 200. Los probes finales `/live`, `/ready` y `/health` también dieron HTTP 200 y readiness informó PostgreSQL, Data Protection y rate limits saludables. |
+| Pérdida API A/B | Los dos escenarios pasaron y restauraron ambos backends: API A 29,964 s y API B 32,183 s. Evidencias `gcp-api-a-2026-11-14-final.json` y `gcp-api-b-2026-11-14-final.json`. |
+| Pérdida VM A/B | Los dos escenarios pasaron y restauraron el par: VM A 8,266 s y VM B 7,612 s. Cuando Compute omitió el backend detenido de `get-health`, el verificador lo aceptó solo con ambos backends sanos en preflight y el superviviente sano. Evidencias `gcp-vm-a-2026-11-14-final.json` y `gcp-vm-b-2026-11-14-final.json`. |
+| Estabilidad | El observador se inició a las 18:47:08 UTC y se cerró por instrucción del usuario a las 19:04:12 UTC: 1.023,2 s, 18/31 lotes y 54/54 probes HTTP 200. **No completa el intervalo de 30 minutos requerido**; no usar como aprobación de operación sostenida. El resumen está en `evidencia/gcp-stability-2026-11-14.json`; no conserva latencia individual por muestra. |
+| Inventario al cierre de medición | Observado a las 19:08:15 UTC: VM A/B `RUNNING`, ambos backends `HEALTHY`, sesión activa, Cloud SQL `RUNNABLE`/`ZONAL`. Se conserva el plazo original 20:19:23 UTC. Evidencia `evidencia/gcp-inventario-final-2026-11-14.json`. Por instrucción expresa del usuario, las VMs permanecen encendidas. |
+| Respaldo | Cloud SQL continúa con backups automáticos deshabilitados. El backup bajo demanda y la restauración aislada probados en el corte anterior no sustituyen una política automática ni la comparación de datos de negocio. |
+
+### Límites y gates pendientes
+
+- Redis se observó degradado: `service_up=0` en ambos nodos y el contenedor de B `unhealthy`, con 61 PIDs de un límite 64 y fallos de ejecución del healthcheck. La API conservó readiness saludable, pero esto no acredita la salud del servicio compartido. No se hizo una modificación de runtime o Compose para ocultar el problema.
+- Los agentes de telemetría de las dos VMs estaban inactivos y se reiniciaron antes de la ventana. Los puntos de inicio fueron frescos (A 49,35 s; B 6,41 s); OOM y reinicios de contenedores API estaban en cero. Hace falta validar continuidad/frescura durante una observación completa.
+- BrowserAct llegó al login OAuth de Google de Grafana. No se ingresaron credenciales y no se pudo verificar visualmente el dashboard autenticado. La consulta directa de Prometheus sí funcionó; no equivale a una revisión del dashboard.
+- La prueba sostenida de 30 minutos se omitió por instrucción del usuario. Una ejecución posterior debe completarla si se requiere acreditar ese criterio.
+- Faltan los casos de la matriz local que continúan parciales, en particular las combinaciones restantes de salud/arranque, sesión y comandos, crash y regresiones del job. Los resultados previos de SIGTERM local y PostgreSQL real se conservan, pero no reemplazan esos casos.
+- En GCP se ejecutaron baseline y cuatro pérdidas controladas de API/VM; no se probó allí un comando de negocio persistente con cliente real durante el failover ni un SIGTERM de API/worker con trabajo en vuelo. La aceptación integral de P7 sigue pendiente.
+- El CI del conjunto final no se ejecutó; el usuario instruyó probar localmente y publicar directo en `develop`, sin CI de PR. Esto no cambia el resultado de la suite local ni debe describirse como CI verde.
+- La topología sigue siendo Cloud SQL zonal, con servicios singleton en A y backups automáticos deshabilitados. No se acredita HA regional ni continuidad integral de servicios singleton.
+
+**Criterio de cierre:** mantener NFR-13 como no aceptado hasta resolver Redis/telemetría, acreditar los casos locales y operativos pendientes y completar la estabilidad si se exige ese gate. Esta ejecución acredita la suite local, la línea base GCP y los cuatro escenarios API/VM enumerados; no cambia los criterios de la card.

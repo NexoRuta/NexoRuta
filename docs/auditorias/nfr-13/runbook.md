@@ -17,6 +17,10 @@ Desde la raíz del repositorio, `python scripts/gcp/verify_nfr13.py inspect` es 
 
 Los subcomandos `api-container` y `vm` inyectan una sola falla explícita. Requieren release publicada exacta, `https://api.<dominio-demo>` y confirmación escrita, ambos backends sanos, Cloud SQL operativo y al menos 90 minutos restantes en la lease original. Adquieren el mismo control lock compartido por deploy y guard; no extienden ni renuevan la lease de sesión. Los ensayos miden hasta 90 muestras HTTP, exigen que el balanceador retire el backend fallado, que el par continúe sano y que haya diez respuestas `/ready` consecutivas; la recuperación HTTP debe comenzar dentro de 60 s. El proceso repara el servicio/VM en `finally` y verifica ambos backends antes de reportar `restored: true`.
 
+En una caída de VM, `gcloud compute backend-services get-health` puede omitir la instancia apagada en lugar de devolverla con estado `UNHEALTHY`. El verificador solo acepta esa omisión si el preflight observó ambos backends `HEALTHY` y la observación posterior conserva sano al superviviente; luego prueba continuidad HTTP mientras la VM afectada sigue fuera. [La referencia de `gcloud get-health`](https://docs.cloud.google.com/sdk/gcloud/reference/compute/backend-services/get-health) documenta que las instancias no visibles al sistema de balanceo no aparecen en la respuesta.
+
+El intervalo HTTP de recuperación comienza cuando vuelve el comando de inyección: `docker kill` para el contenedor o `instances stop` cuando la VM ya quedó detenida. Así se mide desde que la falla es efectiva y las muestras posteriores registran continuidad durante la indisponibilidad.
+
 ```powershell
 python scripts/gcp/verify_nfr13.py inspect --output docs/auditorias/nfr-13/evidencia/gcp-inventario.json
 python scripts/gcp/verify_nfr13.py api-container --node a --release RELEASE_ID --api-origin https://api.DOMINIO_DEMO --confirm-fault NFR13-FAULT-API-CONTAINER-A --output docs/auditorias/nfr-13/evidencia/gcp-api-a.json
@@ -27,12 +31,20 @@ python scripts/gcp/verify_nfr13.py vm --node a --release RELEASE_ID --api-origin
 
 `RELEASE_ID` y `DOMINIO_DEMO` deben copiarse del resumen de despliegue vigente o de las salidas Terraform actuales; no reutilizar una captura o un manifiesto anterior. Ejecutar un escenario por vez. Confirmar el estado `passed` y `restored: true` del JSON antes de iniciar el siguiente. No iniciar si el control lock está ocupado, si faltan muestras actuales o si la ventana no deja 90 min para recuperación.
 
-Si el proceso o la VM desaparece antes de ejecutar su `finally`, recuperar la misma VM de la sesión y no cambiar la release:
+Si el proceso o la VM desaparece antes de ejecutar su `finally`, recuperar la misma VM de la sesión y no cambiar la release. Al volver a iniciar una VM, Compute recalcula un `maxRunDuration` desde el nuevo inicio. Para conservar el plazo compartido, leer `expires_at` de la lease original y establecerlo como hora absoluta de terminación antes de arrancar; `set-scheduling` solo opera con la VM detenida:
 
 ```powershell
-gcloud compute instances start nexoruta-demo --project=nexoruta-demo-20261022 --zone=southamerica-west1-a --quiet
-gcloud compute instances start nexoruta-demo-b --project=nexoruta-demo-20261022 --zone=southamerica-west1-b --quiet
+$vm = 'nexoruta-demo-b' # elegir la VM registrada afectada
+$zone = 'southamerica-west1-b' # usar la zona registrada de esa VM
+$session = gcloud storage cat gs://nexoruta-demo-20261022-tofu-state/leases/demo.json | ConvertFrom-Json
+$deadline = [DateTimeOffset]::FromUnixTimeMilliseconds([long]($session.expires_at * 1000)).UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss'Z'")
+$status = gcloud compute instances describe $vm --project=nexoruta-demo-20261022 --zone=$zone --format='value(status)'
+if ($status -eq 'RUNNING') { gcloud compute instances stop $vm --project=nexoruta-demo-20261022 --zone=$zone --quiet }
+gcloud compute instances set-scheduling $vm --clear-max-run-duration --termination-time=$deadline --instance-termination-action=STOP --no-restart-on-failure --project=nexoruta-demo-20261022 --zone=$zone --quiet
+gcloud compute instances start $vm --project=nexoruta-demo-20261022 --zone=$zone --quiet
 ```
+
+Confirmar que `resourceStatus.scheduling.terminationTimestamp` vuelve a coincidir con la lease original (tolerancia de 120 s) antes de continuar. No aceptar el nuevo plazo de cuatro horas generado por un reinicio.
 
 Después de que la VM afectada esté `RUNNING`, recuperar API A/B con Compose desde la release objetivo, usando el `.env` privado ya existente en esa VM:
 
