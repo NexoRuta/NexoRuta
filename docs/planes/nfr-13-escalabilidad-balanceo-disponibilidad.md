@@ -1,6 +1,6 @@
 # NFR-13 — Plan de implementación y aceptación para un agente de IA
 
-Fecha de análisis: 12/11/2026. Estado: **plan, sin implementación ni aceptación de NFR-13**. El trabajo de esta revisión es documental. Las consultas de GCP fueron de solo lectura; no se provocaron fallos ni se desplegó una release para elaborar este plan.
+Fecha de análisis: 12/11/2026. Estado de esa revisión: **plan, sin implementación ni aceptación de NFR-13**. La implementación se integró después en `develop`; la aceptación GCP sigue pendiente. El checkpoint vigente al 14/11/2026 está en [auditorías/nfr-13/checkpoint-2026-11-14.md](../auditorias/nfr-13/checkpoint-2026-11-14.md). Las consultas de GCP de la revisión inicial fueron de solo lectura; no se provocaron fallos ni se desplegó una release para elaborar este plan.
 
 ## 1. Objetivo, autoridad y alcance
 
@@ -405,3 +405,11 @@ Consultadas para contrastar decisiones, no para reemplazar el laboratorio ni el 
 ## 11. Validación de este documento
 
 Se comprobó el contenido de la card por MCP, se extrajeron las secciones relevantes del PDF y la fila NFR-13 del XLSM, se inspeccionaron fuentes/pruebas y se realizaron las consultas remotas de lectura descritas. Se revisaron las referencias locales y el formato del documento. No se ejecutaron builds, tests funcionales, automatización de fallos ni revisión de navegador en esta tarea documental; sus resultados quedan como trabajo del agente implementador. No hay modificación de contratos, infraestructura, datos, estado de Notion ni gitlinks por la elaboración del plan.
+
+## 12. Checkpoint de implementación — 14/11/2026
+
+La implementación y el correctivo del preparador de fixtures están integrados en `develop` (PR #78 y #79; SHA actual `b439ea8195297ab2ae512bd24cafd92a9d0841bb`). La CI de ambos PR y las pruebas locales de scripts GCP indicadas en el checkpoint pasaron. Esto no cierra la aceptación operativa de este plan.
+
+La última ventana GCP se inició con el workflow [`43554138598`](https://github.com/NexoRuta/NexoRuta/actions/runs/43554138598), pero se canceló a las 04:08 UTC mientras el job `deploy` ejecutaba la operación manual de VM. No tomar esa corrida como un deploy completo ni asumir que ambos nodos sirven la misma release. A las 04:09:33 UTC, el inventario de solo lectura mostró las dos VMs `RUNNING`, Cloud SQL `RUNNABLE`, una sesión activa con 13 840 segundos restantes (cierre automático esperado aproximadamente a las 08:00 UTC), y solo el backend B `HEALTHY`; conservar el inventario completo en `docs/auditorias/nfr-13/evidencia/gcp-inventario-stop-checkpoint-2026-11-14.json`. El workflow de stop [`43554645544`](https://github.com/NexoRuta/NexoRuta/actions/runs/43554645544) no pudo operar porque el lock distribuido seguía ocupado; terminó antes de mutar las VMs. Dejar que venza la sesión existente y, al retomar, comprobar primero el apagado automático. Si las VMs siguen encendidas después del vencimiento, usar el workflow coordinado de stop antes de abrir otra ventana.
+
+Al retomar, abrir una ventana nueva desde `develop`, comprobar el resultado de deploy, la lease, las dos releases/backends y los probes HTTP. Después ejecutar el baseline corregido (5 usuarios, 15 minutos), los cuatro fallos controlados de la sección 5 y los 30 minutos de estabilidad de la sección 6, conservando evidencia. Actualizar `docs/auditorias/nfr-13/aceptacion.md` solo con resultados observados. No empezar pruebas de carga o fallos con el estado parcial de esta última sesión.
