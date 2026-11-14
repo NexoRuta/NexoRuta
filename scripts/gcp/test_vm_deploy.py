@@ -4,6 +4,7 @@ import sys
 import json
 import os
 from pathlib import Path
+import subprocess
 import tarfile
 import tempfile
 from types import SimpleNamespace
@@ -439,6 +440,48 @@ class VmDeploymentTests(unittest.TestCase):
             self.assertEqual(compose.call_count, 1)
             for call in compose.call_args_list:
                 self.assertFalse(set(vm_deploy.SHARED).intersection(call.args))
+
+    def test_node_update_retries_transient_compose_readiness_without_force_recreate(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(vm_deploy, "BASE", Path(directory)):
+            target = "release-" + "c" * 32
+            target_directory = Path(directory) / "releases" / target
+            target_directory.mkdir(parents=True)
+            deployment = vm_deploy.Deploy(target_directory, io.StringIO())
+            args = SimpleNamespace(release=target, node="a")
+            transient = subprocess.CalledProcessError(1, ["docker", "compose", "up"])
+            with (patch.object(vm_deploy.Deploy, "compose", side_effect=[transient, None]) as compose,
+                  patch.object(vm_deploy, "direct_health") as health,
+                  patch.object(vm_deploy.time, "sleep") as sleep,
+                  redirect_stdout(io.StringIO())):
+                vm_deploy.apply(args, deployment, "10.0.0.2")
+            self.assertEqual(compose.call_count, 2)
+            self.assertIn("--force-recreate", compose.call_args_list[0].args)
+            self.assertNotIn("--force-recreate", compose.call_args_list[1].args)
+            self.assertEqual(compose.call_args_list[0].args[-len(vm_deploy.APPS):], vm_deploy.APPS)
+            self.assertEqual(compose.call_args_list[1].args[-len(vm_deploy.APPS):], vm_deploy.APPS)
+            sleep.assert_called_once_with(15)
+            health.assert_called_once_with("10.0.0.2")
+            self.assertEqual((Path(directory) / "current-release").read_text(), target + "\n")
+
+    def test_node_update_preserves_failed_phase_and_does_not_publish_release_marker(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(vm_deploy, "BASE", Path(directory)):
+            target = "release-" + "d" * 32
+            target_directory = Path(directory) / "releases" / target
+            target_directory.mkdir(parents=True)
+            deployment = vm_deploy.Deploy(target_directory, io.StringIO())
+            args = SimpleNamespace(release=target, node="a")
+            failed_compose = subprocess.CalledProcessError(1, ["docker", "compose", "up"])
+            with (patch.object(vm_deploy.Deploy, "compose", side_effect=[failed_compose, failed_compose]) as compose,
+                  patch.object(vm_deploy, "direct_health") as health,
+                  patch.object(vm_deploy.time, "sleep"),
+                  redirect_stdout(io.StringIO()) as output):
+                with self.assertRaisesRegex(RuntimeError, "remains out of the load balancer") as caught:
+                    vm_deploy.apply(args, deployment, "10.0.0.2")
+            self.assertEqual(compose.call_count, 2)
+            self.assertEqual(caught.exception.nexoruta_phase, "start_and_wait_for_apps")
+            self.assertEqual(json.loads(output.getvalue().splitlines()[-1])["status"], "failed")
+            health.assert_not_called()
+            self.assertFalse((Path(directory) / "current-release").exists())
 
     def test_prepare_of_existing_session_waits_for_shared_brokers_and_keeps_password_out_of_arguments(self):
         self.assertIn("prometheus-write-gateway", vm_deploy.SHARED)

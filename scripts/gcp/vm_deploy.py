@@ -754,13 +754,24 @@ def prepare(args, deployment, runtime, integrations, hosting, redis_identity, ma
 
 def apply(args, deployment, private_ip):
     try:
-        deployment.measure("start_and_wait_for_apps", lambda: deployment.compose("up", "-d", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "300", *APPS))
+        def start_apps():
+            try:
+                deployment.compose("up", "-d", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "300", *APPS)
+            except Exception:
+                print(json.dumps({"stage": "apply", "node": args.node, "release": args.release,
+                                  "status": "retrying_apps_readiness"}), flush=True)
+                time.sleep(15)
+                deployment.compose("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", *APPS)
+        deployment.measure("start_and_wait_for_apps", start_apps)
         deployment.measure("direct_health_checks", lambda: direct_health(private_ip))
         private_file(BASE / "current-release", args.release + "\n")
-    except Exception:
+    except Exception as error:
         print(json.dumps({"stage": "apply", "node": args.node, "release": args.release,
                           "status": "failed"}))
-        raise RuntimeError("Node application update failed; it remains out of the load balancer") from None
+        failure = RuntimeError("Node application update failed; it remains out of the load balancer")
+        if hasattr(error, "nexoruta_phase"):
+            failure.nexoruta_phase = error.nexoruta_phase
+        raise failure from None
 
 
 class MailSmokeError(RuntimeError):
