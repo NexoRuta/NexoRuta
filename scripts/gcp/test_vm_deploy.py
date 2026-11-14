@@ -547,6 +547,12 @@ class VmDeploymentTests(unittest.TestCase):
             first_kafka_command = next(index for index, event in enumerate(events)
                                        if event[0] == "compose" and "exec" in event and "kafka" in event)
             self.assertLess(events.index(broker_reconcile_event), first_kafka_command)
+            commerce_topic_create = ("--profile", "shared", "exec", "-T", "kafka",
+                                     "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:9092",
+                                     "--create", "--if-not-exists", "--topic", "nexoruta.comercios.v2",
+                                     "--partitions", "3", "--replication-factor", "1")
+            self.assertIn(commerce_topic_create,
+                          [event[1:] for event in events if event[0] == "compose"])
             self.assertIn(("--profile", "shared", "up", "-d", "--no-deps", "--force-recreate",
                            "--wait", "--wait-timeout", "300", *vm_deploy.OBSERVABILITY_CORE), up_calls)
             observability_reconcile = ("compose", "--profile", "shared", "up", "-d", "--no-deps",

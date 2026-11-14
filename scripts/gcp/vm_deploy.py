@@ -720,9 +720,11 @@ def prepare(args, deployment, runtime, integrations, hosting, redis_identity, ma
                 "--wait", "--wait-timeout", "300", "proxy"))
             deployment.measure("direct_mail_health_check", lambda: direct_mail_health(
                 private_ip, runtime["endpoints"]["mail"]))
-            for topic in ("nexoruta.envios.creados.v1", "nexoruta.password-recovery.requested.v1"):
+            for topic, partitions in (("nexoruta.envios.creados.v1", 1),
+                                      ("nexoruta.password-recovery.requested.v1", 1),
+                                      ("nexoruta.comercios.v2", 3)):
                 deployment.compose("--profile", "shared", "exec", "-T", "kafka", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:9092",
-                                   "--create", "--if-not-exists", "--topic", topic, "--partitions", "1", "--replication-factor", "1")
+                                   "--create", "--if-not-exists", "--topic", topic, "--partitions", str(partitions), "--replication-factor", "1")
             ensure_operational_topic(deployment)
             ensure_mongo_runtime_users(deployment)
         elif cache_enabled:
