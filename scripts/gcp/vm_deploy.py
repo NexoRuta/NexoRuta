@@ -364,8 +364,7 @@ def ensure_mongo_runtime_users(deployment):
 def bootstrap_config(runtime):
     passwords, ids = runtime["passwords"], runtime["organization_ids"]
     return {
-        "PlatformInitialization": {"Enabled": True, "Email": "admin@nexoruta.test",
-                                   "Password": passwords["admin"], "SynchronizePassword": True},
+        "PlatformInitialization": {"Enabled": True, "Email": "admin@nexoruta.test", "Password": passwords["admin"]},
         "AccesoInicial": {
             "OperadorId": ids["operator"], "ComercioId": ids["commerce"],
             "OperadorNombre": "Operador Demo Uruguay", "ComercioNombre": "Comercio Demo Uruguay",

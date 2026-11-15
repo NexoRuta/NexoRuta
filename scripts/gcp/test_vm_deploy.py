@@ -53,7 +53,6 @@ class VmDeploymentTests(unittest.TestCase):
                          configuration["PlatformInitialization"]["Email"])
         self.assertEqual("synthetic-platform-password",
                          configuration["PlatformInitialization"]["Password"])
-        self.assertIs(configuration["PlatformInitialization"]["SynchronizePassword"], True)
 
     def test_authenticated_identity_smoke_matches_each_synthetic_actor_and_organization(self):
         organization_ids = {"operator": "operator-id", "commerce": "commerce-id"}
