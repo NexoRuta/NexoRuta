@@ -18,6 +18,7 @@ class GitHubEnvironmentTests(unittest.TestCase):
             "GCP_DELIVERY_BUCKET": "demo-delivery",
             "GCP_WORKLOAD_IDENTITY_PROVIDER": "projects/123456/locations/global/workloadIdentityPools/nexoruta-github/providers/demo-vm",
             "GCP_DEPLOY_SERVICE_ACCOUNT": "nexoruta-demo-deployer@demo-project.iam.gserviceaccount.com",
+            "NEXORUTA_FIREBASE_ANDROID_PROJECT_ID": "nexoruta-mobile",
             "GCP_LOAD_SERVICE_ACCOUNT": "nexoruta-load-controller@demo-project.iam.gserviceaccount.com",
             "GCP_LOAD_PREPARER_SERVICE_ACCOUNT": "nexoruta-load-preparer@demo-project.iam.gserviceaccount.com",
         }, clear=True)
@@ -71,6 +72,9 @@ class GitHubEnvironmentTests(unittest.TestCase):
         for job in ("publish", "deploy", "android"):
             with self.subTest(job=job):
                 settings.validate(job)
+        with patch.dict(os.environ, {"DEMO_OPERATION": "update", "NEXORUTA_FIREBASE_ANDROID_PROJECT_ID": ""}):
+            with self.assertRaisesRegex(ValueError, "NEXORUTA_FIREBASE_ANDROID_PROJECT_ID"):
+                settings.validate("deploy")
         with patch.dict(os.environ, {"GCP_REGION": "us-central1"}):
             with self.assertRaisesRegex(ValueError, "GCP_REGION"):
                 settings.validate("android")
@@ -93,6 +97,7 @@ class GitHubEnvironmentTests(unittest.TestCase):
 
     def test_unconfigured_integrations_use_mailpit_and_configured_secrets_are_paired(self):
         defaults = settings.integrations()
+        self.assertEqual(defaults["firebase_project_id"], "nexoruta-mobile")
         self.assertEqual((defaults["smtp_host"], defaults["smtp_port"], defaults["smtp_ssl"]), ("mailpit", 1025, False))
         self.assertEqual(defaults["cache_enabled"], "true")
         with patch.dict(os.environ, {"SMTP_USERNAME": "demo"}):

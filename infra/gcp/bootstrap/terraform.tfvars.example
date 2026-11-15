@@ -1,4 +1,6 @@
 project_id           = "REPLACE_WITH_EXISTING_PROJECT_ID"
+firebase_project_id  = "nexoruta-mobile"
+firebase_android_app_id = "1:646442506693:android:100447ba9efe843258d3ac"
 region               = "southamerica-west1"
 github_repository    = "NexoRuta/NexoRuta"
 github_repository_id = "REPLACE_WITH_NUMERIC_REPOSITORY_ID"

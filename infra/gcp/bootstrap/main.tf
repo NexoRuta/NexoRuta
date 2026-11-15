@@ -30,9 +30,45 @@ provider "google-beta" {
   user_project_override = true
 }
 
+provider "google" {
+  alias                 = "firebase"
+  project               = var.firebase_project_id
+  region                = var.region
+  billing_project       = var.firebase_project_id
+  user_project_override = true
+}
+
+provider "google-beta" {
+  alias                 = "firebase"
+  project               = var.firebase_project_id
+  region                = var.region
+  billing_project       = var.firebase_project_id
+  user_project_override = true
+}
+
 variable "project_id" {
   type        = string
   description = "Existing Google Cloud project with active billing."
+}
+
+variable "firebase_project_id" {
+  type        = string
+  description = "Firebase project used by the Android app and push worker."
+  default     = "nexoruta-mobile"
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", var.firebase_project_id))
+    error_message = "firebase_project_id must be a Google Cloud project ID."
+  }
+}
+
+variable "firebase_android_app_id" {
+  type        = string
+  description = "Existing Firebase Android app ID for uy.nexoruta.repartidor."
+  default     = "1:646442506693:android:100447ba9efe843258d3ac"
+  validation {
+    condition     = can(regex("^1:[0-9]+:android:[a-f0-9]+$", var.firebase_android_app_id))
+    error_message = "firebase_android_app_id must be an Android Firebase app ID."
+  }
 }
 
 variable "region" {

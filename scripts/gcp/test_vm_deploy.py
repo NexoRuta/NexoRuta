@@ -461,6 +461,7 @@ class VmDeploymentTests(unittest.TestCase):
                    "organization_ids": {"operator": "operator-id", "commerce": "commerce-id"},
                    "demo_actor_password": "synthetic-demo-actor-password-2026"}
         integrations = {"smtp_host": "mailpit", "smtp_port": 1025, "smtp_ssl": False,
+                        "firebase_project_id": "nexoruta-mobile",
                         "smtp_from": "demo@example.test", "monitor_google_client_id": "oauth-client",
                         "monitor_google_client_secret": "private-oauth", "monitor_allowed_emails": ["reader@example.test"],
                         "webhook_allowed_origins": ["https://merchant.example.test", "https://events.example.test"],
@@ -483,6 +484,7 @@ class VmDeploymentTests(unittest.TestCase):
         values = vm_deploy.environment(runtime, integrations, images, "hash", hosting, "b", "10.0.0.2",
                                        "release-" + "a" * 32, ("172.22.0.0/16",), runtime["redis_identity_fixture"])
         self.assertEqual(values["SMTP_HOST"], "10.0.0.1")
+        self.assertEqual(values["FIREBASE_PROJECT_ID"], "nexoruta-mobile")
         self.assertEqual(values["REDIS_HOST"], runtime["redis"]["host"])
         self.assertEqual(values["REDIS_AUTH"], runtime["redis_identity_fixture"]["password"])
         self.assertEqual(values["REDIS_PORT"], 6378)

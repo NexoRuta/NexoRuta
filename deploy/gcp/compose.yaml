@@ -66,7 +66,7 @@ x-worker:
     Seguimiento__EncryptionKey: ${TRACKING_KEY:?}
     Tracking__PublicBaseUrl: ${TRACKING_URL:?}
     Push__RegistrationEncryptionKey: ${PUSH_KEY:?}
-    Push__ProjectId: ${PROJECT_ID:?}
+    Push__ProjectId: ${FIREBASE_PROJECT_ID:?}
     Email__Smtp__Host: ${SMTP_HOST:?}
     Email__Smtp__Port: ${SMTP_PORT:?}
     Email__Smtp__UseSsl: ${SMTP_SSL:?}
@@ -433,7 +433,7 @@ services:
       Seguimiento__EncryptionKey: ${TRACKING_KEY:?}
       Tracking__PublicBaseUrl: ${TRACKING_URL:?}
       Push__RegistrationEncryptionKey: ${PUSH_KEY:?}
-      Push__ProjectId: ${PROJECT_ID:?}
+      Push__ProjectId: ${FIREBASE_PROJECT_ID:?}
       Email__Smtp__Host: ${SMTP_HOST:?}
       Email__Smtp__Port: ${SMTP_PORT:?}
       Email__Smtp__UseSsl: ${SMTP_SSL:?}
@@ -472,7 +472,7 @@ services:
       Seguimiento__EncryptionKey: ${TRACKING_KEY:?}
       Tracking__PublicBaseUrl: ${TRACKING_URL:?}
       Push__RegistrationEncryptionKey: ${PUSH_KEY:?}
-      Push__ProjectId: ${PROJECT_ID:?}
+      Push__ProjectId: ${FIREBASE_PROJECT_ID:?}
       Email__Smtp__Host: ${SMTP_HOST:?}
       Email__Smtp__Port: ${SMTP_PORT:?}
       Email__Smtp__UseSsl: ${SMTP_SSL:?}

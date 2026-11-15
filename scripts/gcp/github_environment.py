@@ -74,6 +74,8 @@ def validate(job):
             "GCP_STATE_BUCKET": r"[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]",
             "GCP_DELIVERY_BUCKET": r"[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]",
         })
+    if job == "deploy" and os.environ.get("DEMO_OPERATION") in ("start", "update"):
+        patterns["NEXORUTA_FIREBASE_ANDROID_PROJECT_ID"] = r"[a-z][a-z0-9-]{4,28}[a-z0-9]"
     if job == "load":
         patterns.update({
             "GCP_ZONE": re.escape(session.REGION + "-a"),
@@ -169,6 +171,7 @@ def integrations():
     if cache_enabled not in ("true", "false"):
         raise ValueError("NEXORUTA_CACHE_ENABLED must be true or false")
     result = {
+        "firebase_project_id": os.environ.get("NEXORUTA_FIREBASE_ANDROID_PROJECT_ID", "").strip(),
         "smtp_host": public["SMTP_HOST"],
         "smtp_port": public["SMTP_PORT"],
         "smtp_ssl": public["SMTP_SSL"],

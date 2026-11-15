@@ -383,8 +383,12 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
                 private_ip=None, release=None, docker_subnets=(), redis_identity=None):
     passwords, keys, endpoints = runtime["passwords"], runtime["keys"], runtime["endpoints"]
     redis = runtime.get("redis")
+    firebase_project_id = integrations.get("firebase_project_id")
+    if not isinstance(firebase_project_id, str) or not re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", firebase_project_id):
+        raise ValueError("Firebase project ID must be configured for mobile push")
     result = {
         "PROJECT_ID": runtime["project_id"], "SQL_CONNECTION_NAME": runtime["sql_connection"],
+        "FIREBASE_PROJECT_ID": firebase_project_id,
         "MIGRATOR_PASSWORD": passwords["migrator"], "API_DB_PASSWORD": passwords["api"],
         "WORKER_DB_PASSWORD": passwords["worker"], "BOOTSTRAP_DB_PASSWORD": passwords["bootstrap"],
         "MIGRATOR_CONNECTION": connection("postgres", passwords["migrator"]),

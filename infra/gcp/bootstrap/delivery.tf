@@ -150,9 +150,18 @@ resource "google_project_iam_member" "runtime_sql" {
 }
 
 resource "google_project_iam_member" "runtime_push" {
-  project = var.project_id
-  role    = "roles/firebasecloudmessaging.admin"
-  member  = "serviceAccount:${google_service_account.runtime.email}"
+  provider   = google.firebase
+  project    = var.firebase_project_id
+  role       = "roles/firebasecloudmessaging.admin"
+  member     = "serviceAccount:${google_service_account.runtime.email}"
+  depends_on = [google_project_service.firebase_messaging]
+}
+
+resource "google_project_service" "firebase_messaging" {
+  provider           = google.firebase
+  project            = var.firebase_project_id
+  service            = "fcm.googleapis.com"
+  disable_on_destroy = false
 }
 
 resource "google_firebase_project" "demo" {
@@ -180,15 +189,16 @@ resource "google_apikeys_key" "mobile" {
   depends_on = [google_firebase_project.demo]
 }
 
-data "google_firebase_android_app_config" "demo" {
-  provider = google-beta
-  project  = var.project_id
-  app_id   = google_firebase_android_app.demo.app_id
+data "google_firebase_android_app_config" "mobile" {
+  provider = google-beta.firebase
+  project  = var.firebase_project_id
+  app_id   = var.firebase_android_app_id
 }
 
 resource "google_secret_manager_secret_version" "mobile" {
-  secret      = google_secret_manager_secret.config["nexoruta-mobile-config"].id
-  secret_data = base64decode(data.google_firebase_android_app_config.demo.config_file_contents)
+  secret          = google_secret_manager_secret.config["nexoruta-mobile-config"].id
+  secret_data     = base64decode(data.google_firebase_android_app_config.mobile.config_file_contents)
+  deletion_policy = "ABANDON"
 }
 
 # Hosting identity is generated once by the serialized manual deployment job.
