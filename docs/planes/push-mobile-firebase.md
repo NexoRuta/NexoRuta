@@ -1,6 +1,6 @@
 # Auditoría y plan de corrección de push Android con Firebase
 
-Fecha: 14/11/2026. Alcance original: push en Android y dependencias de API, Worker, Firebase y distribucion. iOS queda fuera por indicacion del usuario. La implementacion Android se ejecuto en el checkout el 15/11/2026; este documento conserva la auditoria, el plan, la guia de verificacion y el estado real actualizado. La recepcion Firebase en Android quedo comprobada; el despliegue del Worker y el flujo de apertura/confirmacion siguen pendientes.
+Fecha: 14/11/2026. Alcance original: push en Android y dependencias de API, Worker, Firebase y distribucion. iOS queda fuera por indicacion del usuario. La implementacion Android se publico en `develop` el 15/11/2026 y la recepcion Firebase quedo comprobada en el telefono. El intento de despliegue GCP fallo durante el bootstrap de datos, antes de aplicar las imagenes; el Worker desplegado y el flujo de apertura/confirmacion siguen pendientes.
 
 ## 1. Dictamen y fuentes examinadas
 
@@ -289,8 +289,12 @@ La guia operativa Android de la seccion 4 sigue siendo el procedimiento de acept
 - Se retiró la app temporal `uy.nexoruta.repartidor.pushcheck` creada durante la preparacion. La app Android principal sigue registrada en `nexoruta-mobile`.
 - Por decisión del usuario, se conserva íntegro el proyecto GCP `nexoruta-demo-20261022`, incluidas sus VMs y demas recursos. Solo se cambio el destino Firebase de Mobile.
 
-### Pendientes para considerar productivo el circuito completo
+### Estado del despliegue GCP y pendientes (2026-11-15)
 
-- Los cambios de codigo raiz, Backend, Mobile, IaC y workflow siguen en el checkout; no se publicaron ni se ejecutó el workflow de actualizacion. Los procesos que ya corren en GCP no adoptan automaticamente el nuevo `Push:ProjectId` solo porque haya cambiado Secret Manager. Falta publicar el código y ejecutar la actualizacion por el workflow establecido.
-- Después del despliegue, falta un envio desde el Worker hacia un aviso real creado para la cuenta de prueba y verificar recepcion, apertura, consulta del estado y confirmacion. El envio directo FCM de esta sesion solo verifico Firebase y Android.
-- El APK instalado es Debug firmado localmente y la sesion `repartidor_demo` se uso para la prueba. El usuario debe iniciar sesion con su cuenta real antes de usar la aplicacion.
+- Los cambios de raiz, Backend y Mobile están publicados en `develop`: raiz `152f368`, Backend `f7d05e7`, Mobile `4dc2904`. La acción [43682929092](https://github.com/NexoRuta/NexoRuta/actions/runs/43682929092) publicó correctamente el release `release-a03dfa49040749b1b5b271742cd73594` y sincronizó la integración `firebase_project_id=nexoruta-mobile`.
+- El intento `operation=start` falló en el nodo A durante `vm_migrate_bootstrap_data`. La validación SQL, migraciones de esquema, provisión de roles y catálogo departamental pasaron antes de esa etapa. El error remoto quedó sanitizado como `CalledProcessError` y la acción no expuso la excepción interna del bootstrap.
+- El workflow ejecutó la limpieza de fallo: cerró el lease y detuvo A y B. La consulta posterior a Compute reportó ambas instancias `TERMINATED`. El proyecto y la base GCP se conservaron.
+- `/ready` respondió HTTP 200 durante el arranque, antes del drenaje del balanceador; no acredita que el release nuevo quedara aplicado. La etapa de aplicación de imágenes y health del Worker no se alcanzó, por lo que no se comprobó el `FIREBASE_PROJECT_ID` dentro de un Worker corriendo.
+- Para completar el despliegue hay que diagnosticar el fallo de bootstrap sin resetear datos ni sincronizar/rotar credenciales existentes, corregir su causa y repetir la acción `start`. Después hay que comprobar la configuración efectiva de `worker-push`, su salud en A/B y un envío iniciado por el Worker a Android.
+- El repartidor sintético `repartidor_demo` no tiene una hoja de ruta activa. Por eso no se generó un aviso de negocio y siguen pendientes la apertura del aviso y su confirmación/ACK. Los dos mensajes FCM directos sí aparecieron en la barra de Android, según verificó el usuario.
+- El APK instalado es Debug, firmado localmente; antes de uso real se necesita una compilación Release y que el usuario inicie sesión con su cuenta.
