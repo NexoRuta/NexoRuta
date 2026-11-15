@@ -33,7 +33,7 @@ def check_plan(plan, operation):
             raise RuntimeError("Stopping a session must not create missing resources")
         if "delete" not in actions:
             continue
-        if operation in ("start", "update") and _abandoned_secret_version_replacement(resource, actions):
+        if operation in ("bootstrap", "start", "update") and _abandoned_secret_version_replacement(resource, actions):
             continue
         if operation == "bootstrap":
             raise RuntimeError(f"Bootstrap plan deletes/replaces resources: {address}")

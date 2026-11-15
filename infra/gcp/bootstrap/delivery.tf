@@ -150,18 +150,12 @@ resource "google_project_iam_member" "runtime_sql" {
 }
 
 resource "google_project_iam_member" "runtime_push" {
-  provider   = google.firebase
-  project    = var.firebase_project_id
-  role       = "roles/firebasecloudmessaging.admin"
-  member     = "serviceAccount:${google_service_account.runtime.email}"
-  depends_on = [google_project_service.firebase_messaging]
-}
-
-resource "google_project_service" "firebase_messaging" {
-  provider           = google.firebase
-  project            = var.firebase_project_id
-  service            = "fcm.googleapis.com"
-  disable_on_destroy = false
+  # Keep the existing demo-project binding in this state. FCM is enabled and
+  # the runtime identity is granted its least-privilege role separately in
+  # var.firebase_project_id; the demo deployer must not manage IAM there.
+  project = var.project_id
+  role    = "roles/firebasecloudmessaging.admin"
+  member  = "serviceAccount:${google_service_account.runtime.email}"
 }
 
 resource "google_firebase_project" "demo" {

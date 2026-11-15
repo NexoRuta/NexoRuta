@@ -282,8 +282,9 @@ class BootstrapSetupValidationTests(unittest.TestCase):
                        "before": {"deletion_policy": "ABANDON"}, "after": {"deletion_policy": "ABANDON"}},
         }]}
         infra_safety.check_plan(replacement, "start")
-        with self.assertRaises(RuntimeError):
-            infra_safety.check_plan(replacement, "bootstrap")
+        infra_safety.check_plan(replacement, "bootstrap")
+        with self.assertRaisesRegex(RuntimeError, "must not create"):
+            infra_safety.check_plan(replacement, "stop")
         with self.assertRaisesRegex(RuntimeError, "must not create"):
             infra_safety.check_plan(create, "stop")
         with self.assertRaisesRegex(RuntimeError, "invalid plan"):

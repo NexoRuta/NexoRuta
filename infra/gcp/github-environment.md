@@ -77,6 +77,22 @@ nunca los valores. Las contraseñas de SQL/brokers/actores, las claves de cifrad
 y la firma Android se gestionan por IaC/Secret Manager, no como variables
 manuales de Actions.
 
+## Acceso al proyecto Firebase movil
+
+El proyecto `nexoruta-mobile` conserva la app Android `uy.nexoruta.repartidor`.
+Antes de ejecutar el bootstrap desde GitHub, una identidad administradora del
+proyecto Firebase debe configurar:
+
+| Principal | Proyecto | Rol / requisito |
+| --- | --- | --- |
+| `nexoruta-demo-deployer@nexoruta-demo-20261022.iam.gserviceaccount.com` | `nexoruta-mobile` | `roles/serviceusage.serviceUsageConsumer` y `roles/firebase.viewer` para leer la configuracion de la app. |
+| `nexoruta-demo-runtime@nexoruta-demo-20261022.iam.gserviceaccount.com` | `nexoruta-mobile` | `roles/firebasecloudmessaging.admin` para enviar avisos. |
+
+La API `fcm.googleapis.com` debe estar habilitada en `nexoruta-mobile`. El
+deployer no recibe permisos para modificar IAM en el proyecto Firebase; el rol
+de envio se concede a la identidad runtime por separado. El secreto de Android
+se escribe con politica `ABANDON`, que agrega versiones y conserva las previas.
+
 ## Environment de CI
 
 Las PRs usan **`nexoruta-ci`**, separado de identidades y secretos de despliegue.
