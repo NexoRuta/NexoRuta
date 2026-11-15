@@ -247,6 +247,8 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
         "SMTP_USERNAME": integrations.get("smtp_username", ""), "SMTP_PASSWORD": integrations.get("smtp_password", ""),
         "GEOAPIFY_API_KEY": integrations.get("geoapify_api_key", ""),
         "WEBHOOK_ALLOWED_ORIGINS": ";".join(integrations.get("webhook_allowed_origins", [])),
+        "WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN": str(
+            integrations.get("webhook_allow_any_public_https_origin", False)).lower(),
     }
     for name, url in endpoints.items():
         parsed = urllib.parse.urlsplit(url)

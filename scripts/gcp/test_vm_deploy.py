@@ -331,7 +331,7 @@ class VmDeploymentTests(unittest.TestCase):
                         "smtp_from": "demo@example.test", "monitor_google_client_id": "oauth-client",
                         "monitor_google_client_secret": "private-oauth", "monitor_allowed_emails": ["reader@example.test"],
                         "webhook_allowed_origins": ["https://merchant.example.test", "https://events.example.test"],
-                        "cache_enabled": "true"}
+                        "webhook_allow_any_public_https_origin": False, "cache_enabled": "true"}
         hosting = {"grafana_secret_key": "private-grafana-key", "certificate_password": "private-pfx",
                    "certificate_pfx": "cGZ4"}
         images = {name: registry + "/" + name + "@sha256:" + "a" * 64 for name in (
@@ -367,6 +367,11 @@ class VmDeploymentTests(unittest.TestCase):
         self.assertEqual(values["JWT_KEY"], runtime["keys"]["jwt"])
         self.assertEqual(values["WEBHOOK_ALLOWED_ORIGINS"],
                          "https://merchant.example.test;https://events.example.test")
+        self.assertEqual(values["WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN"], "false")
+        integrations["webhook_allow_any_public_https_origin"] = True
+        enabled = vm_deploy.environment(runtime, integrations, images, "hash", hosting, "b", "10.0.0.2",
+                                       "release-" + "a" * 32, ("172.22.0.0/16",), runtime["redis_identity_fixture"])
+        self.assertEqual(enabled["WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN"], "true")
 
     def test_shared_environment_rejects_open_google_access_and_default_proxy_routes(self):
         runtime, integrations, hosting, images = self.configuration()

@@ -93,6 +93,7 @@ def validate(job):
     if job == "deploy" and os.environ.get("DEMO_OPERATION") in ("start", "update"):
         try:
             parse_webhook_allowed_origins(os.environ.get("WEBHOOK_ALLOWED_ORIGINS", ""))
+            parse_allow_any_public_https_origin(os.environ.get("WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN", "false"))
         except ValueError as error:
             errors.append(str(error))
     if job == "deploy" and os.environ.get("DEMO_OPERATION") in ("start", "update"):
@@ -152,6 +153,13 @@ def parse_webhook_allowed_origins(raw):
     return sorted(origins, key=str.casefold)
 
 
+def parse_allow_any_public_https_origin(raw):
+    value = (raw or "false").strip().lower()
+    if value not in ("true", "false"):
+        raise ValueError("WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN must be true or false")
+    return value == "true"
+
+
 def integrations():
     public = app_environment()
     cache_enabled = os.environ.get("NEXORUTA_CACHE_ENABLED", "true").strip().lower()
@@ -166,6 +174,8 @@ def integrations():
         "smtp_password": os.environ.get("SMTP_PASSWORD", ""),
         "geoapify_api_key": os.environ.get("GEOAPIFY_API_KEY", ""),
         "webhook_allowed_origins": parse_webhook_allowed_origins(os.environ.get("WEBHOOK_ALLOWED_ORIGINS", "")),
+        "webhook_allow_any_public_https_origin": str(parse_allow_any_public_https_origin(
+            os.environ.get("WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN", "false"))).lower(),
         "mapbox_public_token": public["MAPBOX_PUBLIC_TOKEN"],
         "cache_enabled": cache_enabled,
     }

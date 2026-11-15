@@ -109,6 +109,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://dashboard:18889
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       Webhooks__AllowedOrigins: ${NEXORUTA_WEBHOOK_ALLOWED_ORIGINS:-}
+      Webhooks__AllowAnyPublicHttpsOrigin: ${NEXORUTA_WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN:-false}
       Jwt__SigningKeyBase64: ${NEXORUTA_JWT_KEY_BASE64:?Falta clave JWT}
     ports:
       - "5000:8080"
@@ -193,6 +194,7 @@ services:
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=nexoruta;Username=nexoruta_worker_runtime;Password=${NEXORUTA_WORKER_DB_PASSWORD:?Set the restricted worker role password}"
       DataProtection__KeysDirectory: /var/nexoruta/data-protection-keys
       Webhooks__AllowedOrigins: ${NEXORUTA_WEBHOOK_ALLOWED_ORIGINS:-}
+      Webhooks__AllowAnyPublicHttpsOrigin: ${NEXORUTA_WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN:-false}
     volumes:
       - api_dataprotection_keys:/var/nexoruta/data-protection-keys:ro
     healthcheck:

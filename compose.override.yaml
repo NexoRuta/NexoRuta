@@ -24,6 +24,7 @@ services:
       <<: *otel-settings
       Geocoding__Geoapify__PermitirLlamadasReales: "false"
       RoutingGeoapify__PermitirLlamadasReales: "false"
+      Webhooks__AllowAnyPublicHttpsOrigin: ${NEXORUTA_WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN:-true}
     depends_on:
       rls-role-provisioner:
         condition: service_completed_successfully
@@ -59,7 +60,9 @@ services:
         condition: service_started
 
   worker-webhooks:
-    environment: *otel-settings
+    environment:
+      <<: *otel-settings
+      Webhooks__AllowAnyPublicHttpsOrigin: ${NEXORUTA_WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN:-true}
     depends_on:
       rls-role-provisioner:
         condition: service_completed_successfully

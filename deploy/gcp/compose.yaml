@@ -44,6 +44,7 @@ x-api-env: &id001
   AllowedHosts: ${ALLOWED_HOSTS:?}
   ConnectionStrings__RateLimits: ${API_CONNECTION:?}
   Webhooks__AllowedOrigins: ${WEBHOOK_ALLOWED_ORIGINS:-}
+  Webhooks__AllowAnyPublicHttpsOrigin: ${WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN:-false}
 x-worker:
   image: ${WORKER_IMAGE:?}
   entrypoint: &id002
@@ -58,6 +59,7 @@ x-worker:
     ConnectionStrings__Postgres: ${WORKER_CONNECTION:?}
     Messaging__Transport: RabbitMq
     Webhooks__AllowedOrigins: ${WEBHOOK_ALLOWED_ORIGINS:-}
+    Webhooks__AllowAnyPublicHttpsOrigin: ${WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN:-false}
     RabbitMq__Host: ${SERVICES_HOST:?}
     RabbitMq__Username: nexoruta
     RabbitMq__Password: ${RABBIT_PASSWORD:?}
@@ -482,6 +484,7 @@ services:
       ConnectionStrings__Postgres: ${WORKER_CONNECTION:?}
       Messaging__Transport: HttpWebhooks
       Webhooks__AllowedOrigins: ${WEBHOOK_ALLOWED_ORIGINS:-}
+      Webhooks__AllowAnyPublicHttpsOrigin: ${WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN:-false}
       OpenTelemetry__Enabled: 'true'
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc

@@ -191,13 +191,16 @@ class DeliveryTests(unittest.TestCase):
         alerts = (root / "deploy/observability/prometheus/alerts.yaml").read_text(encoding="utf-8")
 
         self.assertIn("worker-webhooks:", local)
-        self.assertRegex(local, r"worker-webhooks:\n\s+environment: \*otel-settings")
+        self.assertRegex(local, r"worker-webhooks:\n\s+environment:\n\s+<<: \*otel-settings")
         self.assertRegex(local, r"worker-webhooks:[\s\S]{0,240}rls-role-provisioner:")
-        self.assertRegex(base_local, r"worker-webhooks:[\s\S]{0,700}healthcheck:")
+        self.assertRegex(base_local, r"worker-webhooks:[\s\S]{0,1000}healthcheck:")
         self.assertIn("Webhooks__AllowedOrigins: ${NEXORUTA_WEBHOOK_ALLOWED_ORIGINS:-}", base_local)
+        self.assertIn("Webhooks__AllowAnyPublicHttpsOrigin: ${NEXORUTA_WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN:-false}", base_local)
+        self.assertIn("Webhooks__AllowAnyPublicHttpsOrigin: ${NEXORUTA_WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN:-true}", local)
         self.assertIn("Webhooks__DevelopmentReceiverUrl", local_demo)
         self.assertIn("worker-webhooks:", remote)
         self.assertIn("Webhooks__AllowedOrigins: ${WEBHOOK_ALLOWED_ORIGINS:-}", remote)
+        self.assertIn("Webhooks__AllowAnyPublicHttpsOrigin: ${WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN:-false}", remote)
         self.assertIn("Messaging__Transport: HttpWebhooks", remote)
         self.assertIn("worker-webhooks", vm_deploy.APPS)
         self.assertIn("worker-webhooks", monitor_agent.APPLICATIONS)
@@ -211,6 +214,10 @@ class DeliveryTests(unittest.TestCase):
             "https://merchant.example.test:443; https://events.example.test:8443/"),
             ["https://events.example.test:8443", "https://merchant.example.test"])
         self.assertEqual(github_environment.parse_webhook_allowed_origins(""), [])
+        self.assertTrue(github_environment.parse_allow_any_public_https_origin("true"))
+        self.assertFalse(github_environment.parse_allow_any_public_https_origin("false"))
+        with self.assertRaises(ValueError):
+            github_environment.parse_allow_any_public_https_origin("sometimes")
         for invalid in (
             "http://merchant.example.test", "https://merchant.example.test/hooks",
             "https://user@merchant.example.test", "https://merchant.example.test?token=x",
