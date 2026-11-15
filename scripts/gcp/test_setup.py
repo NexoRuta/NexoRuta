@@ -215,6 +215,23 @@ class BootstrapSetupValidationTests(unittest.TestCase):
                     "repository": "NexoRuta/NexoRuta", "repository_id": repository_id, "owner_id": owner_id}
         bootstrap_setup.validate_state_identity(state, **identity, require_complete=True,
                                                 require_current_subject=True)
+        with_firebase_config = json.loads(json.dumps(state))
+        with_firebase_config["values"]["root_module"]["resources"].append({
+            "mode": "data",
+            "address": "data.google_firebase_android_app_config.mobile",
+            "type": "google_firebase_android_app_config",
+            "name": "mobile",
+            "values": {"project": "nexoruta-mobile"},
+        })
+        bootstrap_setup.validate_state_identity(with_firebase_config, **identity)
+
+        unexpected_external = json.loads(json.dumps(with_firebase_config))
+        unexpected_external["values"]["root_module"]["resources"][-1]["type"] = (
+            "google_project_iam_member"
+        )
+        with self.assertRaisesRegex(ValueError, "different project"):
+            bootstrap_setup.validate_state_identity(unexpected_external, **identity)
+
         altered = json.loads(json.dumps(state))
         altered["values"]["root_module"]["resources"][1]["values"]["attribute_condition"] = condition.replace(
             f"assertion.sub == '{subject}'", f"assertion.sub in ['repo:NexoRuta/NexoRuta:environment:nexoruta-demo', '{subject}']",

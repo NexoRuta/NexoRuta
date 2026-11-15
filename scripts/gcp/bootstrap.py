@@ -151,7 +151,9 @@ def main():
                 "repository": environment["GITHUB_REPOSITORY"],
                 "repository_id": environment["BOOTSTRAP_REPOSITORY_ID"],
                 "owner_id": environment["BOOTSTRAP_OWNER_ID"], "project_number": project_number,
-                "wif_profile": environment.get("BOOTSTRAP_WIF_PROFILE", "demo")}
+                "wif_profile": environment.get("BOOTSTRAP_WIF_PROFILE", "demo"),
+                "firebase_project_id": environment.get(
+                    "NEXORUTA_FIREBASE_ANDROID_PROJECT_ID", "nexoruta-mobile")}
     bootstrap_setup.validate_state_identity(state, **identity)
     detach_legacy_mobile_config_version(tofu, state)
     with tempfile.TemporaryDirectory(prefix="nexoruta-bootstrap-") as directory:

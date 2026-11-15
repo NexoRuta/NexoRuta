@@ -167,7 +167,7 @@ def expected_wif_condition(repository_id, owner_id, repository, *, immutable_sub
 
 def validate_state_identity(state, *, project_id, bucket_name, repository, repository_id, owner_id,
                             project_number=None, require_complete=False, require_current_subject=False,
-                            wif_profile="demo"):
+                            wif_profile="demo", firebase_project_id="nexoruta-mobile"):
     try:
         wif = WIF_PROFILES[wif_profile]
     except KeyError as error:
@@ -211,10 +211,23 @@ def validate_state_identity(state, *, project_id, bucket_name, repository, repos
             raise ValueError("Bootstrap state has no matching public GitHub configuration")
 
     resources = list(_resources(values.get("root_module") or {}))
-    project_ids = {str(item.get("values", {}).get("project")) for item in resources
-                   if isinstance(item, dict) and item.get("values", {}).get("project") is not None}
-    if any(value != project_id for value in project_ids):
-        raise ValueError("OpenTofu state contains resources from a different project")
+    project_ids = set()
+    for item in resources:
+        if not isinstance(item, dict):
+            continue
+        resource_project = item.get("values", {}).get("project")
+        if resource_project is None or str(resource_project) == project_id:
+            if resource_project is not None:
+                project_ids.add(str(resource_project))
+            continue
+        external_firebase_config = (
+            item.get("mode") == "data"
+            and item.get("address") == "data.google_firebase_android_app_config.mobile"
+            and item.get("type") == "google_firebase_android_app_config"
+            and str(resource_project) == firebase_project_id
+        )
+        if not external_firebase_config:
+            raise ValueError("OpenTofu state contains resources from a different project")
     project_marked = (project_id in project_ids
                       or (isinstance(configuration, dict) and configuration.get("project_id") == project_id)
                       or (isinstance(variables, dict) and variables.get("GCP_PROJECT_ID") == project_id))
@@ -369,7 +382,9 @@ def run_setup(project_id, repository=REPOSITORY, environment=ENVIRONMENT, region
         state = json.loads(_run(*tofu, "show", "-json", capture=True))
         validate_state_identity(state, project_id=project_id, bucket_name=bucket_name,
                                 repository=repository, repository_id=repository_id, owner_id=owner_id,
-                                project_number=machine_project_number, wif_profile=wif_profile)
+                                project_number=machine_project_number, wif_profile=wif_profile,
+                                firebase_project_id=os.environ.get(
+                                    "NEXORUTA_FIREBASE_ANDROID_PROJECT_ID", "nexoruta-mobile"))
         if not remote_exists and bucket is not None:
             resources = list(_resources(state.get("values", {}).get("root_module") or {}))
             owned = [item for item in resources if item.get("type") == "google_storage_bucket"
@@ -425,7 +440,9 @@ def run_setup(project_id, repository=REPOSITORY, environment=ENVIRONMENT, region
     validate_state_identity(final_state, project_id=project_id, bucket_name=bucket_name,
                             repository=repository, repository_id=repository_id, owner_id=owner_id,
                             project_number=machine_project_number,
-                            require_complete=True, require_current_subject=True, wif_profile=wif_profile)
+                            require_complete=True, require_current_subject=True, wif_profile=wif_profile,
+                            firebase_project_id=os.environ.get(
+                                "NEXORUTA_FIREBASE_ANDROID_PROJECT_ID", "nexoruta-mobile"))
     lineage, serial = final_state.get("lineage"), final_state.get("serial")
     if (not isinstance(lineage, str) or not lineage
             or type(serial) is not int or serial < 0):
