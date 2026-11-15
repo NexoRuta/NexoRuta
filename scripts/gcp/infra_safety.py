@@ -13,8 +13,31 @@ def _abandoned_secret_version_replacement(resource, actions):
     )
 
 
+def _retired_load_preparer_secret_cleanup(resource, actions):
+    """Allow only the explicitly retired synthetic-admin credential secret and its access grants."""
+    if actions != ["delete"]:
+        return False
+    address = resource.get("address")
+    resource_type = resource.get("type")
+    before = (resource.get("change") or {}).get("before") or {}
+    if (address == 'google_secret_manager_secret.config["nexoruta-load-preparer-credentials"]'
+            and resource_type == "google_secret_manager_secret"):
+        return True
+    if (address == "google_secret_manager_secret_version.load_preparer_credentials"
+            and resource_type == "google_secret_manager_secret_version"):
+        secret = before.get("secret", "")
+        return (before.get("deletion_policy") == "ABANDON" and isinstance(secret, str)
+                and secret.endswith("/secrets/nexoruta-load-preparer-credentials"))
+    if (address == "google_secret_manager_secret_iam_member.load_preparer_credentials"
+            and resource_type == "google_secret_manager_secret_iam_member"):
+        secret_id = before.get("secret_id", "")
+        return (isinstance(secret_id, str)
+                and secret_id.endswith("/secrets/nexoruta-load-preparer-credentials"))
+    return False
+
+
 def check_plan(plan, operation):
-    """Reject destructive actions before apply; bootstrap may create only."""
+    """Reject destructive actions except the explicitly retired demo credential secret."""
     if operation not in ("bootstrap", "start", "update", "stop"):
         raise ValueError("Unsupported infrastructure plan operation")
     if not isinstance(plan, dict) or not isinstance(plan.get("resource_changes", []), list):
@@ -34,6 +57,8 @@ def check_plan(plan, operation):
         if "delete" not in actions:
             continue
         if operation in ("bootstrap", "start", "update") and _abandoned_secret_version_replacement(resource, actions):
+            continue
+        if operation in ("bootstrap", "start", "update") and _retired_load_preparer_secret_cleanup(resource, actions):
             continue
         if operation == "bootstrap":
             raise RuntimeError(f"Bootstrap plan deletes/replaces resources: {address}")

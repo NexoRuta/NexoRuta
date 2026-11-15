@@ -308,6 +308,40 @@ class BootstrapSetupValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "invalid plan"):
             infra_safety.check_plan(None, "update")
 
+    def test_shared_plan_gate_allows_only_retired_load_preparer_secret_cleanup(self):
+        resources = [
+            {
+                "address": 'google_secret_manager_secret.config["nexoruta-load-preparer-credentials"]',
+                "type": "google_secret_manager_secret",
+                "change": {"actions": ["delete"], "before": {"secret_id": "nexoruta-load-preparer-credentials"}},
+            },
+            {
+                "address": "google_secret_manager_secret_version.load_preparer_credentials",
+                "type": "google_secret_manager_secret_version",
+                "change": {"actions": ["delete"], "before": {
+                    "deletion_policy": "ABANDON",
+                    "secret": "projects/demo-project/secrets/nexoruta-load-preparer-credentials",
+                }},
+            },
+            {
+                "address": "google_secret_manager_secret_iam_member.load_preparer_credentials",
+                "type": "google_secret_manager_secret_iam_member",
+                "change": {"actions": ["delete"], "before": {
+                    "secret_id": "projects/demo-project/secrets/nexoruta-load-preparer-credentials",
+                }},
+            },
+        ]
+        for operation in ("bootstrap", "start", "update"):
+            infra_safety.check_plan({"resource_changes": resources}, operation)
+        with self.assertRaisesRegex(RuntimeError, "does not destroy"):
+            infra_safety.check_plan({"resource_changes": resources}, "stop")
+
+        wrong_secret = {"resource_changes": [{
+            **resources[0], "address": 'google_secret_manager_secret.config["nexoruta-demo-runtime"]',
+        }]}
+        with self.assertRaisesRegex(RuntimeError, "deletes/replaces|delete or replace"):
+            infra_safety.check_plan(wrong_secret, "bootstrap")
+
     def test_legacy_mobile_secret_migration_forgets_state_without_deleting_version(self):
         state = {"values": {"root_module": {"resources": [{
             "address": "google_secret_manager_secret_version.mobile",
