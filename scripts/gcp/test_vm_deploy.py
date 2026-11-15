@@ -51,13 +51,14 @@ class VmDeploymentTests(unittest.TestCase):
 
         self.assertEqual("admin-demo@nexoruta.test",
                          configuration["PlatformInitialization"]["Email"])
-        self.assertEqual(vm_deploy.DEMO_SEED_PASSWORD,
+        self.assertEqual(vm_deploy.DEMO_ADMIN_PASSWORD,
                          configuration["PlatformInitialization"]["Password"])
         self.assertEqual(vm_deploy.DEMO_SEED_PASSWORD,
                          configuration["AccesoInicial"]["OperadorUsuarioPassword"])
         self.assertEqual(vm_deploy.DEMO_SEED_PASSWORD,
                          configuration["AccesoInicial"]["UsuarioPassword"])
-        self.assertEqual(vm_deploy.DEMO_SEED_PASSWORD, seed_demo_data.SEED_PASSWORD)
+        self.assertEqual(vm_deploy.DEMO_ADMIN_PASSWORD, seed_demo_data.ADMIN_PASSWORD)
+        self.assertEqual(vm_deploy.DEMO_ADMIN_PASSWORD, prepare_load_fixture.ADMIN_PASSWORD)
         self.assertEqual(vm_deploy.DEMO_SEED_PASSWORD, prepare_load_fixture.SEED_PASSWORD)
         self.assertNotIn("SynchronizePassword", configuration["PlatformInitialization"])
 

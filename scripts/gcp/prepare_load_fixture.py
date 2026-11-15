@@ -17,6 +17,7 @@ import load_tests
 
 FIXTURE_SECRET = "nexoruta-load-fixtures"
 ADMIN_EMAIL = "admin-demo@nexoruta.test"
+ADMIN_PASSWORD = "AdminPass123!"
 SEED_PASSWORD = "ChangeMe123!"
 READ_PATH = "/api/mobile/perfil"
 MAX_BATCH = 5
@@ -220,7 +221,7 @@ def main():
     if status != 200:
         raise RuntimeError("The remote application is not ready for fixture preparation")
     accounts = fixture_accounts(current, token, project)
-    seeded = prepare_application(origin, ADMIN_EMAIL, SEED_PASSWORD, accounts, check_active)
+    seeded = prepare_application(origin, ADMIN_EMAIL, ADMIN_PASSWORD, accounts, check_active)
     check_active()
     prepared_accounts, object_name, digest = pin_operations(token, project, seeded)
     credentials = {item["email"]: item["password"] for item in accounts}

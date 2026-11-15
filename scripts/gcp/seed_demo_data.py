@@ -18,7 +18,7 @@ import urllib.request
 METADATA = "http://metadata.google.internal/computeMetadata/v1/"
 SECRET_NAME = "nexoruta-demo-runtime"
 ADMIN_EMAIL = "admin-demo@nexoruta.test"
-SEED_PASSWORD = "ChangeMe123!"
+ADMIN_PASSWORD = "AdminPass123!"
 MAX_RESPONSE_BYTES = 1024 * 1024
 
 
@@ -279,7 +279,7 @@ def main():
         origin,
         "POST",
         "/api/auth/login",
-        payload={"email": ADMIN_EMAIL, "password": SEED_PASSWORD},
+        payload={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
     )
     if status != 200 or login.get("contexto") != "Plataforma":
         raise RuntimeError(f"Platform login failed or returned the wrong context (HTTP {status}).")

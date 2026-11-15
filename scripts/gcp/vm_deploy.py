@@ -31,6 +31,7 @@ APPS = ("api", "worker-rabbit", "worker-kafka", "worker-push", "worker-webhooks"
         "grafana", "otel-collector", "alloy")
 APP_IMAGE_SERVICES = ("api", "worker", "admin", "backoffice", "commerce", "tracking")
 DEMO_SEED_PASSWORD = "ChangeMe123!"
+DEMO_ADMIN_PASSWORD = "AdminPass123!"
 SHARED = ("rabbitmq", "kafka", "mongo", "mailpit", "proxy", "prometheus", "prometheus-write-gateway",
           "gcp-metrics-collector", "loki", "tempo")
 OBSERVABILITY_CORE = ("prometheus", "prometheus-write-gateway", "gcp-metrics-collector", "loki", "tempo")
@@ -405,7 +406,7 @@ def ensure_mongo_runtime_users(deployment):
 def bootstrap_config(runtime):
     ids = runtime["organization_ids"]
     return {
-        "PlatformInitialization": {"Enabled": True, "Email": "admin-demo@nexoruta.test", "Password": DEMO_SEED_PASSWORD},
+        "PlatformInitialization": {"Enabled": True, "Email": "admin-demo@nexoruta.test", "Password": DEMO_ADMIN_PASSWORD},
         "AccesoInicial": {
             "OperadorId": ids["operator"], "ComercioId": ids["commerce"],
             "OperadorNombre": "Operador Demo Uruguay", "ComercioNombre": "Comercio Demo Uruguay",
@@ -1133,7 +1134,7 @@ def smoke(runtime, check_accounts=True):
     accounts = (("admin", "admin-demo@nexoruta.test"), ("operator", "operador@nexoruta.test"), ("commerce", "comercio@nexoruta.test")) if check_accounts else ()
     authenticated_reads = []
     for role, email in accounts:
-        payload = json.dumps({"email": email, "password": DEMO_SEED_PASSWORD}).encode()
+        payload = json.dumps({"email": email, "password": DEMO_ADMIN_PASSWORD if role == "admin" else DEMO_SEED_PASSWORD}).encode()
         request = urllib.request.Request(endpoints["api"] + "/api/auth/login", data=payload, headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=20) as response:
             if response.status != 200:
