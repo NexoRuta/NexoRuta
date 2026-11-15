@@ -23,16 +23,23 @@ class ImageInventoryTests(unittest.TestCase):
         self.assertEqual({item["name"] for item in inventory["images"] if item["kind"] == "build"},
                          {"build", "runtime"})
 
-    def test_pinned_digests_match_the_recorded_official_registry_platform_check(self):
+    def test_pinned_digests_match_the_recorded_official_registry_platform_checks(self):
         report = json.loads((ROOT / "docs/auditorias/nfr-14/evidencia/image-platforms-2026-11-14.json")
                             .read_text(encoding="utf-8"))
+        otel_report = json.loads((ROOT / "docs/auditorias/nfr-14/evidencia/otel-collector-platforms-2026-11-15.json")
+                                 .read_text(encoding="utf-8"))
         inventory = image_inventory.collect(ROOT)
         expected = {(item["kind"], item["name"], item["image"]) for item in inventory["images"]}
-        recorded = {(item["kind"], item["name"], item["image"]) for item in report["images"]}
+        recorded = {(item["kind"], item["name"], item["image"]) for item in report["images"]
+                    if item["name"] != "otel-collector"}
+        recorded.add((otel_report["kind"], otel_report["name"], otel_report["image"]))
         self.assertEqual(report["required_platform"], "linux/amd64")
         self.assertEqual(len(report["images"]), 19)
         self.assertEqual(recorded, expected)
         self.assertTrue(all(item["linux_amd64"] for item in report["images"]))
+        self.assertEqual(otel_report["required_platform"], "linux/amd64")
+        self.assertTrue(otel_report["linux_amd64"])
+        self.assertEqual(otel_report["manifest_digest"], otel_report["image"].split("@", 1)[1])
 
     def test_manifest_inventory_rejects_mutable_image_or_wrong_platform(self):
         inventory = image_inventory.collect(ROOT)

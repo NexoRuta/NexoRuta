@@ -13,15 +13,14 @@ La matriz separa evidencia local, observaciones históricas y gates pendientes.
 
 | Identidad | SHA/estado | Alcance |
 | --- | --- | --- |
-| Raíz base inspeccionada | `86e234e7bc0a2be1ce8911cc186ecf0e55d628e4`, árbol base `6f4011e136ced28f02b9330fb218af085e61c44c` | Base previa a las modificaciones NFR-14. El árbol de trabajo está sucio; no hay SHA final de candidata. |
-| Backend gitlink/base | `5b6f0f9f052348aed27da40ed202da953b39ea2a` | El submódulo tiene cambios locales no publicados. |
+| Raíz base inspeccionada | `86e234e7bc0a2be1ce8911cc186ecf0e55d628e4`, árbol base `6f4011e136ced28f02b9330fb218af085e61c44c` | Base previa a NFR-14. La candidata integrada está en `develop`; la card enlazada registra el SHA publicado. |
+| Backend gitlink publicado | `7562ca95b91028b682fb0aa72883be79cd038441` | Commit de backend integrado en `develop` y fijado por el gitlink raíz. |
 | Frontend gitlink/base | `2540041ba267d8a48e6c2b8a644247134f5b47f4` | Sin avanzar a otra punta para esta implementación. |
 | Mobile gitlink/base | `90976706c7db6a54c06ac552811f20f04d90375e` | Sin avanzar a otra punta para esta implementación. |
 
 La revisión de fuentes/versiones está en [`evidencia/sources.json`](evidencia/sources.json).
-Antes de proponer aceptación hay que crear un commit/revisión candidato, registrar
-sus SHA raíz/tree y gitlinks finales, y comprobarlos en CI. No presentar los SHA
-base como una publicación de esta implementación.
+El cierre administrativo y el SHA raíz publicado en `develop` quedan registrados
+en la card enlazada. No presentar los SHA base como la publicación de esta implementación.
 
 ## Historial que no acredita la candidata
 
@@ -31,16 +30,16 @@ base como una publicación de esta implementación.
 | `43631884438` (`develop`, 14/11/2026) | `update/develop` exitoso; release `release-bd39c48fde2b49fa80b18a01f173ebd6`; Cloud Build `b47edff9-9be1-4275-a9f2-cee3be4c4da6`; bundle SHA-256 `12bb73c4caaae928c0a6d934e4fdb9d3e718734b0705221c5ac68819e5cebdf4`. | [Diagnóstico](diagnostico.md), [manifiestos/canales](evidencia/delivery-channels-2026-11-14.json) | Develop no ejecuta Integrated CI; además es anterior al cambio local y comparte la demo. |
 
 No existe run/attempt, tag, build, manifest, bundle hash ni conjunto de seis
-digests de la candidata actual. No hay artifact de CI candidato ligado a root SHA
-y gitlinks finales.
+digests de la candidata actual. No hay artifact de CI candidato ligado al SHA raíz
+y gitlinks finales; el push a `develop` no ejecuta por sí solo la CI integrada ni publica desde `main`.
 
 ## Gates
 
 | Gate / criterio | Estado | Evidencia disponible | Pendiente para aceptar |
 | --- | --- | --- | --- |
 | P0 — fuentes, destino e inventario | Parcial | Diagnóstico y capturas sanitizadas; gitlinks base exactos; recursos demo inventariados. | Finalizar identidad del candidato y resolver con evidencia el historial de digest/schema en cada VM; confirmar todas las precondiciones. |
-| P1 — credenciales y contrato actualizado | Implementación local; CI pendiente | Código/contrato en worktree; build y pruebas backend locales. | Publicar/integrar backend y root en el orden del plan; CI de la combinación final; transición operativa del admin existente con respaldo y ventana aprobados. |
-| P2 — insumos, manifiesto y retención | Implementación local; publicación pendiente | Checks locales; el bundle incorpora validador de host y el smoke NFR-14 serializa versiones sanitizadas de ambos nodos. | Publicación candidata, verificación remota del manifiesto/digests, consumo del artifact de CI/Android y evidencia real de hosts en la release desplegada. |
+| P1 — credenciales y contrato actualizado | Implementada en `develop`; CI/operación pendientes | Código/contrato en los commits publicados; build y pruebas backend locales. | CI de la combinación final; transición operativa del admin existente con respaldo y ventana aprobados. |
+| P2 — insumos, manifiesto y retención | Implementada en `develop`; publicación pendiente | Checks locales; el bundle incorpora validador de host y el smoke NFR-14 serializa versiones sanitizadas de ambos nodos. | Publicación candidata, verificación remota del manifiesto/digests, consumo del artifact de CI/Android y evidencia real de hosts en la release desplegada. |
 | P3 — bootstrap y planes seguros | Implementación local; bootstrap remoto pendiente | `tofu init/validate` local en copia sin backend; pruebas de guards y scripts. | Aplicación autorizada del bootstrap y verificación de WIF/permisos en el entorno que opere. |
 | P4 — CI → publicación → despliegue | Pendiente; aceptado sin ejecución para el cierre administrativo | Solo publicaciones históricas de la tabla anterior. | No existe CI/publicación candidata en `main`; se omitió por instrucción del usuario. La card Done no afirma que haya ocurrido. |
 | P5 — recreación/cleanup/segunda recreación | Pendiente; aceptado sin ejecución para el cierre administrativo | Implementación local de `reproduce.py`, módulo, workflow, pruebas y runbook; sin proyecto de ensayo creado. | No se creó, recreó ni limpió un proyecto GCP; no hay segunda recreación. Se omitió por instrucción del usuario. |
@@ -52,8 +51,8 @@ y gitlinks finales.
 
 | Categoría | Resultado local | Qué demuestra / qué no demuestra |
 | --- | --- | --- |
-| Compilación | Restore `--locked-mode` y build de la solución backend: éxito. 381 unit tests y 7 architecture tests: éxito. | No es build de Cloud Build ni de las seis imágenes del candidato. No equivale a CI integrado remoto. |
-| Automatización | `scripts/gcp`: 332 casos, 324 aprobados, 8 skips documentados y 0 fallidos. El grupo focal de NFR-14 ejecutó 112 casos con 1 skip. Backend/Testcontainers con Docker WSL y PostgreSQL 18/PostGIS: 42 casos seleccionados; luego 13 retest tras cambiar nombres de casos para no exponer passwords en logs. | Los tests cloud son simulados/locales o usan fixtures; no crean recursos GCP ni comprueban factura. |
+| Compilación | Restore `--locked-mode` y build de la solución backend: éxito. 382 unit tests y 7 architecture tests: éxito. | No es build de Cloud Build ni de las seis imágenes del candidato. No equivale a CI integrado remoto. |
+| Automatización | `scripts/gcp`: 339 casos, 331 aprobados, 8 skips documentados y 0 fallidos. El grupo focal de NFR-14 ejecutó 112 casos con 1 skip. Backend/Testcontainers con Docker WSL y PostgreSQL 18/PostGIS: 42 casos seleccionados; luego 13 retest tras cambiar nombres de casos para no exponer passwords en logs. | Los tests cloud son simulados/locales o usan fixtures; no crean recursos GCP ni comprueban factura. |
 | Validación estática | `tofu fmt`; init/validate de bootstrap/demo/reproduction-project en copias temporales; `compileall`; `bash -n`; actionlint con ignore acotado para la extensión `queue`; Compose validado desde WSL. | No aplica estado ni autentica contra GCP. |
 | HTTP/TLS | Inspección histórica a las 19:56 UTC del 14/11: endpoints de salud/ingreso respondieron 200 con TLS normal; Grafana y Mailpit rechazaron requests anónimos con 401 como correspondía. | No es el candidato nuevo ni el estado actual: a las 20:21 UTC las VMs ya estaban detenidas. |
 | Revisión visual | No realizada. | Falta navegador con login, navegación y lectura por rol en la candidata, con capturas sanitizadas. |
