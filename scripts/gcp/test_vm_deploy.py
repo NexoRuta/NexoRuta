@@ -40,11 +40,25 @@ def install_host_version_fixtures(root, release):
 
 
 class VmDeploymentTests(unittest.TestCase):
+    def test_bootstrap_config_uses_a_separate_platform_identity(self):
+        runtime = {
+            "passwords": {"admin": "synthetic-platform-password",
+                          "operator": "operator-password", "commerce": "commerce-password"},
+            "organization_ids": {"operator": "operator-id", "commerce": "commerce-id"},
+        }
+
+        configuration = vm_deploy.bootstrap_config(runtime)
+
+        self.assertEqual("platform-bootstrap@nexoruta.test",
+                         configuration["PlatformInitialization"]["Email"])
+        self.assertEqual("synthetic-platform-password",
+                         configuration["PlatformInitialization"]["Password"])
+
     def test_authenticated_identity_smoke_matches_each_synthetic_actor_and_organization(self):
         organization_ids = {"operator": "operator-id", "commerce": "commerce-id"}
         cases = (
-            ({"usuarioEmail": "admin@nexoruta.test", "tipo": "Plataforma",
-              "operadorId": None, "comercioId": None}, "admin", "admin@nexoruta.test"),
+            ({"usuarioEmail": "platform-bootstrap@nexoruta.test", "tipo": "Plataforma",
+              "operadorId": None, "comercioId": None}, "admin", "platform-bootstrap@nexoruta.test"),
             ({"usuarioEmail": "operador@nexoruta.test", "tipo": "Operador",
               "operadorId": "operator-id", "comercioId": None}, "operator", "operador@nexoruta.test"),
             ({"usuarioEmail": "comercio@nexoruta.test", "tipo": "Comercio",

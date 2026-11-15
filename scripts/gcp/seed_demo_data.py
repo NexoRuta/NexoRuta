@@ -17,7 +17,7 @@ import urllib.request
 
 METADATA = "http://metadata.google.internal/computeMetadata/v1/"
 SECRET_NAME = "nexoruta-demo-runtime"
-ADMIN_EMAIL = "admin@nexoruta.test"
+ADMIN_EMAIL = "platform-bootstrap@nexoruta.test"
 MAX_RESPONSE_BYTES = 1024 * 1024
 
 

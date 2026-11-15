@@ -101,7 +101,7 @@ def preparer_credentials(token, project):
         raise RuntimeError(f"Could not read the fixture-preparer credential (HTTP {status})")
     value = json.loads(base64.b64decode(json.loads(body)["payload"]["data"], validate=True))
     email, password = value.get("email"), value.get("password")
-    if email != "admin@nexoruta.test" or not isinstance(password, str) or len(password) < 12:
+    if email != "platform-bootstrap@nexoruta.test" or not isinstance(password, str) or len(password) < 12:
         raise RuntimeError("The fixture-preparer secret has no valid platform credential")
     return email, password
 

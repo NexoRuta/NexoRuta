@@ -89,7 +89,7 @@ class PrepareLoadFixtureTests(unittest.TestCase):
             return 200, {"cuentas": payload["cuentas"]}
 
         with patch.object(prepare, "api_request", side_effect=request):
-            seeded = prepare.prepare_application("https://api.example.test", "admin@nexoruta.test",
+            seeded = prepare.prepare_application("https://api.example.test", "platform-bootstrap@nexoruta.test",
                                                  "admin-password", accounts)
 
         self.assertEqual(accounts, seeded)
