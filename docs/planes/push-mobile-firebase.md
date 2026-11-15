@@ -1,6 +1,6 @@
 # Auditoría y plan de corrección de push Android con Firebase
 
-Fecha: 14/11/2026. Alcance original: push en Android y dependencias de API, Worker, Firebase y distribucion. iOS queda fuera por indicacion del usuario. La implementacion Android se publico en `develop` el 15/11/2026 y la recepcion Firebase quedo comprobada en el telefono. El intento de despliegue GCP fallo durante el bootstrap de datos, antes de aplicar las imagenes; el Worker desplegado y el flujo de apertura/confirmacion siguen pendientes.
+Fecha: 14/11/2026. Alcance original: push en Android y dependencias de API, Worker, Firebase y distribucion. iOS queda fuera por indicacion del usuario. La implementacion Android se publico en `develop` el 15/11/2026 y la recepcion Firebase quedo comprobada en el telefono. Dos intentos de despliegue GCP fallaron durante el bootstrap de datos, antes de aplicar las imagenes. La consulta de solo lectura identifico una identidad administrativa huérfana que el bootstrap rehusa elevar; el Worker desplegado y el flujo de apertura/confirmacion siguen pendientes.
 
 ## 1. Dictamen y fuentes examinadas
 
@@ -275,8 +275,8 @@ La guia operativa Android de la seccion 4 sigue siendo el procedimiento de acept
 | Capa | Resultado | Limite |
 | --- | --- | --- |
 | Compilación Android | Build Debug ARM64 con el archivo real de Firebase, target GcpDemo y EmbedAssembliesIntoApk=true: 0 errores. Se instalo y abrio en Galaxy S21, Android 14; la pantalla de acceso y la sección Cuenta cargaron. | 4 advertencias: XA0033 por la salida de Java 21 y tres XA0141 de bibliotecas Mapbox sin páginas de 16 KB. No es un APK de distribución Release. |
-| Worker y pruebas | Compilacion Worker previa correcta. Mobile.Application: 107/107; Worker: 9/9; validador Firebase Android: 6/6; pruebas Python de GitHub/GCP: 46 aprobadas y 1 omitida. `git diff --check` y `tofu fmt -check` de los archivos Terraform modificados pasan. | La prueba integrada PostgreSQL de migracion/outbox no se ejecutó en esta sesion. |
-| HTTP GCP | `/ready` respondio HTTP 200 y los backends del balanceador aparecen HEALTHY. | No acredita envio push desde el Worker desplegado. |
+| Worker y pruebas | Build del Worker sin errores; pruebas focales repetidas: Mobile 33/33, clasificación del Worker 9/9, preflight Firebase Python 6/6. También se registraron las suites más amplias de la ejecución anterior: Mobile.Application 107/107, Worker 9/9 y GitHub/GCP 46 aprobadas + 1 omitida. | Advertencias NU1510 y EF1003 ajenas a push. No se ejecutó la prueba integrada PostgreSQL de migración/outbox. |
+| HTTP GCP | `/ready` dio HTTP 200 durante los intentos 43682929092 y 43729545386, antes de drenar el balanceador. | Ambos intentos fallaron luego en bootstrap; HTTP 200 no identifica el release ni demuestra que Worker se aplicara. |
 | Registro Android | La cuenta administrativa indicada rechazó el acceso. Con autorización del usuario se inició sesión con la cuenta sintética `repartidor_demo`; la app mostró "Notificaciones activadas." y el API confirmó el registro. El FID no se incluyó en logs ni en este documento. | La cuenta de repartidor de prueba no tiene una hoja de ruta activa. |
 | Firebase y entrega Android | Se enviaron dos mensajes de datos sintéticos desde FCM HTTP v1 al proyecto `nexoruta-mobile`: uno con la app en primer plano y otro con la app minimizada. FCM aceptó ambos y NotificationManager registró dos notificaciones en `nexoruta.avisos` con el título y cuerpo esperados; el usuario confirmó que aparecen en la barra de notificaciones de Android. | Los payloads usaron identificadores sintéticos; no se creó aviso de negocio. No se probó el toque, apertura y confirmación de un aviso real. La prueba directa no acredita que el Worker GCP desplegado use todavía el proyecto nuevo. |
 | Revisión visual | No se cambió el layout. El usuario confirmó la visualización de las notificaciones en la barra de Android. | No se guardó una captura del sistema. |
@@ -291,10 +291,29 @@ La guia operativa Android de la seccion 4 sigue siendo el procedimiento de acept
 
 ### Estado del despliegue GCP y pendientes (2026-11-15)
 
-- Los cambios de raiz, Backend y Mobile están publicados en `develop`: raiz `152f368`, Backend `f7d05e7`, Mobile `4dc2904`. La acción [43682929092](https://github.com/NexoRuta/NexoRuta/actions/runs/43682929092) publicó correctamente el release `release-a03dfa49040749b1b5b271742cd73594` y sincronizó la integración `firebase_project_id=nexoruta-mobile`.
-- El intento `operation=start` falló en el nodo A durante `vm_migrate_bootstrap_data`. La validación SQL, migraciones de esquema, provisión de roles y catálogo departamental pasaron antes de esa etapa. El error remoto quedó sanitizado como `CalledProcessError` y la acción no expuso la excepción interna del bootstrap.
+- Los cambios de raiz, Backend y Mobile están publicados en `develop`: raiz `152f368`, Backend `f7d05e7`, Mobile `4dc2904`; la actualización de este documento se publicó como `614aa8f`. Las acciones [43682929092](https://github.com/NexoRuta/NexoRuta/actions/runs/43682929092) y [43729545386](https://github.com/NexoRuta/NexoRuta/actions/runs/43729545386) publicaron correctamente los releases `release-a03dfa49040749b1b5b271742cd73594` y `release-b75f6e4f50ba4d70bbb142d9f3125ebe`, y sincronizaron `firebase_project_id=nexoruta-mobile`.
+- Ambos intentos `operation=start` fallaron en el nodo A durante `vm_migrate_bootstrap_data`. Pasaron SQL preflight, migraciones de esquema, provisión de roles y catálogo departamental; no se llegó a la etapa `apply` de las imágenes. El error del proceso remoto quedó sanitizado como `CalledProcessError`.
+- La causa de bootstrap quedó identificada con una consulta SQL de solo lectura: existe `admin@nexoruta.test` en `Usuarios`, pero no tiene fila en `AccesosPlataforma`. `EfPlataformaRepository.AsegurarConfiguradaAsync` detecta el correo ya ocupado y se niega a elevar esa identidad; `DatosInicialesSeeder` convierte el conflicto en fallo de inicialización. No se modificó la cuenta, su acceso ni sus credenciales. Para reintentar hay que decidir si se conserva esa identidad y se crea un administrador sintético distinto, o si se autoriza explícitamente cambiar el acceso de la existente.
 - El workflow ejecutó la limpieza de fallo: cerró el lease y detuvo A y B. La consulta posterior a Compute reportó ambas instancias `TERMINATED`. El proyecto y la base GCP se conservaron.
 - `/ready` respondió HTTP 200 durante el arranque, antes del drenaje del balanceador; no acredita que el release nuevo quedara aplicado. La etapa de aplicación de imágenes y health del Worker no se alcanzó, por lo que no se comprobó el `FIREBASE_PROJECT_ID` dentro de un Worker corriendo.
-- Para completar el despliegue hay que diagnosticar el fallo de bootstrap sin resetear datos ni sincronizar/rotar credenciales existentes, corregir su causa y repetir la acción `start`. Después hay que comprobar la configuración efectiva de `worker-push`, su salud en A/B y un envío iniciado por el Worker a Android.
+- Verificación portable repetida: Mobile 33/33 pruebas focales, validador Firebase 6/6, clasificación push del Worker 9/9 y build del Worker sin errores. Persisten advertencias NU1510 y EF1003 ajenas a push. La integración PostgreSQL/outbox no se ejecutó en este Windows sin Docker; no se usaron servicios del host como fixture.
 - El repartidor sintético `repartidor_demo` no tiene una hoja de ruta activa. Por eso no se generó un aviso de negocio y siguen pendientes la apertura del aviso y su confirmación/ACK. Los dos mensajes FCM directos sí aparecieron en la barra de Android, según verificó el usuario.
 - El APK instalado es Debug, firmado localmente; antes de uso real se necesita una compilación Release y que el usuario inicie sesión con su cuenta.
+
+### Estado de los pasos de verificación del plan
+
+| Paso | Estado | Evidencia / límite |
+| --- | --- | --- |
+| 1. Fuentes y efectos | Completo | SHAs de raíz/submódulos registrados; cambios publicados en `develop`; se conservaron proyecto, base y volúmenes GCP. No se usaron proveedores de mapas reales. |
+| 2. Regresiones portables | Parcial | Pasaron los filtros Mobile 33/33, Python 6/6 y Worker 9/9. No se ejecutó cada combinación de carreras enumerada en la guía. |
+| 3. API, SQL y Worker controlados | Parcial | Build Worker y clasificación unitaria pasaron. Fixture de integración PostgreSQL/outbox no se ejecutó en Windows sin Docker. |
+| 4. Configuración Firebase efectiva | Parcial | JSON real validado; `nexoruta-mobile`, FCM API e IAM runtime verificados; secreto GCP apunta al proyecto correcto. Worker no llegó a correr el release nuevo y no se leyó su entorno efectivo. |
+| 5. Artefacto nativo | Parcial | APK Debug ARM64 con configuración real instalada y abierta en Galaxy S21 Android 14. No se produjo APK Release firmado ni SHA256 de distribución. |
+| 6. Inscripción y permisos | Parcial | Sesión `repartidor_demo`, notificaciones activadas y alta confirmada por API. No se probaron permiso/canal denegado, primer arranque sin red o recuperación tras API caída. |
+| 7. Evento real con app abierta | Pendiente | La cuenta sintética no tiene ruta activa; no se creó un aviso de negocio ni se correlacionó su outbox. |
+| 8. Segundo plano y proceso ausente | Parcial | Llegó el push directo con la app minimizada y el usuario vio la notificación. No se probó proceso ausente, toque, apertura ni ACK de negocio. |
+| 9. Rotación, reconexión y salida | Pendiente | No se rotó FID ni se probaron logout/revocación/cambio de cuenta en esta aceptación. |
+| 10. Fallas controladas del proveedor | Parcial | Clasificación unitaria 9/9. Falta la matriz integrada de cuotas, respuesta parcial, carreras y persistencia con PostgreSQL. |
+| 11. Revisión visual y evidencia | Parcial | El usuario confirmó las notificaciones en la barra; no se guardó captura y no se revisaron visualmente estados de error/denegación ni accesibilidad. |
+
+El ADB del teléfono está actualmente `offline`; el último puerto/código de emparejamiento proporcionado ya no conectó. Se conserva la evidencia de las dos entregas anteriores, pero hacen falta datos ADB vigentes para repetir las pruebas de los pasos 6–9.
