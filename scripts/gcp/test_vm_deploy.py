@@ -61,6 +61,21 @@ class VmDeploymentTests(unittest.TestCase):
         self.assertEqual(vm_deploy.DEMO_SEED_PASSWORD, prepare_load_fixture.SEED_PASSWORD)
         self.assertNotIn("SynchronizePassword", configuration["PlatformInitialization"])
 
+    def test_bootstrap_failure_diagnostic_is_allowlisted_and_does_not_return_log_text(self):
+        raw_log = io.StringIO(
+            "secret=must-not-escape\n"
+            "Unhandled exception. System.InvalidOperationException: "
+            "Platform initialization email belongs to an existing identity; it will not be elevated.\n"
+        )
+        diagnostic = vm_deploy.bootstrap_failure_diagnostic(raw_log, 0)
+        self.assertEqual("BootstrapPlatformEmailConflict", diagnostic)
+        self.assertNotIn("must-not-escape", diagnostic)
+
+    def test_bootstrap_failure_diagnostic_reports_only_exception_type_as_fallback(self):
+        raw_log = io.StringIO("Unhandled exception. Npgsql.PostgresException: private database details\n")
+        self.assertEqual("BootstrapPostgresException",
+                         vm_deploy.bootstrap_failure_diagnostic(raw_log, 0))
+
     def test_authenticated_identity_smoke_matches_each_synthetic_actor_and_organization(self):
         organization_ids = {"operator": "operator-id", "commerce": "commerce-id"}
         cases = (

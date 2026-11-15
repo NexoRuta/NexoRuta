@@ -382,6 +382,18 @@ class DeliveryTests(unittest.TestCase):
             "Node a stage prepare failed (TypeError at environment:177)",
         )
 
+    def test_remote_stage_error_reports_only_allowlisted_bootstrap_diagnostics(self):
+        output = json.dumps({
+            "node": "a", "stage": "migrate", "status": "failed",
+            "error_type": "BootstrapFailureError", "failed_phase": "bootstrap_data",
+            "safe_diagnostic": "BootstrapPlatformEmailConflict", "error": "private detail",
+        })
+        self.assertEqual(
+            delivery.remote_stage_error(output, "a", "migrate"),
+            "Node a stage migrate failed (BootstrapFailureError, phase bootstrap_data, "
+            "diagnostic BootstrapPlatformEmailConflict)",
+        )
+
     def test_vm_error_location_contains_only_function_and_line(self):
         try:
             raise TypeError("secret detail")

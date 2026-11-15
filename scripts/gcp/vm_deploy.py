@@ -58,6 +58,39 @@ def measure(timings, phase, operation):
         timings[phase] = round((time.perf_counter() - started) * 1000)
 
 
+def bootstrap_failure_diagnostic(log, start_offset):
+    """Return a small allowlisted category from bootstrap output, never raw logs."""
+    try:
+        if hasattr(log, "getvalue"):
+            text = log.getvalue()[start_offset:]
+        else:
+            log.flush()
+            with open(log.name, "rb") as source:
+                source.seek(start_offset)
+                text = source.read(65536).decode("utf-8", errors="replace")
+    except (AttributeError, OSError, ValueError):
+        return "BootstrapProcessFailed"
+    categories = (
+        ("Platform initialization email belongs to an existing identity", "BootstrapPlatformEmailConflict"),
+        ("Existing platform account is incompatible", "BootstrapPlatformIdentityIncompatible"),
+        ("No existing platform account was found to synchronize", "BootstrapPlatformAccountMissing"),
+        ("Configured platform administrator credentials are missing or invalid", "BootstrapPlatformConfigurationInvalid"),
+    )
+    for message, category in categories:
+        if message in text:
+            return category
+    match = re.search(r"(?:Unhandled exception\.?\s+|\n)(?:[\w.]+\.)?([A-Za-z][A-Za-z0-9]*(?:Exception|Error)):", text)
+    if match:
+        return "Bootstrap" + match.group(1)
+    return "BootstrapProcessFailed"
+
+
+class BootstrapFailureError(RuntimeError):
+    def __init__(self, diagnostic):
+        super().__init__("Demo bootstrap failed")
+        self.safe_diagnostic = diagnostic
+
+
 def token():
     request = urllib.request.Request(
         "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
@@ -731,7 +764,17 @@ class Deploy:
                     self.compose("run", "--rm", "--no-deps", "db-tools", "psql", "-v", "ON_ERROR_STOP=1", "-f", "/deploy/sql/" + name)
             self.measure("provision_runtime_and_hosting", provision_roles_and_hosting)
             self.measure("import_department_catalog", lambda: self.compose("run", "--rm", "--no-deps", "migrate", "department-catalog-import"))
-            self.measure("bootstrap_data", lambda: self.compose("run", "--rm", "--no-deps", "bootstrap"))
+            def bootstrap_data():
+                self.log.flush()
+                try:
+                    start_offset = os.fstat(self.log.fileno()).st_size
+                except (AttributeError, OSError, ValueError):
+                    start_offset = len(self.log.getvalue()) if hasattr(self.log, "getvalue") else 0
+                try:
+                    self.compose("run", "--rm", "--no-deps", "bootstrap")
+                except subprocess.CalledProcessError:
+                    raise BootstrapFailureError(bootstrap_failure_diagnostic(self.log, start_offset)) from None
+            self.measure("bootstrap_data", bootstrap_data)
 
 
 def metadata(path):
@@ -1127,9 +1170,11 @@ def main():
     except Exception as error:
         failed_phase = getattr(error, "nexoruta_phase", "")
         http_status = getattr(error, "http_status", None)
+        safe_diagnostic = getattr(error, "safe_diagnostic", "")
         print(json.dumps({"release": args.release, "node": args.node, "stage": args.stage,
                           "status": "failed", "error_type": type(error).__name__,
                           "error_location": error_location(error), "failed_phase": failed_phase,
+                          "safe_diagnostic": safe_diagnostic if re.fullmatch(r"[A-Za-z][A-Za-z0-9]{0,63}", safe_diagnostic) else None,
                           "http_status": http_status if type(http_status) is int and 100 <= http_status <= 599 else None,
                           "timings_ms": timings}))
         raise SystemExit(1) from None

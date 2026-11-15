@@ -542,6 +542,12 @@ def remote_stage_error(output, node, operation):
             http_status = result.get("http_status")
             if type(http_status) is int and 100 <= http_status <= 599:
                 suffix += f", HTTP {http_status}"
+            phase = result.get("failed_phase", "")
+            if isinstance(phase, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", phase):
+                suffix += f", phase {phase}"
+            diagnostic = result.get("safe_diagnostic", "")
+            if isinstance(diagnostic, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9]{0,63}", diagnostic):
+                suffix += f", diagnostic {diagnostic}"
             return f"Node {node} stage {operation} failed ({error_type}{suffix})"
     if exit_code is not None:
         return f"Node {node} stage {operation} exited ({exit_code}) without a report"
