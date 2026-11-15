@@ -360,7 +360,7 @@ def connection(username, password):
     password = str(password)
     if any(character in password for character in ';"\r\n'):
         password = '"' + password.replace('"', '""') + '"'
-    return f"Host=sql-proxy;Port=5432;Database=nexoruta;Username={username};Password={password};SSL Mode=Disable;Maximum Pool Size=20"
+    return f"Host=sql-proxy;Port=5432;Database=nexoruta;Username={username};Password={password};SSL Mode=Disable;Maximum Pool Size=2"
 
 
 def mongo_runtime_password(root_password, application):
