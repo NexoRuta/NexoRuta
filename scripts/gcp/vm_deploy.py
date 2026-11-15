@@ -364,7 +364,7 @@ def ensure_mongo_runtime_users(deployment):
 def bootstrap_config(runtime):
     passwords, ids = runtime["passwords"], runtime["organization_ids"]
     return {
-        "PlatformInitialization": {"Enabled": True, "Email": "platform-bootstrap@nexoruta.test", "Password": passwords["admin"]},
+        "PlatformInitialization": {"Enabled": True, "Email": "admin@nexoruta.test", "Password": passwords["admin"]},
         "AccesoInicial": {
             "OperadorId": ids["operator"], "ComercioId": ids["commerce"],
             "OperadorNombre": "Operador Demo Uruguay", "ComercioNombre": "Comercio Demo Uruguay",
@@ -1012,7 +1012,7 @@ class MailSmokeError(RuntimeError):
 
 def validate_authenticated_identity(identity, role, email, organization_ids):
     expected = {
-        "admin": ("platform-bootstrap@nexoruta.test", "Plataforma"),
+        "admin": ("admin@nexoruta.test", "Plataforma"),
         "operator": ("operador@nexoruta.test", "Operador"),
         "commerce": ("comercio@nexoruta.test", "Comercio"),
     }
@@ -1082,7 +1082,7 @@ def smoke(runtime, check_accounts=True):
     else:
         raise MailSmokeError("The demo mail inbox did not become available", last_status)
     # A database-backed login exercises the migrated schema and runtime RLS role.
-    accounts = (("admin", "platform-bootstrap@nexoruta.test"), ("operator", "operador@nexoruta.test"), ("commerce", "comercio@nexoruta.test")) if check_accounts else ()
+    accounts = (("admin", "admin@nexoruta.test"), ("operator", "operador@nexoruta.test"), ("commerce", "comercio@nexoruta.test")) if check_accounts else ()
     authenticated_reads = []
     for role, email in accounts:
         payload = json.dumps({"email": email, "password": runtime["passwords"][role]}).encode()
