@@ -88,19 +88,46 @@ def expires_at(value):
     return parsed.timestamp()
 
 
-def kafka_lag(output, group):
-    total, partitions = 0, 0
+def kafka_lag(output, group, earliest_offsets=None):
+    total, partitions, committed = 0, 0, True
+    unresolved = set()
     for line in output.splitlines():
         columns = line.split()
         if not columns or columns[0] != group:
             continue
-        if len(columns) < 6 or not columns[5].isdigit():
+        if len(columns) < 6:
             raise ValueError("Kafka partition lag is unavailable")
-        total += int(columns[5])
+        topic, partition, current, end, lag = columns[1:6]
+        if current.isdigit() and end.isdigit() and lag.isdigit():
+            total += int(lag)
+        elif current == "-" and end.isdigit() and lag == "-":
+            committed = False
+            key = (topic, int(partition))
+            if earliest_offsets is None or key not in earliest_offsets:
+                unresolved.add(key)
+            else:
+                beginning = earliest_offsets[key]
+                if beginning > int(end):
+                    raise ValueError("Kafka earliest offset exceeds the log end")
+                total += int(end) - beginning
+        else:
+            raise ValueError("Kafka partition lag is unavailable")
         partitions += 1
     if not partitions:
         raise ValueError("Kafka consumer group has no committed partition lag")
-    return total
+    return total, committed, unresolved
+
+
+def kafka_earliest_offsets(output):
+    offsets = {}
+    for line in output.splitlines():
+        match = re.fullmatch(r"([^:\s]+):([0-9]+):([0-9]+)", line.strip())
+        if not match:
+            raise ValueError("Kafka earliest offset is unavailable")
+        offsets[(match[1], int(match[2]))] = int(match[3])
+    if not offsets:
+        raise ValueError("Kafka earliest offset is unavailable")
+    return offsets
 
 
 def rabbit_queues(output):
@@ -336,11 +363,22 @@ class Collector:
             output = command("docker", "exec", self.containers["kafka"]["id"],
                              "/opt/kafka/bin/kafka-consumer-groups.sh", "--bootstrap-server", "kafka:9092",
                              "--group", group, "--describe", timeout=10)
-            lag = kafka_lag(output, group)
+            lag, committed, unresolved = kafka_lag(output, group)
+            if unresolved:
+                earliest_offsets = {}
+                for topic in sorted({topic for topic, _ in unresolved}):
+                    offsets = command("docker", "exec", self.containers["kafka"]["id"],
+                                      "/opt/kafka/bin/kafka-get-offsets.sh", "--bootstrap-server", "kafka:9092",
+                                      "--topic", topic, "--time", "-2", timeout=10)
+                    earliest_offsets.update(kafka_earliest_offsets(offsets))
+                lag, committed, unresolved = kafka_lag(output, group, earliest_offsets)
+            if unresolved:
+                raise ValueError("Kafka lag could not be resolved from earliest offsets")
             if name == "recovery":
                 self.metric("kafka_lag", lag)
             else:
                 self.metric("kafka_group_lag", lag, group=name)
+            self.metric("kafka_group_offset_committed", int(committed), group=name)
 
     def collect_rabbit(self):
         with urllib.request.urlopen(f"http://{self.config['services_host']}:15692/metrics", timeout=5) as response:

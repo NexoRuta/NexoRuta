@@ -2242,7 +2242,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "description": "Mensajes listos en RabbitMQ y lag del grupo consumidor de Kafka, reportados por el agente de monitoreo.",
+          "description": "Mensajes listos en RabbitMQ y lag de Kafka. Sin offset confirmado, el colector calcula desde el earliest del tópico, como usa AutoOffsetReset.Earliest; el panel de estado indica que falta el commit del grupo.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -2302,6 +2302,75 @@
           ],
           "title": "Profundidad de cola · RabbitMQ y Kafka",
           "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "1 = el grupo confirmó un offset; 0 = todavía no hay commit. El lag numérico se calcula igualmente desde el offset earliest, por lo que puede ser 0 si no quedan registros retenidos.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "options": {
+                    "0": {
+                      "color": "red",
+                      "text": "Sin commit"
+                    },
+                    "1": {
+                      "color": "green",
+                      "text": "Confirmado"
+                    }
+                  },
+                  "type": "value"
+                }
+              ],
+              "noValue": "Sin datos",
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 12,
+            "x": 0,
+            "y": 159
+          },
+          "id": 38,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by (node) (nexoruta_gcp_kafka_group_offset_committed{node=~\"$node\",group=\"recovery\"})",
+              "instant": true,
+              "legendFormat": "Nodo {{node}}",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Kafka recovery · offset confirmado",
+          "type": "stat"
         },
         {
           "datasource": {

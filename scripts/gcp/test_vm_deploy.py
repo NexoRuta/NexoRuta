@@ -86,6 +86,44 @@ class VmDeploymentTests(unittest.TestCase):
         self.assertEqual(metrics[("kafka_group_lag", "board")], 2)
         self.assertEqual(metrics[("kafka_group_lag", "history")], 2)
         self.assertEqual(metrics[("kafka_group_lag", "management")], 2)
+        self.assertEqual({group: metrics[("kafka_group_offset_committed", group)]
+                          for group in monitor_agent.KAFKA_GROUPS},
+                         {group: 1 for group in monitor_agent.KAFKA_GROUPS})
+
+    def test_monitor_resolves_uncommitted_kafka_group_from_earliest_offset(self):
+        group = monitor_agent.KAFKA_GROUPS["recovery"]
+        output = f"{group} nexoruta.password-recovery.requested.v1 0 - 1 - - - -"
+        lag, committed, unresolved = monitor_agent.kafka_lag(output, group)
+        self.assertEqual((lag, committed, unresolved),
+                         (0, False, {("nexoruta.password-recovery.requested.v1", 0)}))
+        offsets = monitor_agent.kafka_earliest_offsets("nexoruta.password-recovery.requested.v1:0:1")
+        self.assertEqual(monitor_agent.kafka_lag(output, group, offsets), (0, False, set()))
+
+        collector = monitor_agent.Collector.__new__(monitor_agent.Collector)
+        collector.config = {"node": "a"}
+        collector.containers = {"kafka": {"id": "kafka-id"}}
+        collector.timestamp = "2026-11-07T00:00:00Z"
+        collector.resource = {"type": "gce_instance", "labels": {}}
+        collector.samples = []
+        outputs = {
+            group: output,
+            **{value: f"{value} topic 0 1 3 2 consumer host client"
+               for name, value in monitor_agent.KAFKA_GROUPS.items() if name != "recovery"}
+        }
+
+        def command_output(*args, **kwargs):
+            if any(argument.endswith("kafka-get-offsets.sh") for argument in args):
+                return "nexoruta.password-recovery.requested.v1:0:1"
+            return outputs[args[args.index("--group") + 1]]
+
+        with patch.object(monitor_agent, "command", side_effect=command_output):
+            collector.attempt("kafka", collector.collect_kafka)
+        metrics = {(sample["metric"]["type"].rsplit("/", 1)[-1],
+                    sample["metric"]["labels"].get("group")): sample["points"][0]["value"]["doubleValue"]
+                   for sample in collector.samples}
+        self.assertEqual(metrics[("kafka_lag", None)], 0)
+        self.assertEqual(metrics[("kafka_group_offset_committed", "recovery")], 0)
+        self.assertEqual(metrics[("collection_success", None)], 1)
 
     def test_monitor_exports_only_bounded_operational_collection_size(self):
         collector = monitor_agent.Collector.__new__(monitor_agent.Collector)

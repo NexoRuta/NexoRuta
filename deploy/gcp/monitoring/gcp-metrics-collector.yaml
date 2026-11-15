@@ -21,6 +21,7 @@ receivers:
       - metric_name: custom.googleapis.com/nexoruta/rabbit_queue_pending
       - metric_name: custom.googleapis.com/nexoruta/kafka_lag
       - metric_name: custom.googleapis.com/nexoruta/kafka_group_lag
+      - metric_name: custom.googleapis.com/nexoruta/kafka_group_offset_committed
       - metric_name: custom.googleapis.com/nexoruta/mongo_history_documents
       - metric_name: custom.googleapis.com/nexoruta/mongo_history_data_bytes
       - metric_name: custom.googleapis.com/nexoruta/node_running
@@ -50,6 +51,7 @@ processors:
           - set(name, "nexoruta_gcp_rabbit_queue_pending") where name == "custom.googleapis.com/nexoruta/rabbit_queue_pending"
           - set(name, "nexoruta_gcp_kafka_lag") where name == "custom.googleapis.com/nexoruta/kafka_lag"
           - set(name, "nexoruta_gcp_kafka_group_lag") where name == "custom.googleapis.com/nexoruta/kafka_group_lag"
+          - set(name, "nexoruta_gcp_kafka_group_offset_committed") where name == "custom.googleapis.com/nexoruta/kafka_group_offset_committed"
           - set(name, "nexoruta_gcp_mongo_history_documents") where name == "custom.googleapis.com/nexoruta/mongo_history_documents"
           - set(name, "nexoruta_gcp_mongo_history_data_bytes") where name == "custom.googleapis.com/nexoruta/mongo_history_data_bytes"
           - set(name, "nexoruta_gcp_node_running") where name == "custom.googleapis.com/nexoruta/node_running"

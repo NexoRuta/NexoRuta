@@ -135,6 +135,14 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn("rabbitmq_detailed_queue_messages", rabbit_query)
         self.assertIn("nexoruta_gcp_rabbit_queue_pending", rabbit_query)
         self.assertIn("label_replace", rabbit_query)
+        queue_depth = by_title["Profundidad de cola · RabbitMQ y Kafka"]
+        self.assertIn("nexoruta_gcp_kafka_lag", queue_depth["targets"][1]["expr"])
+        offset_status = by_title["Kafka recovery · offset confirmado"]
+        self.assertIn("nexoruta_gcp_kafka_group_offset_committed", offset_status["targets"][0]["expr"])
+        self.assertIn("Sin commit", str(offset_status["fieldConfig"]["defaults"]["mappings"]))
+        gcp_metrics = (root / "deploy/gcp/monitoring/gcp-metrics-collector.yaml").read_text(encoding="utf-8")
+        self.assertIn("custom.googleapis.com/nexoruta/kafka_group_offset_committed", gcp_metrics)
+        self.assertIn("nexoruta_gcp_kafka_group_offset_committed", gcp_metrics)
 
         gcp_row = next(panel for panel in dashboard["panels"]
                        if panel.get("title") == "Infraestructura GCP · Prometheus")
