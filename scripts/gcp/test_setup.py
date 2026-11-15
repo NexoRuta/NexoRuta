@@ -330,6 +330,13 @@ class BootstrapSetupValidationTests(unittest.TestCase):
                     "secret_id": "projects/demo-project/secrets/nexoruta-load-preparer-credentials",
                 }},
             },
+            {
+                "address": 'google_secret_manager_secret_iam_member.deployer["nexoruta-load-preparer-credentials"]',
+                "type": "google_secret_manager_secret_iam_member",
+                "change": {"actions": ["delete"], "before": {
+                    "secret_id": "projects/demo-project/secrets/nexoruta-load-preparer-credentials",
+                }},
+            },
         ]
         for operation in ("bootstrap", "start", "update"):
             infra_safety.check_plan({"resource_changes": resources}, operation)

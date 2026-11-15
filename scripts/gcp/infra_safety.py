@@ -28,8 +28,10 @@ def _retired_load_preparer_secret_cleanup(resource, actions):
         secret = before.get("secret", "")
         return (before.get("deletion_policy") == "ABANDON" and isinstance(secret, str)
                 and secret.endswith("/secrets/nexoruta-load-preparer-credentials"))
-    if (address == "google_secret_manager_secret_iam_member.load_preparer_credentials"
-            and resource_type == "google_secret_manager_secret_iam_member"):
+    if (address in (
+            "google_secret_manager_secret_iam_member.load_preparer_credentials",
+            'google_secret_manager_secret_iam_member.deployer["nexoruta-load-preparer-credentials"]',
+    ) and resource_type == "google_secret_manager_secret_iam_member"):
         secret_id = before.get("secret_id", "")
         return (isinstance(secret_id, str)
                 and secret_id.endswith("/secrets/nexoruta-load-preparer-credentials"))
