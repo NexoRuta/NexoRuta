@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import tarfile
 import tempfile
 from types import SimpleNamespace
@@ -13,10 +14,140 @@ import urllib.error
 from unittest.mock import Mock, patch
 
 import vm_deploy
+import image_inventory
 import monitor_agent
+import deployment_health
+
+
+def valid_host_versions():
+    return {
+        "schema_version": 1, "recorded_at": "2026-11-14T12:00:00+00:00",
+        "os_id": "debian", "os_version_id": "12", "kernel": "6.1.0-cloud-amd64",
+        "architecture": "x86_64", "docker_server": "29.1.3", "docker_compose": "2.40.3",
+        "docker_buildx": "github.com/docker/buildx v0.29.1",
+        "containerd": "containerd github.com/containerd/containerd v2.1.5",
+        "packages": {name: "1.2.3-1" for name in (
+            "docker-ce", "docker-ce-cli", "containerd.io", "docker-buildx-plugin",
+            "docker-compose-plugin", "google-cloud-ops-agent", "python3",
+        )},
+    }
+
+
+def install_host_version_fixtures(root, release):
+    source = Path(__file__).with_name("host_versions.py")
+    shutil.copyfile(source, release / "host_versions.py")
+    (root / "host-versions.json").write_text(json.dumps(valid_host_versions()), encoding="utf-8")
 
 
 class VmDeploymentTests(unittest.TestCase):
+    def test_authenticated_identity_smoke_matches_each_synthetic_actor_and_organization(self):
+        organization_ids = {"operator": "operator-id", "commerce": "commerce-id"}
+        cases = (
+            ({"usuarioEmail": "admin@nexoruta.test", "tipo": "Plataforma",
+              "operadorId": None, "comercioId": None}, "admin", "admin@nexoruta.test"),
+            ({"usuarioEmail": "operador@nexoruta.test", "tipo": "Operador",
+              "operadorId": "operator-id", "comercioId": None}, "operator", "operador@nexoruta.test"),
+            ({"usuarioEmail": "comercio@nexoruta.test", "tipo": "Comercio",
+              "operadorId": None, "comercioId": "commerce-id"}, "commerce", "comercio@nexoruta.test"),
+        )
+        for identity, role, email in cases:
+            with self.subTest(role=role):
+                vm_deploy.validate_authenticated_identity(identity, role, email, organization_ids)
+
+    def test_authenticated_identity_smoke_rejects_wrong_actor_or_missing_expected_organization(self):
+        organization_ids = {"operator": "operator-id", "commerce": "commerce-id"}
+        cases = (
+            ({"usuarioEmail": "operador@nexoruta.test", "tipo": "Operador",
+              "operadorId": "operator-id", "comercioId": None}, "operator", "comercio@nexoruta.test",
+             organization_ids),
+            ({"usuarioEmail": "operador@nexoruta.test", "tipo": "Operador",
+              "operadorId": "other-organization", "comercioId": None}, "operator", "operador@nexoruta.test",
+             organization_ids),
+            ({"usuarioEmail": "operador@nexoruta.test", "tipo": "Operador",
+              "operadorId": None, "comercioId": None}, "operator", "operador@nexoruta.test", {}),
+        )
+        for identity, role, email, expected_organizations in cases:
+            with self.subTest(role=role, email=email), self.assertRaises(RuntimeError):
+                vm_deploy.validate_authenticated_identity(identity, role, email, expected_organizations)
+
+    def release_manifest(self):
+        release = "release-" + "a" * 32
+        sources = {name: char * 40 for name, char in zip(("backend", "frontend", "mobile"), "bcd")}
+        artifact = {"id": 31, "name": "nfr14-ci-evidence-1", "digest": "sha256:" + "a" * 64}
+        proof = {
+            "schema_version": 1, "android_input_sha256": "f" * 64,
+            "mobile_sha": sources["mobile"], "origin_release": release,
+            "verified_by": {
+                "repository_id": "123", "workflow_path": ".github/workflows/ci.yml",
+                "run_id": 7, "run_attempt": 1, "event": "pull_request",
+                "pull_request": 11, "base_branch": "main", "head_branch": "develop",
+                "head_repository_id": "123", "root_sha": "8" * 40,
+                "root_tree": "9" * 40, "sources": sources, "artifact": artifact,
+            },
+        }
+        inventory = image_inventory.collect(Path(__file__).parents[2])
+        return {
+            "manifest_version": 2, "release": release, "channel": "main",
+            "project_id": "demo-project", "region": "southamerica-west1",
+            "root_sha": "c" * 40, "sources": sources,
+            "integration_tag": "integration-20-1", "publication_order": [20, 1],
+            "images": {name: f"southamerica-west1-docker.pkg.dev/demo-project/nexoruta/{name}@sha256:" + "b" * 64
+                       for name in ("api", "worker", "admin", "backoffice", "commerce", "tracking")},
+            "image_sources": {name: sources["backend"] if name in ("api", "worker") else sources["frontend"]
+                              for name in ("api", "worker", "admin", "backoffice", "commerce", "tracking")},
+            "built_images": ["api", "worker", "admin", "backoffice", "commerce", "tracking"],
+            "reused_images": {}, "bundle_sha256": "e" * 64,
+            "bundle_source": {"root_sha": "c" * 40, "backend_sha": sources["backend"]},
+            "bundle_rebuilt": True, "deployment_images": inventory,
+            "deployment_images_sha256": image_inventory.checksum(inventory),
+            "ci_evidence": {
+                "schema_version": 1, "repository_id": "123", "workflow_path": ".github/workflows/ci.yml",
+                "run_id": 7, "run_attempt": 1, "run_number": 20, "event": "pull_request",
+                "pull_request": 11, "base_branch": "main", "head_branch": "develop",
+                "root_sha": "8" * 40, "release_root_sha": "c" * 40, "root_tree": "9" * 40,
+                "sources": sources, "android_job": "success", "artifact": artifact,
+                "plan_sha256": "f" * 64,
+            },
+            "ci_plan": {"android_input_sha256": "f" * 64,
+                        "components": {"mobile_android": {"run": True}}},
+            "android_input_sha256": "f" * 64,
+            "android_verified_mobile_sha": sources["mobile"],
+            "android_verification": proof,
+        }
+
+    def test_release_manifest_requires_digest_pinned_app_images_and_provenance(self):
+        manifest = self.release_manifest()
+        self.assertIs(vm_deploy.validate_release_manifest(
+            manifest, manifest["release"], "demo-project", "southamerica-west1-a"), manifest)
+        for fault in ("missing_image", "mutable_image", "missing_ci", "altered_android_digest"):
+            candidate = json.loads(json.dumps(manifest))
+            if fault == "missing_image":
+                del candidate["images"]["api"]
+            elif fault == "mutable_image":
+                candidate["images"]["api"] = "latest"
+            elif fault == "missing_ci":
+                candidate["ci_evidence"] = None
+            else:
+                candidate["android_input_sha256"] = "0" * 64
+            with self.subTest(fault=fault), self.assertRaises(ValueError):
+                vm_deploy.validate_release_manifest(
+                    candidate, manifest["release"], "demo-project", "southamerica-west1-a")
+
+    def test_bundle_image_inventory_must_match_the_published_manifest(self):
+        manifest = self.release_manifest()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            shutil.copyfile(Path(__file__).parents[2] / "scripts/gcp/image_inventory.py", root / "image_inventory.py")
+            shutil.copyfile(Path(__file__).parents[2] / "scripts/gcp/ci_evidence.py", root / "ci_evidence.py")
+            shutil.copyfile(Path(__file__).parents[2] / "scripts/gcp/integration.py", root / "integration.py")
+            shutil.copyfile(Path(__file__).parents[2] / "scripts/gcp/host_versions.py", root / "host_versions.py")
+            shutil.copyfile(Path(__file__).parents[2] / "scripts/gcp/deployment_health.py", root / "deployment_health.py")
+            image_inventory.write_bundle(root, manifest["deployment_images"])
+            self.assertEqual(vm_deploy.validate_bundle_inventory(manifest, root), manifest["deployment_images"])
+            manifest["deployment_images_sha256"] = "0" * 64
+            with self.assertRaisesRegex(ValueError, "does not match"):
+                vm_deploy.validate_bundle_inventory(manifest, root)
+
     def test_mongodb_runtime_credentials_are_separate_and_never_reuse_root_password(self):
         root = "ab" * 32
         api = vm_deploy.mongo_runtime_password(root, "api")
@@ -203,6 +334,7 @@ class VmDeploymentTests(unittest.TestCase):
             patch.object(vm_deploy.os, "umask"),
             patch("builtins.open", unittest.mock.mock_open()),
             patch.dict(sys.modules, {"fcntl": SimpleNamespace(flock=lock, LOCK_EX=2)}),
+            patch.object(vm_deploy, "metadata", side_effect=lambda key: "demo-project" if key == "project/project-id" else "southamerica-west1-a"),
             patch.object(vm_deploy, "object_bytes", side_effect=RuntimeError("reached download")),
         ):
             with self.assertRaisesRegex(RuntimeError, "reached download"):
@@ -326,7 +458,8 @@ class VmDeploymentTests(unittest.TestCase):
                    "passwords": passwords, "keys": {name: "key" for name in ("jwt", "tracking", "push", "evidence")},
                    "endpoints": {name: f"https://{name}.34-0-0-1.sslip.io" for name in (
                        "api", "admin", "backoffice", "commerce", "tracking", "mail", "monitor")},
-                   "organization_ids": {"operator": "operator-id", "commerce": "commerce-id"}}
+                   "organization_ids": {"operator": "operator-id", "commerce": "commerce-id"},
+                   "demo_actor_password": "synthetic-demo-actor-password-2026"}
         integrations = {"smtp_host": "mailpit", "smtp_port": 1025, "smtp_ssl": False,
                         "smtp_from": "demo@example.test", "monitor_google_client_id": "oauth-client",
                         "monitor_google_client_secret": "private-oauth", "monitor_allowed_emails": ["reader@example.test"],
@@ -353,6 +486,7 @@ class VmDeploymentTests(unittest.TestCase):
         self.assertEqual(values["REDIS_HOST"], runtime["redis"]["host"])
         self.assertEqual(values["REDIS_AUTH"], runtime["redis_identity_fixture"]["password"])
         self.assertEqual(values["REDIS_PORT"], 6378)
+        self.assertEqual(values["DEMO_DATA_ACTOR_PASSWORD"], runtime["demo_actor_password"])
         import base64
         expected_ca = base64.b64encode(runtime["redis_identity_fixture"]["ca_certificate"].encode()).decode()
         self.assertEqual(json.loads(values["REDIS_CA_CERTIFICATES_BASE64_JSON"]), [expected_ca])
@@ -372,6 +506,14 @@ class VmDeploymentTests(unittest.TestCase):
         enabled = vm_deploy.environment(runtime, integrations, images, "hash", hosting, "b", "10.0.0.2",
                                        "release-" + "a" * 32, ("172.22.0.0/16",), runtime["redis_identity_fixture"])
         self.assertEqual(enabled["WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN"], "true")
+
+    def test_shared_environment_requires_a_valid_external_demo_actor_password(self):
+        runtime, integrations, hosting, images = self.configuration()
+        for password in (None, "short", "long-password-with\nnewline", "long-password-with\x00nul"):
+            with self.subTest(password="missing-or-invalid"), self.assertRaisesRegex(ValueError, "demo actor password"):
+                runtime["demo_actor_password"] = password
+                vm_deploy.environment(runtime, integrations, images, "hash", hosting, "a", "10.0.0.1",
+                                      "release-" + "a" * 32, ("172.22.0.0/16",), runtime["redis_identity_fixture"])
 
     def test_shared_environment_rejects_open_google_access_and_default_proxy_routes(self):
         runtime, integrations, hosting, images = self.configuration()
@@ -477,7 +619,7 @@ class VmDeploymentTests(unittest.TestCase):
             args = SimpleNamespace(release=target, node="b")
             with patch.object(vm_deploy.Deploy, "compose") as compose, patch.object(vm_deploy, "direct_health", side_effect=RuntimeError("new node unhealthy")), redirect_stdout(io.StringIO()) as output:
                 with self.assertRaises(RuntimeError):
-                    vm_deploy.apply(args, deployment, "10.0.0.2")
+                    vm_deploy.apply(args, deployment, "10.0.0.2", False)
             self.assertFalse((root / "current-release").exists())
             self.assertEqual(json.loads(output.getvalue())["status"], "failed")
             self.assertEqual(compose.call_count, 1)
@@ -494,9 +636,11 @@ class VmDeploymentTests(unittest.TestCase):
             transient = subprocess.CalledProcessError(1, ["docker", "compose", "up"])
             with (patch.object(vm_deploy.Deploy, "compose", side_effect=[transient, None]) as compose,
                   patch.object(vm_deploy, "direct_health") as health,
+                  patch.object(vm_deploy, "compose_health_snapshot",
+                               return_value={"node": "a", "services": []}),
                   patch.object(vm_deploy.time, "sleep") as sleep,
                   redirect_stdout(io.StringIO())):
-                vm_deploy.apply(args, deployment, "10.0.0.2")
+                vm_deploy.apply(args, deployment, "10.0.0.2", False)
             self.assertEqual(compose.call_count, 2)
             self.assertIn("--force-recreate", compose.call_args_list[0].args)
             self.assertNotIn("--force-recreate", compose.call_args_list[1].args)
@@ -519,12 +663,46 @@ class VmDeploymentTests(unittest.TestCase):
                   patch.object(vm_deploy.time, "sleep"),
                   redirect_stdout(io.StringIO()) as output):
                 with self.assertRaisesRegex(RuntimeError, "remains out of the load balancer") as caught:
-                    vm_deploy.apply(args, deployment, "10.0.0.2")
+                    vm_deploy.apply(args, deployment, "10.0.0.2", False)
             self.assertEqual(compose.call_count, 2)
             self.assertEqual(caught.exception.nexoruta_phase, "start_and_wait_for_apps")
             self.assertEqual(json.loads(output.getvalue().splitlines()[-1])["status"], "failed")
             health.assert_not_called()
             self.assertFalse((Path(directory) / "current-release").exists())
+
+    def test_compose_health_snapshot_uses_a_secret_free_inspect_template_and_exact_inventory(self):
+        services = deployment_health.expected_services("a", True)
+        container_ids = [f"{index:012x}" for index in range(1, len(services) + 1)]
+        records = [
+            f"{service}\trunning\t{'healthy' if service in deployment_health.HEALTHCHECK_SERVICES else 'not-configured'}"
+            for service in services
+        ]
+        deployment = SimpleNamespace(directory=Path(tempfile.mkdtemp()))
+        self.addCleanup(shutil.rmtree, deployment.directory)
+        shutil.copyfile(Path(__file__).with_name("deployment_health.py"),
+                        deployment.directory / "deployment_health.py")
+
+        def execute(*args, capture=False):
+            self.assertTrue(capture)
+            if args[:2] == ("docker", "ps"):
+                self.assertIn("label=com.docker.compose.project=nexoruta-demo", args)
+                return "\n".join(container_ids)
+            if args[:2] == ("docker", "inspect"):
+                self.assertTrue(args[2].startswith("--format="))
+                template = args[2]
+                self.assertEqual(template, (
+                    '--format={{index .Config.Labels "com.docker.compose.service"}}\t'
+                    '{{.State.Status}}\t'
+                    '{{if .State.Health}}{{.State.Health.Status}}{{else}}not-configured{{end}}'
+                ))
+                self.assertEqual(list(args[3:]), container_ids)
+                return "\n".join(records)
+            raise AssertionError(args)
+
+        deployment.execute = execute
+        result = vm_deploy.compose_health_snapshot(deployment, "a", True)
+        self.assertEqual(result["node"], "a")
+        self.assertEqual([item["service"] for item in result["services"]], list(services))
 
     def test_prepare_of_existing_session_waits_for_shared_brokers_and_keeps_password_out_of_arguments(self):
         self.assertIn("prometheus-write-gateway", vm_deploy.SHARED)
@@ -534,6 +712,7 @@ class VmDeploymentTests(unittest.TestCase):
             root = Path(directory)
             release = root / "release"
             release.mkdir()
+            install_host_version_fixtures(root, release)
             (release / "monitor_agent.py").write_text("# collector")
             (release / "monitoring").mkdir()
             (release / "monitoring/ops-agent.yaml").write_text("metrics: {}")
@@ -571,12 +750,14 @@ class VmDeploymentTests(unittest.TestCase):
                   patch.object(vm_deploy, "bridge_subnets", return_value=["172.22.0.0/16"]),
                   patch.object(vm_deploy, "redis_addresses", return_value={"10.0.0.3"}),
                   patch.object(vm_deploy, "configure_redis_files", return_value=(root / "redis", "fingerprint")),
+                  patch.object(vm_deploy, "collect_release_host_versions", return_value=valid_host_versions()),
                   patch.object(vm_deploy, "OPS_AGENT_CONFIG", root / "ops-agent.yaml"),
                   patch.object(vm_deploy.urllib.request, "urlopen", return_value=response) as urlopen):
                 result = vm_deploy.prepare(args, deployment, runtime, integrations, hosting,
                                            runtime["redis_identity_fixture"], {"images": images}, "10.0.0.1")
             self.assertEqual(result, {"cache_enabled": True, "redis_node": "b", "redis_port": 6378,
-                                      "redis_server_reconciled": False})
+                                      "redis_server_reconciled": False,
+                                      "host_versions": valid_host_versions()})
             up_calls = [call.args for call in deployment.compose.call_args_list if "up" in call.args]
             self.assertIn(("up", "-d", "--wait", "--wait-timeout", "300", "sql-proxy"), up_calls)
             broker_reconcile = ("--profile", "shared", "up", "-d", "--no-deps", "--wait", "--wait-timeout", "300",
@@ -623,6 +804,7 @@ class VmDeploymentTests(unittest.TestCase):
             root = Path(directory)
             release = root / "release"
             release.mkdir()
+            install_host_version_fixtures(root, release)
             (release / "monitor_agent.py").write_text("# collector")
             (release / "monitoring").mkdir()
             (release / "monitoring/ops-agent.yaml").write_text("metrics: {}")
@@ -637,6 +819,7 @@ class VmDeploymentTests(unittest.TestCase):
                   patch.object(vm_deploy, "bridge_subnets", return_value=["172.22.0.0/16"]),
                   patch.object(vm_deploy, "redis_addresses") as redis_addresses,
                   patch.object(vm_deploy, "configure_redis_files") as configure_redis_files,
+                  patch.object(vm_deploy, "collect_release_host_versions", return_value=valid_host_versions()),
                   patch.object(vm_deploy, "OPS_AGENT_CONFIG", root / "ops-agent.yaml"),
                   patch.object(vm_deploy.socket, "gethostbyname", return_value="10.0.0.1")):
                 result = vm_deploy.prepare(args, deployment, runtime, integrations, hosting,

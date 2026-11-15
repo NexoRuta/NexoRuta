@@ -159,6 +159,7 @@ jobs:
         env:
           CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
           GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GH_TOKEN: ${{ github.token }}
           BOOTSTRAP_REPOSITORY_ID: ${{ github.repository_id }}
           BOOTSTRAP_OWNER_ID: ${{ github.repository_owner_id }}
         run: python3 scripts/gcp/bootstrap.py

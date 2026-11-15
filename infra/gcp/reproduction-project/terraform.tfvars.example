@@ -1,0 +1,8 @@
+# Supply these values only after the disposable-project parent, billing account,
+# and monthly alert budget have been explicitly approved.
+project_id          = "nfr14-r-0123456789abcdef"
+run_id              = "0123456789abcdef0123456789abcdef"
+control_project_id  = "REPLACE_WITH_EXTERNAL_CONTROL_PROJECT_ID"
+parent              = "organizations/REPLACE_WITH_APPROVED_ID"
+billing_account_id  = "REPLACE_WITH_APPROVED_ACCOUNT_ID"
+approved_budget_usd = 100

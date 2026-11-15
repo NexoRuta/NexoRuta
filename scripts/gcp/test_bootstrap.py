@@ -22,6 +22,13 @@ class BootstrapTests(unittest.TestCase):
         state = {"values": {"root_module": {"resources": [budget]}}}
         self.assertEqual(bootstrap.settings(env, state)["billing_account_id"], "existing-account")
         self.assertEqual(bootstrap.settings(env, {})["billing_account_id"], "")
+        self.assertEqual(bootstrap.settings(env, {}, default_billing_account_id="new-account")["billing_account_id"],
+                         "new-account")
+        configured_state = {"values": {"outputs": {"bootstrap_configuration": {
+            "value": {"billing_account_id": ""},
+        }}}}
+        self.assertEqual(bootstrap.settings(env, configured_state, default_billing_account_id="new-account")["billing_account_id"],
+                         "")
 
     def test_delete_and_replacement_are_rejected_before_apply(self):
         for actions in (["delete"], ["delete", "create"], ["create", "delete"]):
@@ -33,7 +40,8 @@ class BootstrapTests(unittest.TestCase):
 
     def test_missing_remote_state_stops_before_initialization(self):
         from unittest.mock import patch
-        with patch.dict(bootstrap.os.environ, {"GCP_STATE_BUCKET": "existing-bucket"}), \
+        with patch.dict(bootstrap.os.environ, {"GCP_PROJECT_ID": "demo-project", "GCP_STATE_BUCKET": "existing-bucket"}), \
+             patch.object(bootstrap, "preflight_target"), \
              patch.object(bootstrap, "command", side_effect=RuntimeError("missing state")) as command:
             with self.assertRaisesRegex(RuntimeError, "missing state"):
                 bootstrap.main()

@@ -1,27 +1,67 @@
-# Guía rápida: desplegar la demo
+# Guía de operación de la demo desde GitHub Actions
 
-El despliegue se controla desde **NexoRuta/NexoRuta → Actions → “NexoRuta - publish images / manual VM controls”**. Elegí la rama `main`, pulsá **Run workflow** y seleccioná la operación.
+Las operaciones de demo se ejecutan manualmente en **NexoRuta/NexoRuta → Actions →
+NexoRuta - publish integration images** con `workflow_dispatch`. La publicación
+automática del canal main es otro workflow; ver [integration-tags.md](integration-tags.md).
 
-| Operación | Qué hace | Cuándo usarla |
+| Operación | Comportamiento | Estado que conserva |
 | --- | --- | --- |
-| `start` | Lee y fija la última release completa ya publicada; enciende Cloud SQL y las dos VMs; despliega esas imágenes y verifica la aplicación. | Para iniciar una sesión nueva de pruebas. |
-| `update` | Usa las últimas imágenes ya publicadas y actualiza las dos VMs por rotación. No enciende VMs apagadas. | Después de que el CI/publicación haya terminado y quieras aplicar esas imágenes. |
-| `stop` | Apaga ambas VMs y Cloud SQL. Los datos se conservan para la siguiente sesión. | Al terminar de probar; también hay apagado automático al vencer las cuatro horas. |
+| `start` desde `main` | Selecciona una publicación main completa, enciende Cloud SQL y las dos VMs y ejecuta despliegue y smoke. | Establece una sesión de hasta cuatro horas para las VMs. |
+| `update` desde `main` | Aplica la última publicación main completa a una demo activa; no ejecuta CI ni compila imágenes. | Conserva vencimiento de sesión y SQL. Produce un corte durante migración. |
+| `start`/`update` desde `develop` | Construye los gitlinks exactos de develop y publica el canal develop antes de desplegarlo. No ejecuta Integrated CI. | Comparte VMs, Cloud SQL y datos con main. |
+| `stop` | Detiene A y B. Puede ejecutarse desde main/develop. | Mantiene Cloud SQL encendido, discos, datos y recursos compartidos. No es destrucción ni limita el costo residual. |
 
-Un push a `main` ejecuta CI y publica imágenes, pero **nunca enciende la VM**. Los cambios en los repos de Backend, Frontend y Mobile también notifican al repo madre para publicar. Esperá a que termine esa publicación para que `start` o `update` puedan seleccionar esa release; ambos usan la última publicación completa si hay otra publicación en curso.
+Un push a `main` ejecuta `publish.yml` para publicar una combinación aprobada; no
+enciende ni actualiza VMs. `ci.yml` valida PRs a `develop`/`main`, ejecución
+manual y semanal. Los cambios en repos de componentes deben llegar al repo raíz
+como gitlinks para que la combinación quede fijada y evaluada. Consultar el
+resumen de Actions para comprobar el SHA raíz, los tres SHAs de componentes, el
+run/attempt y los artifacts de evidencia.
 
-Cada combinación que pasa CI recibe un tag `integration-<run-id>-<intento>` en el
-repo madre. En **Releases** aparece su prerelease cuando termina la publicación,
-con el manifiesto de commits e imágenes. Un tag sin prerelease puede indicar un build fallido. Ver [el flujo de integración](integration-tags.md).
+## Actualización y ventana de interrupción
 
-Para empezar: integrá los cambios en las ramas `main` de los repos, esperá la publicación y ejecutá `start`. En el resumen de esa ejecución están los endpoints y la release seleccionada. `monitor` muestra CPU, RAM, disco, latencia, errores y procesos; requiere una de las cuentas Google configuradas en el environment `nexoruta-demo`. El endpoint `mail` pide contraseña. Para cambios posteriores, esperá la publicación y ejecutá `update`. Al finalizar, ejecutá `stop`.
+Cada `update` retira ambos nodos del balanceador, detiene las aplicaciones,
+ejecuta migraciones una sola vez y aplica/reincorpora primero B y después A. Hay
+una interrupción deliberada. Si falla la migración, las aplicaciones siguen
+detenidas; si falla la aplicación de un nodo, no se restauran automáticamente
+contenedores anteriores ni se revierten migraciones. Corregir el código y
+publicar una versión nueva. No programar esta operación como si fuera una
+rotación sin corte.
 
-La identidad de GitHub Actions accede a GCP con OIDC; no configures claves JSON de GCP en GitHub. La configuración necesaria ya está en el environment `nexoruta-demo`.
+`start`/`update` desde `develop` actualiza el esquema compartido. Una migración de
+develop puede impedir el retorno a una release anterior de main. Elegir la rama
+con intención y no ejecutar pruebas de develop sobre datos que no deban cambiar.
 
-## Probar develop en GCP
+## Acceso y configuración
 
-En main y develop, start y update aplican primero el módulo bootstrap desde su estado remoto GCS (prefijo foundation), antes de sincronizar integraciones y desplegar la demo. Esto aprovisiona las nuevas identidades, secretos y permisos declarados en la revisión seleccionada. El plan conserva el presupuesto opcional existente y bloquea eliminaciones o reemplazos de recursos; si falla, no continúa el despliegue. Stop omite este paso para conservar su capacidad de apagado.
+La identidad de Actions usa OIDC/WIF y tokens temporales, no claves JSON. El
+environment persistente es `nexoruta-demo`; revisar [variables y secretos](github-environment.md).
+La configuración pública de SMTP/Mapbox se mantiene en
+`compose.yaml > x-app-settings`. SMTP autenticado y Geoapify son opcionales; no
+asumir que sus secretos están presentes. La revisión del 14/11/2026 confirmó
+nombres de variables y secretos, no valores.
 
-La instalación inicial del proyecto, bucket/estado remoto y la identidad WIF sigue usando scripts/gcp/setup.ps1: el workflow necesita esos recursos para autenticarse. No utiliza archivos de configuración ni credenciales del Windows del operador.
+La URL de monitor está protegida por Google OAuth y restringida a
+`MONITOR_ALLOWED_EMAILS`. Mailpit requiere credenciales runtime. No copiar
+contraseñas, tokens ni contenido de `.env` al resumen o a artifacts.
 
-En **Run workflow**, seleccione la rama `develop`. `start` o `update` construye y despliega los commits fijados en el root y sus gitlinks en el canal privado `develop`; no ejecuta el Integrated CI. Despues, inicie `NexoRuta - pruebas de carga` desde `develop`. Para el camino publicado y probado, seleccione `main`. Ambos canales comparten VMs y Cloud SQL, por lo que las migraciones de `develop` quedan en la base compartida.
+## Comandos de despacho e inspección
+
+```powershell
+# Iniciar la última publicación main completa.
+gh workflow run vm-controls.yml --repo NexoRuta/NexoRuta --ref main -f operation=start
+
+# Actualizar una sesión activa desde main. Hay un corte durante migración.
+gh workflow run vm-controls.yml --repo NexoRuta/NexoRuta --ref main -f operation=update
+
+# Detener A/B; SQL y recursos persistentes se conservan.
+gh workflow run vm-controls.yml --repo NexoRuta/NexoRuta --ref main -f operation=stop
+
+# Inspeccionar runs y esperar el resultado.
+gh run list --repo NexoRuta/NexoRuta --workflow vm-controls.yml
+gh run watch ID_EJECUCION --repo NexoRuta/NexoRuta
+```
+
+No se despachó ningún workflow durante la implementación local de NFR-14. El
+camino `reproduce.yml` y sus condiciones se documentan en el [runbook aislado](../../docs/auditorias/nfr-14/runbook.md);
+su ejecución requiere aprobaciones GCP y no se sustituye con esta guía.

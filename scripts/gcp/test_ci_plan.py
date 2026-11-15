@@ -1,6 +1,8 @@
 """Safety checks for integrated change selection and reusable validation evidence."""
 
+import json
 import unittest
+from unittest.mock import patch
 
 import ci_plan
 
@@ -15,6 +17,21 @@ class CiPlanTests(unittest.TestCase):
             "sources": dict(self.sources),
             "android_input_sha256": "f" * 64,
             "android_verified_mobile_sha": self.sources["mobile"],
+            "android_verification": {
+                "schema_version": 1,
+                "android_input_sha256": "f" * 64,
+                "mobile_sha": self.sources["mobile"],
+                "verified_by": {
+                    "repository_id": "123", "workflow_path": ".github/workflows/ci.yml",
+                    "run_id": 7, "run_attempt": 1, "event": "pull_request",
+                    "pull_request": 11, "base_branch": "main", "head_branch": "develop",
+                    "head_repository_id": "123", "root_sha": "8" * 40,
+                    "root_tree": "9" * 40, "sources": dict(self.sources),
+                    "artifact": {"id": 31, "name": "nfr14-ci-evidence-1",
+                                 "digest": "sha256:" + "a" * 64},
+                },
+                "origin_release": "release-" + "d" * 32,
+            },
         }
         self.android_key = "f" * 64
 
@@ -28,6 +45,19 @@ class CiPlanTests(unittest.TestCase):
         self.assertTrue(plan["infrastructure"]["run"])
         self.assertTrue(plan["cloudsql"]["run"])
         self.assertTrue(all(job["run"] for job in plan["components"].values()))
+
+    def test_old_release_without_ci_proof_cannot_be_a_reusable_baseline(self):
+        legacy = {"integration_tag": "integration-1-1"}
+        release = {"tag_name": "integration-1-1", "draft": False, "prerelease": True,
+                   "body": "```json\n" + json.dumps(legacy) + "\n```"}
+        with patch.object(ci_plan.integration, "github", return_value=[release]):
+            self.assertIsNone(ci_plan.release_baseline())
+
+    def test_invalid_android_proof_forces_the_android_job(self):
+        baseline = dict(self.baseline, android_verification={})
+        plan = ci_plan.make_plan("1" * 40, self.sources, baseline, (),
+                                 {"backend": (), "frontend": (), "mobile": ()}, self.android_key)
+        self.assertTrue(plan["components"]["mobile_android"]["run"])
 
     def test_documentation_only_change_skips_component_tests_and_images(self):
         plan = self.plan(frontend=("docs/architecture.md", "README.md"))

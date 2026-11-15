@@ -1,13 +1,35 @@
 # Costos de la demo en Santiago
 
-La configuración nueva mantiene Cloud SQL `db-g1-small` encendido todo el mes.
-Su cómputo estimado es de USD 36/mes, más disco SQL y otros recursos. Los
-backups automáticos y la recuperación puntual están deshabilitados. Los cálculos
-históricos siguientes no reflejan esta configuración.
+> **Estado NFR-14 (14/11/2026): esta página todavía no contiene una estimación
+> vigente ni gasto observado aprobables.** Las cifras siguientes son una
+> referencia histórica del diseño anterior. No usarlas para autorizar una sesión
+> ni para declarar cumplido P7. El inventario y los datos faltantes están en
+> [costos NFR-14](../../docs/auditorias/nfr-14/costos.md).
 
-Estimación histórica en USD, sin impuestos, consultada el 22/10/2026. La tabla
-original describe **una VM** y ya no es el total de la arquitectura aprobada de
-dos `n4-custom-6-16384`; no usar sus totales para estimar las nuevas sesiones.
+La topología actualmente declarada incluye dos VMs N4 custom de 6 vCPU/16 GiB,
+cuatro discos de datos/arranque, Cloud SQL `db-g1-small` siempre encendido,
+balanceador e IP global, Redis en VM B, Memorystore Basic 1 GiB observado como
+recurso adicional, Artifact Registry, buckets versionados, builds, secretos,
+Scheduler/Workflows y telemetría. SQL de restauración también aparece en el
+inventario, detenido. La última lectura de costos no obtuvo Billing Reports ni
+Cost table; no hay valores observados de consumo/créditos en el repo.
+
+Para cerrar P7 hay que separar costo fijo con VMs detenidas, costo incremental
+de una sesión de cuatro horas, publicaciones/builds, ensayo aislado y recursos
+residuales. Recalcular desde cantidades/SKUs de inventario y tarifas oficiales
+vigentes para Santiago. Los escenarios de 8 y 20 sesiones deben usar esas
+cantidades y separar costo bruto, créditos y neto. Un presupuesto no es límite
+de gasto y el plazo de VM no limita SQL, LB, IP, discos ni servicios administrados.
+
+El código actual mantiene Cloud SQL `db-g1-small` configurado como `ALWAYS`; la
+inspección remota del 14/11/2026 lo observó `RUNNABLE`. Los backups automáticos y
+la recuperación puntual están deshabilitados. No se verificó una tarifa actual
+ni se obtuvo el costo del servicio; P7 sigue pendiente. Los cálculos históricos
+siguientes no reflejan la configuración vigente.
+
+**Referencia histórica** en USD, sin impuestos, consultada el 22/10/2026. La tabla
+original describe **una VM** y ya no es el total de la arquitectura de dos
+`n4-custom-6-16384`; no usar sus tarifas/totales para estimar las sesiones actuales.
 Precios de lista por uso, sin compromisos anuales ni Spot.
 
 | Recurso definido | Tarifa | Costo calculado |

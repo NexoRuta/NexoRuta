@@ -17,8 +17,12 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 import demo_session as session
+import ci_evidence
+import image_inventory
 import integration
 import publication
+import host_versions
+import deployment_health
 
 ROOT = session.ROOT
 SERVICES = ("api", "worker", "admin", "backoffice", "commerce", "tracking")
@@ -133,9 +137,16 @@ def stage_sources(destination):
     shutil.copyfile(map_source, frontend_inputs / map_source.name)
 
 
-def create_bundle(destination):
+def create_bundle(destination, deployment_images=None):
     assets = destination / "assets"
     shutil.copytree(ROOT / "deploy/gcp", assets)
+    deployment_images = deployment_images or image_inventory.collect(ROOT)
+    image_inventory.write_bundle(assets, deployment_images)
+    shutil.copyfile(Path(__file__).with_name("image_inventory.py"), assets / "image_inventory.py")
+    shutil.copyfile(Path(__file__).with_name("ci_evidence.py"), assets / "ci_evidence.py")
+    shutil.copyfile(Path(__file__).with_name("host_versions.py"), assets / "host_versions.py")
+    shutil.copyfile(Path(__file__).with_name("deployment_health.py"), assets / "deployment_health.py")
+    shutil.copyfile(Path(__file__).with_name("integration.py"), assets / "integration.py")
     shutil.copyfile(ROOT / "deploy/observability/grafana/nexoruta.json",
                     assets / "grafana/provisioning/dashboards/nexoruta.json")
     shutil.copyfile(ROOT / "deploy/observability/grafana/load-tests.json",
@@ -187,14 +198,38 @@ def create_bundle(destination):
     return bundle
 
 
+def selected_build_services(plan, *, reproduction=False):
+    build_services = plan.get("images")
+    if not isinstance(build_services, list) or any(
+        not isinstance(name, str) or name not in SERVICES for name in build_services
+    ):
+        raise ValueError("The CI change plan contains an invalid image selection")
+    if len(build_services) != len(set(build_services)):
+        raise ValueError("The CI change plan contains an invalid image selection")
+    # An isolated project's registry has no trusted previous manifest. Rebuild
+    # every service while retaining the protected CI evidence for Android.
+    return list(SERVICES) if reproduction else build_services
+
+
 def build():
     config = session.configuration()
     channel = os.environ.get("RELEASE_CHANNEL", "")
+    reproduction = config.get("NEXORUTA_EXECUTION_PROFILE") == "reproduction"
     if channel not in ("main", "develop"):
         raise ValueError("Builds must explicitly target RELEASE_CHANNEL=main or develop")
+    if reproduction and channel != "main":
+        raise ValueError("The reproduction project only accepts its isolated main release channel")
+    if channel == "main" and not os.environ.get("TESTED_CI_PLAN"):
+        raise ValueError("Main publications require the exact plan and successful protected CI evidence")
     if channel == "main":
         # Main publication uses the already-tested tag and its exact submodule gitlinks.
         snapshot = integration.verify_checkout(os.environ["INTEGRATION_TAG"], os.environ.get("INTEGRATION_COMMIT"))
+        if reproduction:
+            import reproduce
+            target = reproduce.validate_runtime_environment(os.environ)
+            if os.environ.get("INTEGRATION_TAG") != target["integration_tag"]:
+                raise ValueError("The publication tag differs from the reproduction environment identity")
+            reproduce._release_manifest(target["integration_tag"], os.environ.get("GITHUB_REPOSITORY_ID"))
     else:
         if os.environ.get("TESTED_CI_PLAN"):
             raise ValueError("Develop builds use a complete release and do not consume the main CI plan")
@@ -203,27 +238,48 @@ def build():
         plan = json.loads(os.environ["TESTED_CI_PLAN"])
         if plan.get("current", {}).get("sources") != snapshot["sources"] or not plan.get("publish_required"):
             raise ValueError("The CI change plan does not authorize this integration snapshot")
-        build_services = plan.get("images")
-        if (not isinstance(build_services, list) or len(build_services) != len(set(build_services))
-                or any(name not in SERVICES for name in build_services)):
-            raise ValueError("The CI change plan contains an invalid image selection")
+        build_services = selected_build_services(plan, reproduction=reproduction)
     else:
         # Local use without a plan is conservative and always creates a full release.
         plan = {"version": 0, "images": list(SERVICES), "publish_required": True, "bundle_required": True,
                 "android_input_sha256": None, "components": {"mobile_android": {"run": True}}}
         build_services = list(SERVICES)
+    ci_identity = None
+    android_verification = None
+    release = f"release-{uuid.uuid4().hex}"
+    if channel == "main":
+        evidence_file = os.environ.get("NEXORUTA_CI_EVIDENCE_FILE", "")
+        if not evidence_file:
+            raise ValueError("Main publications require verified Integrated CI evidence")
+        ci_identity, android_verification = ci_evidence.bind_for_release(
+            evidence_file, snapshot=snapshot, plan=plan, release=release)
     project, region = config["GCP_PROJECT_ID"], session.REGION
     bucket = os.environ.get("GCP_DELIVERY_BUCKET", f"{project}-nexoruta-delivery")
     registry = f"{region}-docker.pkg.dev/{project}/nexoruta"
-    release = f"release-{uuid.uuid4().hex}"
     previous = None
     try:
         previous = latest_manifest(config)
     except RuntimeError as error:
-        if f"No published {channel} release is available" not in str(error):
+        if (f"No published {channel} release is available" not in str(error)
+                and f"No reusable {channel} release is available" not in str(error)):
             raise
+    if previous:
+        previous_image_sources = previous.get("image_sources", {})
+        for name in SERVICES:
+            source = "backend" if name in ("api", "worker") else "frontend"
+            if previous_image_sources.get(name) != snapshot["sources"][source]:
+                if name not in build_services:
+                    build_services.append(name)
+    effective_bundle_required = bool(plan.get("bundle_required") or previous is None)
     if set(build_services) != set(SERVICES) and previous is None:
         raise RuntimeError("A complete prior manifest is required before reusing images")
+    if effective_bundle_required:
+        deployment_images = image_inventory.collect(ROOT)
+    else:
+        deployment_images = image_inventory.validate_inventory(previous.get("deployment_images"))
+        if image_inventory.checksum(deployment_images) != previous.get("deployment_images_sha256"):
+            raise ValueError("Previous deployment image inventory checksum does not match its manifest")
+    deployment_images_sha256 = image_inventory.checksum(deployment_images)
 
     with tempfile.TemporaryDirectory(prefix="nexoruta-build-") as temp:
         work = Path(temp)
@@ -296,8 +352,8 @@ def build():
         images = {name: built_images.get(name, previous_images.get(name)) for name in SERVICES}
         if any(value is None for value in images.values()):
             raise RuntimeError("The complete integration manifest has missing images")
-        if plan.get("bundle_required") or previous is None:
-            bundle = create_bundle(work)
+        if effective_bundle_required:
+            bundle = create_bundle(work, deployment_images)
             bundle_source = {"root_sha": snapshot["root_sha"], "backend_sha": snapshot["sources"]["backend"]}
         else:
             bundle = work / "bundle.tar.gz"
@@ -322,13 +378,21 @@ def build():
             "images", "bundle_required", "publish_required", "android_input_sha256",
         ) if key in plan}
         manifest = {
-            "release": release, "build_id": build_id, "images": images,
+            "manifest_version": 2,
+            "release": release, "project_id": project, "region": region,
+            "build_id": build_id, "images": images,
             "image_sources": image_sources, "reused_images": reused,
+            "deployment_images": deployment_images,
+            "deployment_images_sha256": deployment_images_sha256,
             "channel": channel,
             **snapshot,
             "ci_plan": plan_summary,
-            "android_input_sha256": plan.get("android_input_sha256"),
-            "android_verified_mobile_sha": snapshot["sources"]["mobile"] if plan.get("components", {}).get("mobile_android", {}).get("run") else (previous or {}).get("android_verified_mobile_sha"),
+            "built_images": [name for name in SERVICES if name in built_images],
+            "bundle_rebuilt": effective_bundle_required,
+            "ci_evidence": ci_identity,
+            "android_input_sha256": android_verification.get("android_input_sha256") if android_verification else None,
+            "android_verified_mobile_sha": android_verification.get("mobile_sha") if android_verification else None,
+            "android_verification": android_verification,
             "bundle_source": bundle_source,
             "publication_order": [int(os.environ["GITHUB_RUN_NUMBER"]), int(os.environ["GITHUB_RUN_ATTEMPT"])],
             "bundle_sha256": bundle_sha,
@@ -372,6 +436,20 @@ def latest_manifest(config):
                          f"gs://{bucket}/releases/{release}/manifest.json", capture=True))
     if manifest.get("release") != release or manifest.get("channel") != channel:
         raise ValueError(f"Published {channel} manifest does not match its pointer")
+    if manifest.get("manifest_version") != 2:
+        raise RuntimeError(f"No reusable {channel} release is available; a complete version 2 publication is required")
+    if manifest.get("project_id") != project or manifest.get("region") != session.REGION:
+        raise ValueError("Published release belongs to a different project or region")
+    if (not re.fullmatch(r"[a-f0-9]{64}", manifest.get("bundle_sha256", ""))
+            or not isinstance(manifest.get("bundle_source"), dict)
+            or not re.fullmatch(integration.SHA, manifest["bundle_source"].get("root_sha", ""))
+            or not re.fullmatch(integration.SHA, manifest["bundle_source"].get("backend_sha", ""))
+            or manifest.get("publication_order") != pointer.get("publication_order")):
+        raise ValueError("Published release has incomplete bundle or publication provenance")
+    inventory = image_inventory.validate_inventory(manifest.get("deployment_images"))
+    if (not re.fullmatch(r"[a-f0-9]{64}", manifest.get("deployment_images_sha256", ""))
+            or image_inventory.checksum(inventory) != manifest["deployment_images_sha256"]):
+        raise ValueError("Published release has an incomplete or altered deployment image inventory")
     if channel == "main":
         if "integration_tag" not in pointer:
             raise ValueError("Published main channel is missing its tested integration identity")
@@ -381,12 +459,18 @@ def latest_manifest(config):
                 or not re.fullmatch(integration.SHA, manifest.get("root_sha", ""))):
             raise ValueError("Published integration snapshot does not match its channel")
         integration.validate_sources(manifest.get("sources", {}))
+        ci_evidence.validate_manifest_android(manifest)
     else:
         if (manifest.get("source_ref") != "refs/heads/develop"
                 or not re.fullmatch(integration.SHA, manifest.get("root_sha", ""))
                 or manifest.get("publication_order") != pointer.get("publication_order")):
             raise ValueError("Published develop snapshot does not match its channel")
         integration.validate_sources(manifest.get("sources", {}))
+        if (manifest.get("ci_evidence") is not None
+                or manifest.get("android_verification") is not None
+                or manifest.get("android_input_sha256") is not None
+                or manifest.get("android_verified_mobile_sha") is not None):
+            raise ValueError("Develop release cannot claim Android CI evidence")
     images = manifest.get("images", {})
     registry = f"{session.REGION}-docker.pkg.dev/{project}/nexoruta"
     if set(images) != set(SERVICES) or any(
@@ -394,6 +478,35 @@ def latest_manifest(config):
         for name in SERVICES
     ):
         raise ValueError("Published release must contain all six registry images pinned by digest")
+    integration.validate_sources(manifest.get("sources", {}))
+    image_sources = manifest.get("image_sources", {})
+    if set(image_sources) != set(SERVICES) or any(
+        image_sources[name] != manifest["sources"]["backend" if name in ("api", "worker") else "frontend"]
+        for name in SERVICES
+    ):
+        raise ValueError("Published application images do not match the recorded source gitlinks")
+    built_images = manifest.get("built_images")
+    reused_images = manifest.get("reused_images")
+    if (not isinstance(built_images, list)
+            or any(not isinstance(name, str) or name not in SERVICES for name in built_images)
+            or len(built_images) != len(set(built_images))
+            or not isinstance(reused_images, dict)
+            or set(built_images).intersection(reused_images)
+            or set(built_images).union(reused_images) != set(SERVICES)
+            or any(not isinstance(value, str) or not re.fullmatch(r"release-[a-f0-9]{32}", value)
+                   for value in reused_images.values())):
+        raise ValueError("Published release has incomplete application image build provenance")
+    order = manifest.get("publication_order")
+    if (not isinstance(order, list) or len(order) != 2
+            or any(type(value) is not int or value < 1 for value in order)):
+        raise ValueError("Published release has an invalid publication order")
+    if type(manifest.get("bundle_rebuilt")) is not bool:
+        raise ValueError("Published release is missing bundle build provenance")
+    if manifest["bundle_rebuilt"] and (
+        manifest["bundle_source"]["root_sha"] != manifest["root_sha"]
+        or manifest["bundle_source"]["backend_sha"] != manifest["sources"]["backend"]
+    ):
+        raise ValueError("Rebuilt bundle does not match its recorded source snapshot")
     return manifest
 
 
@@ -473,6 +586,18 @@ def prepared_cache_mode(reports):
     if len(modes) != 2 or any(type(mode) is not bool for mode in modes) or modes[0] != modes[1]:
         raise RuntimeError("Both nodes must confirm the same cache mode before deployment")
     return modes[0]
+
+
+def prepared_host_versions(inventory, reports):
+    if len(inventory) != 2 or len(reports) != 2:
+        raise RuntimeError("Both VM preparation stages must return host version evidence")
+    result = {}
+    for node, report in zip(inventory, reports):
+        node_id = node.get("NODE_ID")
+        if node_id not in ("a", "b") or node_id in result:
+            raise RuntimeError("The VM inventory has an invalid host version identity")
+        result[node_id] = host_versions.sanitize_host_versions(report.get("host_versions"))
+    return host_versions.sanitize_node_map(result)
 
 
 def redis_smoke_clients_if_enabled(cache_enabled, inventory, stage, measure):
@@ -584,6 +709,7 @@ def deploy(config, release):
     # same Redis B endpoint accepts the configured CA, hostname and AUTH. A
     # deliberate PostgreSQL bypass must remain deployable during a Redis outage.
     cache_enabled = prepared_cache_mode(prepared)
+    host_version_evidence = prepared_host_versions(inventory, prepared)
     redis_smoke_clients = redis_smoke_clients_if_enabled(cache_enabled, inventory, stage, measure)
     last_health_report = {}
     def health(node):
@@ -626,9 +752,14 @@ def deploy(config, release):
 
     stage(inventory[0], "migrate")
 
+    compose_health = {}
     for node in reversed(inventory):
         group = groups[node["NODE_ID"]]
-        stage(node, "apply")
+        apply_report = stage(node, "apply")
+        node_id = node["NODE_ID"]
+        compose_health[node_id] = deployment_health.sanitize_node_snapshot(
+            apply_report.get("compose_health"), node_id, cache_enabled,
+        )
         measure("load_balancer_admit", lambda: session.gcloud(
             node, "compute", "instance-groups", "unmanaged", "add-instances", group,
             f"--instances={node['VM_NAME']}"), node=node["NODE_ID"])
@@ -639,9 +770,25 @@ def deploy(config, release):
                 f"--instances={node['VM_NAME']}")
             raise
     result = stage(inventory[0], "verify")
+    expected_roles = {"admin", "operator", "commerce"}
+    authenticated_reads = result.get("authenticated_reads")
+    if (not isinstance(authenticated_reads, list) or len(authenticated_reads) != len(expected_roles)
+            or any(not isinstance(item, dict) or item.get("role") not in expected_roles
+                   for item in authenticated_reads)
+            or {item["role"] for item in authenticated_reads} != expected_roles
+            or any(not isinstance(item, dict) or item.get("login") != "passed"
+                   or item.get("actor_read") != "passed" for item in authenticated_reads)):
+        raise RuntimeError("Synthetic role login and authenticated actor-read smoke did not complete")
+    result["authenticated_reads"] = sorted(
+        ({"role": item["role"], "login": "passed", "actor_read": "passed"}
+         for item in authenticated_reads),
+        key=lambda item: item["role"],
+    )
     result["redis_node"] = "b"
     result["cache_enabled"] = cache_enabled
     result["redis_smoke_clients"] = redis_smoke_clients
+    result["host_versions"] = host_version_evidence
+    result["compose_health"] = deployment_health.sanitize_node_map(compose_health, cache_enabled)
     print(json.dumps(result))
     return result
 

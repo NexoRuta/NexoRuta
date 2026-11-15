@@ -64,6 +64,20 @@ class IntegrationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "will not be moved"):
             integration.publish_tag(tag, self.base)
 
+    def test_snapshot_for_tag_fetches_and_resolves_only_an_annotated_immutable_tag(self):
+        commit = integration.snapshot(self.base, self.sources)
+        tag = "integration-123-3"
+        integration.publish_tag(tag, commit)
+        integration.git("tag", "-d", tag)
+        snapshot = integration.snapshot_for_tag(tag)
+        self.assertEqual(snapshot["root_sha"], commit)
+        self.assertEqual(snapshot["sources"], self.sources)
+        self.assertEqual(snapshot["root_tree"], integration.git("rev-parse", f"{commit}^{{tree}}"))
+        with self.assertRaisesRegex(ValueError, "annotated"):
+            integration.git("tag", "-d", tag)
+            integration.git("tag", tag, self.base)
+            integration.snapshot_for_tag(tag)
+
     def test_invalid_snapshot_input_is_rejected(self):
         for value in ({}, {**self.sources, "unexpected": "a" * 40}, {**self.sources, "mobile": "main"}):
             with self.subTest(value=value), self.assertRaises(ValueError):

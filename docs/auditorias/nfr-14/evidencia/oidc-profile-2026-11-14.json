@@ -1,0 +1,32 @@
+{
+  "observed_at_utc": "2026-11-14T22:09:37Z",
+  "read_only": true,
+  "github": {
+    "endpoint": "repos/NexoRuta/NexoRuta/actions/oidc/customization/sub",
+    "http_status": 200,
+    "use_default": true,
+    "use_immutable_subject": true,
+    "sub_claim_prefix": "repo:NexoRuta@338352981/NexoRuta@1406504463"
+  },
+  "google_workload_identity_provider": {
+    "resource": "projects/1090571196455/locations/global/workloadIdentityPools/nexoruta-github/providers/demo-vm",
+    "state": "ACTIVE",
+    "repository_id": "1406504463",
+    "repository_owner_id": "338352981",
+    "repository": "NexoRuta/NexoRuta",
+    "allowed_refs": ["refs/heads/main", "refs/heads/develop"],
+    "accepted_subjects": [
+      "repo:NexoRuta/NexoRuta:environment:nexoruta-demo",
+      "repo:NexoRuta@338352981/NexoRuta@1406504463:environment:nexoruta-demo"
+    ],
+    "allowed_workflows": [
+      "NexoRuta/NexoRuta/.github/workflows/publish.yml@refs/heads/main",
+      "NexoRuta/NexoRuta/.github/workflows/vm-controls.yml@refs/heads/main",
+      "NexoRuta/NexoRuta/.github/workflows/vm-controls.yml@refs/heads/develop",
+      "NexoRuta/NexoRuta/.github/workflows/load-tests.yml@refs/heads/main",
+      "NexoRuta/NexoRuta/.github/workflows/load-tests.yml@refs/heads/develop"
+    ],
+    "allowed_events": ["workflow_dispatch", "push"]
+  },
+  "decision": "The repository template issues the immutable repository-ID subject. The current provider still accepts both the old name-based subject and the immutable subject. IaC is narrowed to the observed immutable subject; this evidence does not claim that change has been applied to GCP."
+}

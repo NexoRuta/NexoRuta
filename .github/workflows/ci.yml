@@ -83,6 +83,7 @@ jobs:
     outputs:
       sources: ${{ steps.sources.outputs.sources }}
       plan: ${{ steps.sources.outputs.plan }}
+      root_tree: ${{ steps.sources.outputs.root_tree }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -98,6 +99,7 @@ jobs:
           sources = {repo: subprocess.check_output(['git', '-C', repo, 'rev-parse', 'HEAD'], text=True).strip() for repo in ('backend', 'frontend', 'mobile')}
           pathlib.Path('sources.json').write_text(json.dumps(sources))
           PY
+          echo "root_tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
           python3 scripts/gcp/ci_plan.py plan
 
   backend:
@@ -503,6 +505,26 @@ jobs:
               output.write('\n'.join(summary))
           print('Integrated validation plan completed:', json.dumps(expected, sort_keys=True))
           PY
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        if: success() && github.event_name == 'pull_request' && github.base_ref == 'main'
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Write immutable evidence for the protected main pull request
+        if: success() && github.event_name == 'pull_request' && github.base_ref == 'main'
+        env:
+          NFR14_CI_PLAN: ${{ needs.sources.outputs.plan }}
+          NFR14_ROOT_TREE: ${{ needs.sources.outputs.root_tree }}
+          NFR14_JOB_RESULTS: ${{ toJSON(needs) }}
+          NFR14_ANDROID_JOB_RESULT: ${{ needs.mobile_android.result }}
+        run: python3 scripts/gcp/ci_evidence.py write "$RUNNER_TEMP/nfr14-ci-evidence.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: success() && github.event_name == 'pull_request' && github.base_ref == 'main'
+        with:
+          name: nfr14-ci-evidence-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nfr14-ci-evidence.json
+          if-no-files-found: error
+          retention-days: 14
 
   cloudsql:
     needs: sources

@@ -1,0 +1,101 @@
+{
+  "observed_at": "2026-11-14T20:21:58Z",
+  "purpose": "P0 baseline before NFR-14 source changes",
+  "root": {
+    "repository": "NexoRuta/NexoRuta",
+    "branch_at_start": "codex/nfr-14-implementation",
+    "commit": "86e234e7bc0a2be1ce8911cc186ecf0e55d628e4",
+    "tree": "6f4011e136ced28f02b9330fb218af085e61c44c",
+    "remote_heads": {
+      "main": "27f69c62bc974deee8879374d4d14b1db051a0f6",
+      "develop": "7c397dcd53d88d8b21011d209bf79cb642fc1f6d"
+    }
+  },
+  "components": [
+    {
+      "name": "backend",
+      "repository": "NexoRuta/NexoRuta-Backend",
+      "gitlink": "5b6f0f9f052348aed27da40ed202da953b39ea2a",
+      "checkout_at_start": "5b6f0f9f052348aed27da40ed202da953b39ea2a",
+      "remote_heads": {
+        "main": "54165fb2d169c907730f1f991fd694b30101f6b0",
+        "develop": "5b6f0f9f052348aed27da40ed202da953b39ea2a"
+      }
+    },
+    {
+      "name": "frontend",
+      "repository": "NexoRuta/NexoRuta-Frontend",
+      "gitlink": "2540041ba267d8a48e6c2b8a644247134f5b47f4",
+      "checkout_at_start": "2540041ba267d8a48e6c2b8a644247134f5b47f4",
+      "remote_heads": {
+        "main": "5c1c008d5a62ea3f7e5f043b2b3a178e154a4ef6",
+        "develop": "162bf08ec9ad1428fa56dc81b5ce289ac1208a61"
+      }
+    },
+    {
+      "name": "mobile",
+      "repository": "NexoRuta/NexoRuta-Mobile",
+      "gitlink": "90976706c7db6a54c06ac552811f20f04d90375e",
+      "checkout_at_start": "90976706c7db6a54c06ac552811f20f04d90375e",
+      "remote_heads": {
+        "main": "4b9032bc54be3faf7549b33a65315aca87a69df5",
+        "develop": "90976706c7db6a54c06ac552811f20f04d90375e"
+      }
+    }
+  ],
+  "toolchain": {
+    "python": "3.13.5",
+    "dotnet_sdk": "10.0.401",
+    "dotnet_roll_forward": "disable",
+    "opentofu": "1.13.1",
+    "provider_locks": {
+      "bootstrap_sha256": "682b6c9aa77052244666c42fca5a74d8a6f15696a365157dc8db1a55d1a9c117",
+      "demo_sha256": "5c588920b244dcc86469c5398dd8641b658dae097a4fab9ef0e9f6267640ce4c",
+      "google": "7.46.1",
+      "google-beta": "7.46.1",
+      "random": "3.7.2"
+    },
+    "gcloud": "590.0.0",
+    "gh": "2.103.0",
+    "go": "1.25.0"
+  },
+  "github": {
+    "repository": "NexoRuta/NexoRuta",
+    "environment": "nexoruta-demo",
+    "variable_names": [
+      "GCP_DELIVERY_BUCKET",
+      "GCP_DEPLOY_SERVICE_ACCOUNT",
+      "GCP_LOAD_PREPARER_SERVICE_ACCOUNT",
+      "GCP_LOAD_SERVICE_ACCOUNT",
+      "GCP_MANAGE_DNS",
+      "GCP_PROJECT_ID",
+      "GCP_REGION",
+      "GCP_STATE_BUCKET",
+      "GCP_WORKLOAD_IDENTITY_PROVIDER",
+      "GCP_ZONE",
+      "MONITOR_ALLOWED_EMAILS"
+    ],
+    "secret_names_only": [
+      "MONITOR_GOOGLE_CLIENT_ID",
+      "MONITOR_GOOGLE_CLIENT_SECRET"
+    ],
+    "main_ruleset": {
+      "id": 26076039,
+      "active": true,
+      "required_check": "Integrated CI / result",
+      "strict": true,
+      "pull_request_required": true,
+      "bypass_actors": []
+    },
+    "latest_observed_main_publish_run": 41946941369,
+    "latest_observed_vm_control_run": 43631884438
+  },
+  "gcp": {
+    "project_id": "nexoruta-demo-20261022",
+    "project_number": "1090571196455",
+    "region": "southamerica-west1",
+    "sanitized_inventory": "docs/auditorias/nfr-14/evidencia/demo-inspect-2026-11-14.json",
+    "sanitized_delivery_channels": "docs/auditorias/nfr-14/evidencia/delivery-channels-2026-11-14.json",
+    "inspection_scope": "resource metadata, status and names only; no Secret Manager values, OpenTofu state or business records"
+  }
+}

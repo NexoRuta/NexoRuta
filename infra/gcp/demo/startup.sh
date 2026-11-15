@@ -70,6 +70,53 @@ if ! dpkg-query -W google-cloud-ops-agent >/dev/null 2>&1; then
   bash /tmp/nexoruta-ops-repo.sh --also-install
   rm -f /tmp/nexoruta-ops-repo.sh
 fi
+python3 - <<'PY'
+import json
+import os
+import platform
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+
+def command(*args):
+    try:
+        return subprocess.check_output(args, text=True, stderr=subprocess.DEVNULL).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+packages = {}
+for package in (
+    "docker-ce", "docker-ce-cli", "containerd.io", "docker-buildx-plugin",
+    "docker-compose-plugin", "google-cloud-ops-agent", "python3",
+):
+    packages[package] = command("dpkg-query", "-W", "-f=${Version}", package)
+
+os_release = {}
+for line in Path("/etc/os-release").read_text(encoding="utf-8").splitlines():
+    if "=" in line:
+        key, value = line.split("=", 1)
+        os_release[key] = value.strip('"')
+
+record = {
+    "schema_version": 1,
+    "recorded_at": datetime.now(timezone.utc).isoformat(),
+    "os_id": os_release.get("ID"),
+    "os_version_id": os_release.get("VERSION_ID"),
+    "kernel": platform.release(),
+    "architecture": platform.machine(),
+    "docker_server": command("docker", "version", "--format", "{{.Server.Version}}"),
+    "docker_compose": command("docker", "compose", "version", "--short"),
+    "docker_buildx": command("docker", "buildx", "version"),
+    "containerd": command("containerd", "--version"),
+    "packages": packages,
+}
+destination = Path("/srv/nexoruta/host-versions.json")
+temporary = destination.with_suffix(".json.tmp")
+temporary.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+os.chmod(temporary, 0o600)
+temporary.replace(destination)
+print("Recorded effective Debian, kernel, Docker, Compose, containerd, and Ops Agent versions.")
+PY
 cat > /etc/systemd/system/nexoruta-monitor.service <<'UNIT'
 [Unit]
 Description=NexoRuta infrastructure and application signals

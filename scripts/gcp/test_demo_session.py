@@ -2,13 +2,39 @@ import datetime as dt
 import json
 import subprocess
 import threading
+import tempfile
 from pathlib import Path
 import unittest
 from unittest.mock import patch
 
 import demo_session as session
 import delivery
+import bootstrap_setup
 import load_tests as load_test_control
+import host_versions
+import deployment_health
+
+
+def valid_host_versions():
+    return {
+        "schema_version": 1, "recorded_at": "2026-11-14T12:00:00+00:00",
+        "os_id": "debian", "os_version_id": "12", "kernel": "6.1.0-cloud-amd64",
+        "architecture": "x86_64", "docker_server": "29.1.3", "docker_compose": "2.40.3",
+        "docker_buildx": "github.com/docker/buildx v0.29.1",
+        "containerd": "containerd github.com/containerd/containerd v2.1.5",
+        "packages": {name: "1.2.3-1" for name in host_versions.PACKAGE_NAMES},
+    }
+
+
+def valid_compose_health(node="a", cache_enabled=True):
+    return {
+        "node": node,
+        "services": [
+            {"service": name, "state": "running",
+             "health": "healthy" if name in deployment_health.HEALTHCHECK_SERVICES else "not-configured"}
+            for name in deployment_health.expected_services(node, cache_enabled)
+        ],
+    }
 
 
 class SessionSafetyTests(unittest.TestCase):
@@ -66,12 +92,16 @@ class SessionSafetyTests(unittest.TestCase):
             self.assertCountEqual(completed, ["database", "tofu"])
 
         with (patch.object(delivery, "latest_release", return_value="release-" + "a" * 32),
+              patch.object(load_test_control, "assert_no_active"),
+              patch.object(bootstrap_setup, "validate_runtime_target"),
               patch.object(session, "instance", return_value=None),
               patch.object(session, "write_lease"),
               patch.object(session, "start_database", side_effect=start_database),
               patch.object(session, "initialize_tofu", side_effect=setup),
               patch.object(session, "start_session", side_effect=start)):
-            session.run({"DEMO_OPERATION": "start"})
+            session.run({"DEMO_OPERATION": "start", "GCP_PROJECT_ID": "demo-project",
+                         "GCP_STATE_BUCKET": "demo-project-tofu-state",
+                         "NEXORUTA_EXECUTION_PROFILE": "demo"})
 
     def setUp(self):
         environment = patch.dict("os.environ", {"GITHUB_ACTIONS": "false"})
@@ -233,11 +263,13 @@ class SessionSafetyTests(unittest.TestCase):
     def test_start_policy_verification_failure_stops_vm(self):
         config = {
             "DEMO_OPERATION": "start", "GCP_PROJECT_ID": "demo-project",
-            "GCP_ZONE": "us-central1-a", "GCP_STATE_BUCKET": "demo-state",
+            "GCP_ZONE": "us-central1-a", "GCP_STATE_BUCKET": "demo-project-tofu-state",
+            "NEXORUTA_EXECUTION_PROFILE": "demo",
         }
         with (
             patch.object(delivery, "latest_release", return_value="release-" + "a" * 32),
             patch.object(load_test_control, "assert_no_active"),
+            patch.object(bootstrap_setup, "validate_runtime_target"),
             patch.object(session, "instance", return_value=None),
             patch.object(session, "write_lease"),
             patch.object(session, "start_database"),
@@ -272,15 +304,19 @@ class SessionSafetyTests(unittest.TestCase):
             raise RuntimeError("refresh failed")
         with (
             patch.object(delivery, "latest_release", return_value="release-" + "a" * 32),
+            patch.object(load_test_control, "assert_no_active"),
             patch.object(session, "instance", return_value=None),
             patch.object(session, "write_lease"),
             patch.object(session, "start_database", side_effect=lambda config: events.append("database")),
+            patch.object(bootstrap_setup, "validate_runtime_target"),
             patch.object(session, "initialize_tofu"),
             patch.object(session, "start_session", side_effect=fail_refresh),
             patch.object(session, "stop_after_failure") as cleanup,
         ):
             with self.assertRaisesRegex(RuntimeError, "refresh failed"):
-                session.run({"DEMO_OPERATION": "start"})
+                session.run({"DEMO_OPERATION": "start", "GCP_PROJECT_ID": "demo-project",
+                             "GCP_STATE_BUCKET": "demo-project-tofu-state",
+                             "NEXORUTA_EXECUTION_PROFILE": "demo"})
             self.assertEqual(events, ["database", "refresh"])
             cleanup.assert_called_once()
 
@@ -306,6 +342,49 @@ class SessionSafetyTests(unittest.TestCase):
                 session.run({"DEMO_OPERATION": "start"})
             database.assert_not_called()
             cleanup.assert_not_called()
+
+    def test_reproduction_smoke_output_contains_only_allowlisted_role_and_cache_results(self):
+        deployment = {
+            "authenticated_reads": [
+                {"role": role, "login": "passed", "actor_read": "passed", "email": f"{role}@example.test"}
+                for role in ("admin", "operator", "commerce")
+            ],
+            "redis_node": "b", "redis_smoke_clients": ["a", "b"], "cache_enabled": True,
+            "endpoints": {"api": "https://private.example.test"}, "access_token": "private-token",
+            "host_versions": {"a": valid_host_versions(), "b": valid_host_versions()},
+            "compose_health": {"a": valid_compose_health("a"), "b": valid_compose_health("b")},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "github-output.txt"
+            with patch.dict("os.environ", {"GITHUB_OUTPUT": str(output_path)}):
+                session.publish_reproduction_deployment_smoke(
+                    {"GCP_PROJECT_ID": "nfr14-test-project"}, "release-" + "a" * 32, deployment,
+                )
+            raw = output_path.read_text(encoding="utf-8")
+        payload = raw.splitlines()[1]
+        proof = json.loads(payload)
+        self.assertEqual(proof["schema_version"], 3)
+        self.assertEqual(proof["project_id"], "nfr14-test-project")
+        self.assertEqual(set(proof["host_versions"]), {"a", "b"})
+        self.assertEqual(set(proof["compose_health"]), {"a", "b"})
+        self.assertEqual(len(proof["compose_health"]["a"]["services"]),
+                         len(deployment_health.expected_services("a", True)))
+        self.assertEqual([item["role"] for item in proof["authenticated_reads"]],
+                         ["admin", "commerce", "operator"])
+        self.assertNotIn("email", payload)
+        self.assertNotIn("private.example.test", payload)
+        self.assertNotIn("private-token", payload)
+
+    def test_reproduction_smoke_rejects_duplicate_actor_roles(self):
+        read = {"role": "admin", "login": "passed", "actor_read": "passed"}
+        deployment = {
+            "authenticated_reads": [read, read, {"role": "commerce", "login": "passed", "actor_read": "passed"}],
+            "redis_node": "b", "redis_smoke_clients": ["a", "b"], "cache_enabled": True,
+        }
+        with self.assertRaisesRegex(RuntimeError, "every synthetic runtime role"):
+            session.publish_reproduction_deployment_smoke(
+                {"GCP_PROJECT_ID": "nfr14-test-project"}, "release-" + "a" * 32, deployment,
+            )
 
 
 if __name__ == "__main__":

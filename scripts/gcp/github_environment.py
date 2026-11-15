@@ -63,12 +63,12 @@ def validate(job):
         "GCP_REGION": re.escape(session.REGION),
         "GCP_WORKLOAD_IDENTITY_PROVIDER": r"projects/[0-9]+/locations/global/workloadIdentityPools/[a-z0-9-]+/providers/[a-z0-9-]+",
     }
-    if job in ("publish", "deploy"):
+    if job in ("publish", "deploy", "reproduce"):
         patterns["GCP_DEPLOY_SERVICE_ACCOUNT"] = r"[a-z][a-z0-9-]*@[a-z][a-z0-9-]*\.iam\.gserviceaccount\.com"
     if job == "load":
         patterns["GCP_LOAD_SERVICE_ACCOUNT"] = r"nexoruta-load-controller@[a-z][a-z0-9-]*\.iam\.gserviceaccount\.com"
         patterns["GCP_LOAD_PREPARER_SERVICE_ACCOUNT"] = r"nexoruta-load-preparer@[a-z][a-z0-9-]*\.iam\.gserviceaccount\.com"
-    if job in ("publish", "deploy"):
+    if job in ("publish", "deploy", "reproduce"):
         patterns.update({
             "GCP_ZONE": re.escape(session.REGION + "-a"),
             "GCP_STATE_BUCKET": r"[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]",
@@ -81,28 +81,31 @@ def validate(job):
             "GCP_DELIVERY_BUCKET": r"[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]",
         })
     errors = [name for name, pattern in patterns.items() if not re.fullmatch(pattern, os.environ.get(name, ""))]
-    if job in ("deploy", "load"):
+    if job in ("deploy", "load", "reproduce"):
         manage_dns = os.environ.get("GCP_MANAGE_DNS", "").lower()
         domain = os.environ.get("GCP_BASE_DOMAIN", "")
         if manage_dns not in ("", "true", "false"):
             errors.append("GCP_MANAGE_DNS")
         if (domain and not re.fullmatch(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}", domain)) or (manage_dns == "true" and not domain):
             errors.append("GCP_BASE_DOMAIN")
-    if job == "deploy" and os.environ.get("NEXORUTA_CACHE_ENABLED", "true").strip().lower() not in ("true", "false"):
+    if job in ("deploy", "reproduce") and os.environ.get("NEXORUTA_CACHE_ENABLED", "true").strip().lower() not in ("true", "false"):
         errors.append("NEXORUTA_CACHE_ENABLED")
-    if job == "deploy" and os.environ.get("DEMO_OPERATION") in ("start", "update"):
+    if job in ("deploy", "reproduce") and os.environ.get("DEMO_OPERATION") in ("start", "update"):
         try:
             parse_webhook_allowed_origins(os.environ.get("WEBHOOK_ALLOWED_ORIGINS", ""))
             parse_allow_any_public_https_origin(os.environ.get("WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN", "false"))
         except ValueError as error:
             errors.append(str(error))
-    if job == "deploy" and os.environ.get("DEMO_OPERATION") in ("start", "update"):
+    if job in ("deploy", "reproduce") and os.environ.get("DEMO_OPERATION") in ("start", "update"):
         try:
             monitor_settings()
         except ValueError as error:
             errors.append(str(error))
     if errors:
         raise ValueError("Configure valid Variables in GitHub environment nexoruta-demo: " + ", ".join(errors))
+    if job == "reproduce" or os.environ.get("NEXORUTA_EXECUTION_PROFILE") == "reproduction":
+        import reproduce
+        reproduce.validate_runtime_environment(os.environ)
     print(f"GitHub environment configuration is valid for {job}.")
 
 

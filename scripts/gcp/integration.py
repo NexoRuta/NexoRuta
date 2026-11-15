@@ -97,6 +97,25 @@ def verify_checkout(tag, expected_commit=None):
     return {"integration_tag": tag, "root_sha": commit, "sources": sources}
 
 
+def snapshot_for_tag(tag):
+    """Resolve an annotated remote integration tag without executing its checkout code."""
+    if not re.fullmatch(TAG, tag):
+        raise ValueError("Invalid integration tag")
+    ref = f"refs/tags/{tag}"
+    local = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--verify", ref],
+                           capture_output=True, text=True)
+    if local.returncode:
+        fetched = subprocess.run(["git", "-C", str(ROOT), "fetch", "--no-tags", "origin",
+                                  f"{ref}:{ref}"], capture_output=True, text=True)
+        if fetched.returncode:
+            raise RuntimeError("Could not fetch the selected immutable integration tag")
+    if git("cat-file", "-t", ref) != "tag":
+        raise ValueError("Expected the tested annotated integration tag")
+    commit = git("rev-parse", f"{ref}^{{commit}}")
+    return {"integration_tag": tag, "root_sha": commit, "sources": pinned_sources(commit),
+            "root_tree": git("rev-parse", f"{commit}^{{tree}}")}
+
+
 def verify_develop_checkout(expected_commit=None):
     """Verify the immutable root commit and its exact gitlinks for a direct develop build."""
     if os.environ.get("GITHUB_REF") != "refs/heads/develop":

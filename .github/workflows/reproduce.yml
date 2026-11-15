@@ -1,0 +1,209 @@
+name: NexoRuta - isolated NFR-14 reproduction
+run-name: NexoRuta reproduction / ${{ inputs.run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Unique 32-character NFR-14 reproduction run ID'
+        required: true
+        type: string
+      integration_tag:
+        description: 'Exact complete main integration tag already published and validated'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nfr14-reproduction-project
+  queue: max
+
+jobs:
+  reproduce:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: nexoruta-demo
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      id-token: write
+    env:
+      GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+      GH_TOKEN: ${{ github.token }}
+      NFR14_REPRO_RUN_ID: ${{ vars.NFR14_REPRO_RUN_ID }}
+      NFR14_REPRO_INTEGRATION_TAG: ${{ vars.NFR14_REPRO_INTEGRATION_TAG }}
+      NFR14_REPRO_PROJECT_ID: ${{ vars.NFR14_REPRO_PROJECT_ID }}
+      NFR14_REPRO_PROJECT_NUMBER: ${{ vars.NFR14_REPRO_PROJECT_NUMBER }}
+      NFR14_REPRO_STATE_BUCKET: ${{ vars.NFR14_REPRO_STATE_BUCKET }}
+      NFR14_REPRO_DELIVERY_BUCKET: ${{ vars.NFR14_REPRO_DELIVERY_BUCKET }}
+      NFR14_REPRO_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.NFR14_REPRO_WORKLOAD_IDENTITY_PROVIDER }}
+      NFR14_REPRO_DEPLOY_SERVICE_ACCOUNT: ${{ vars.NFR14_REPRO_DEPLOY_SERVICE_ACCOUNT }}
+      NFR14_MAIN_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      NFR14_MAIN_STATE_BUCKET: ${{ vars.GCP_STATE_BUCKET }}
+      NFR14_MAIN_DELIVERY_BUCKET: ${{ vars.GCP_DELIVERY_BUCKET }}
+      NFR14_MAIN_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      NFR14_MAIN_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      NEXORUTA_EXECUTION_PROFILE: reproduction
+      BOOTSTRAP_WIF_PROFILE: reproduction
+      GCP_PROJECT_ID: ${{ vars.NFR14_REPRO_PROJECT_ID }}
+      GCP_REGION: southamerica-west1
+      GCP_ZONE: southamerica-west1-a
+      GCP_SECONDARY_ZONE: southamerica-west1-b
+      GCP_STATE_BUCKET: ${{ vars.NFR14_REPRO_STATE_BUCKET }}
+      GCP_DELIVERY_BUCKET: ${{ vars.NFR14_REPRO_DELIVERY_BUCKET }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.NFR14_REPRO_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.NFR14_REPRO_DEPLOY_SERVICE_ACCOUNT }}
+      GCP_BASE_DOMAIN: ''
+      GCP_MANAGE_DNS: 'false'
+      DEMO_OPERATION: start
+      RELEASE_CHANNEL: main
+      INTEGRATION_TAG: ${{ inputs.integration_tag }}
+      NEXORUTA_CACHE_ENABLED: ${{ vars.NEXORUTA_CACHE_ENABLED || 'true' }}
+      WEBHOOK_ALLOWED_ORIGINS: ''
+      MONITOR_ALLOWED_EMAILS: ${{ vars.MONITOR_ALLOWED_EMAILS }}
+      MONITOR_GOOGLE_CLIENT_ID: ${{ secrets.MONITOR_GOOGLE_CLIENT_ID }}
+      MONITOR_GOOGLE_CLIENT_SECRET: ${{ secrets.MONITOR_GOOGLE_CLIENT_SECRET }}
+      TF_IN_AUTOMATION: 'true'
+      TF_INPUT: 'false'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Validate the locked target and complete main release before using its code
+        env:
+          REQUESTED_RUN_ID: ${{ inputs.run_id }}
+          REQUESTED_INTEGRATION_TAG: ${{ inputs.integration_tag }}
+        run: python3 scripts/gcp/reproduce.py validate-workflow --run-id "$REQUESTED_RUN_ID" --integration-tag "$REQUESTED_INTEGRATION_TAG"
+      - name: Checkout the validated immutable integration tag and exact gitlinks
+        run: |
+          git checkout --detach "refs/tags/$INTEGRATION_TAG"
+          git submodule update --init --recursive
+          python3 scripts/gcp/integration.py check
+      - name: Validate deployment and protected CI configuration
+        run: |
+          python3 scripts/gcp/github_environment.py validate reproduce
+          python3 scripts/gcp/demo_session.py check
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        id: auth
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          version: '590.0.0'
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2
+        with:
+          tofu_version_file: .opentofu-version
+          tofu_wrapper: false
+      - name: Synchronize only the isolated project's foundation
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          BOOTSTRAP_REPOSITORY_ID: ${{ github.repository_id }}
+          BOOTSTRAP_OWNER_ID: ${{ github.repository_owner_id }}
+        run: python3 scripts/gcp/bootstrap.py
+      - name: Configure application integrations from the existing environment
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          GEOAPIFY_API_KEY: ''
+        run: python3 scripts/gcp/github_environment.py sync-integrations
+      - name: Resolve the exact protected CI artifact recorded by the main release
+        id: ci_evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/gcp/reproduce.py resolve-ci-evidence --integration-tag "$INTEGRATION_TAG" --output "$RUNNER_TEMP/nfr14-ci-evidence.json"
+      - name: Build all six images and a fresh deployment bundle in the isolated project
+        id: build
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          NEXORUTA_CLOUD_BUILD_ID_FILE: ${{ runner.temp }}/nexoruta-cloud-build-id
+          TESTED_CI_PLAN: ${{ steps.ci_evidence.outputs.plan }}
+        run: python3 scripts/gcp/delivery.py build
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        id: deployment_auth
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+      - name: Start the four-hour isolated session and perform deployment smoke checks
+        id: start
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.deployment_auth.outputs.access_token }}
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.deployment_auth.outputs.access_token }}
+        run: python3 scripts/gcp/demo_session.py run
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        id: verification_auth
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+      - name: Verify the isolated release, TLS, HTTPS health, and session limits
+        id: verify
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.verification_auth.outputs.access_token }}
+          NEXORUTA_EXPECTED_RELEASE: ${{ steps.build.outputs.release }}
+          NEXORUTA_DEPLOY_SMOKE: ${{ steps.start.outputs.nfr14_smoke }}
+        run: python3 scripts/gcp/verify_nfr14.py --run-id "$NFR14_REPRO_RUN_ID" --integration-tag "$INTEGRATION_TAG" --output "$RUNNER_TEMP/nfr14-verification.json"
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        if: always() && steps.auth.outcome == 'success'
+        id: cleanup_auth
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+      - name: Stop reproduction VMs while preserving the isolated SQL project state
+        if: always() && steps.auth.outcome == 'success'
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.cleanup_auth.outputs.access_token }}
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.cleanup_auth.outputs.access_token }}
+          DEMO_OPERATION: stop
+        run: python3 scripts/gcp/demo_session.py run
+      - name: Finalize isolated session stop evidence
+        if: always() && steps.auth.outcome == 'success' && steps.verify.outcome != 'skipped'
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.cleanup_auth.outputs.access_token }}
+        run: python3 scripts/gcp/verify_nfr14.py --run-id "$NFR14_REPRO_RUN_ID" --integration-tag "$INTEGRATION_TAG" --output "$RUNNER_TEMP/nfr14-verification.json" --finalize-stop
+      - name: Cancel any Cloud Build left active by failure or cancellation
+        if: always() && steps.auth.outcome == 'success'
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.cleanup_auth.outputs.access_token }}
+        run: |
+          build_id_file="$RUNNER_TEMP/nexoruta-cloud-build-id"
+          [[ -s "$build_id_file" ]] || exit 0
+          build_id="$(< "$build_id_file")"
+          status="$(gcloud builds describe "$build_id" --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --format='value(status)')"
+          case "$status" in
+            QUEUED|PENDING|WORKING)
+              gcloud builds cancel "$build_id" --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --quiet
+              ;;
+            CANCELLING|CANCELLED|SUCCESS|FAILURE|INTERNAL_ERROR|TIMEOUT|EXPIRED) ;;
+            *) echo "Cloud Build status is unknown; inspect it before cleanup." >&2; exit 1 ;;
+          esac
+      - name: Remove this runner's OS Login SSH key
+        if: always() && steps.auth.outcome == 'success'
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.cleanup_auth.outputs.access_token }}
+        run: python3 scripts/gcp/ssh_keys.py cleanup
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: nfr14-reproduction-verification-${{ inputs.run_id }}
+          path: ${{ runner.temp }}/nfr14-verification.json
+          if-no-files-found: ignore
+          retention-days: 90

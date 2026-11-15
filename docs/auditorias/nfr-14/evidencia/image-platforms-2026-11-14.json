@@ -1,0 +1,275 @@
+{
+  "checked_at_utc": "2026-11-14T21:35:00.544200+00:00",
+  "images": [
+    {
+      "image": "mcr.microsoft.com/dotnet/sdk:10.0.401@sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317",
+      "kind": "build",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317",
+      "manifest_type": "index",
+      "name": "build",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64"
+      ]
+    },
+    {
+      "image": "mcr.microsoft.com/dotnet/aspnet:10.0@sha256:bfd912c83295ce66d4b706ebb8541b9f14259b0e76fbb88b2751f58ce2399d2e",
+      "kind": "build",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:bfd912c83295ce66d4b706ebb8541b9f14259b0e76fbb88b2751f58ce2399d2e",
+      "manifest_type": "index",
+      "name": "runtime",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64"
+      ]
+    },
+    {
+      "image": "grafana/alloy:v1.21.3@sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4",
+      "manifest_type": "index",
+      "name": "alloy",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64",
+        "linux/ppc64le",
+        "linux/s390x"
+      ]
+    },
+    {
+      "image": "postgres:18-alpine@sha256:1018733457011bf88d81db98cf43aac6d5150afc18787dbe204771fedf80ff95",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:1018733457011bf88d81db98cf43aac6d5150afc18787dbe204771fedf80ff95",
+      "manifest_type": "index",
+      "name": "db-tools",
+      "platforms": [
+        "linux/386",
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64",
+        "linux/ppc64le",
+        "linux/riscv64",
+        "linux/s390x"
+      ]
+    },
+    {
+      "image": "otel/opentelemetry-collector-contrib:0.164.0@sha256:340c9ca6a36617084c6661bdc4f0fe92b7cda5a805d61673ec8db375fddc522b",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:340c9ca6a36617084c6661bdc4f0fe92b7cda5a805d61673ec8db375fddc522b",
+      "manifest_type": "index",
+      "name": "gcp-metrics-collector",
+      "platforms": [
+        "linux/386",
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64",
+        "linux/ppc64le",
+        "linux/riscv64",
+        "linux/s390x"
+      ]
+    },
+    {
+      "image": "grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572",
+      "manifest_type": "index",
+      "name": "grafana",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64"
+      ]
+    },
+    {
+      "image": "apache/kafka:4.1.1@sha256:0bc1bb2478f45b6cea78864df86acdc11e8df2c5172477819a4d12942cbe5d40",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:0bc1bb2478f45b6cea78864df86acdc11e8df2c5172477819a4d12942cbe5d40",
+      "manifest_type": "index",
+      "name": "kafka",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    {
+      "image": "grafana/loki:3.7.9@sha256:0db216b630ae1f348a1584c67f3cead8b4c1fc839169a39501db664744158e28",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:0db216b630ae1f348a1584c67f3cead8b4c1fc839169a39501db664744158e28",
+      "manifest_type": "index",
+      "name": "loki",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64"
+      ]
+    },
+    {
+      "image": "axllent/mailpit:v1.27@sha256:e22dce5b36f93c77082e204a3942fb6b283b7896e057458400a4c88344c3df68",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:e22dce5b36f93c77082e204a3942fb6b283b7896e057458400a4c88344c3df68",
+      "manifest_type": "index",
+      "name": "mailpit",
+      "platforms": [
+        "linux/386",
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    {
+      "image": "mongo:8.0@sha256:d97fea17ccb8d004cd137be8dab54d70d0df11be69c9f422aefe4484c8414ab7",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:d97fea17ccb8d004cd137be8dab54d70d0df11be69c9f422aefe4484c8414ab7",
+      "manifest_type": "index",
+      "name": "mongo",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64",
+        "windows/amd64"
+      ]
+    },
+    {
+      "image": "mongo:8.0@sha256:d97fea17ccb8d004cd137be8dab54d70d0df11be69c9f422aefe4484c8414ab7",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:d97fea17ccb8d004cd137be8dab54d70d0df11be69c9f422aefe4484c8414ab7",
+      "manifest_type": "index",
+      "name": "mongo-provisioner",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64",
+        "windows/amd64"
+      ]
+    },
+    {
+      "image": "otel/opentelemetry-collector-contrib:0.164.0@sha256:340c9ca6a36617084c6661bdc4f0fe92b7cda5a805d61673ec8db375fddc522b",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:340c9ca6a36617084c6661bdc4f0fe92b7cda5a805d61673ec8db375fddc522b",
+      "manifest_type": "index",
+      "name": "otel-collector",
+      "platforms": [
+        "linux/386",
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64",
+        "linux/ppc64le",
+        "linux/riscv64",
+        "linux/s390x"
+      ]
+    },
+    {
+      "image": "prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2",
+      "manifest_type": "index",
+      "name": "prometheus",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64",
+        "linux/ppc64le",
+        "linux/riscv64",
+        "linux/s390x"
+      ]
+    },
+    {
+      "image": "python:3.13-slim-bookworm@sha256:281d39ff02e3b389401586134ff9e6572954687822a58055ec07a60ded4e0b7f",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:281d39ff02e3b389401586134ff9e6572954687822a58055ec07a60ded4e0b7f",
+      "manifest_type": "index",
+      "name": "prometheus-write-gateway",
+      "platforms": [
+        "linux/386",
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64",
+        "linux/ppc64le"
+      ]
+    },
+    {
+      "image": "caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d",
+      "manifest_type": "index",
+      "name": "proxy",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64",
+        "linux/ppc64le",
+        "linux/riscv64",
+        "linux/s390x"
+      ]
+    },
+    {
+      "image": "rabbitmq:4.2-management-alpine@sha256:77ca2ba3621a95208918e6e331199a6c81129690bf7fc570dc61b6e64726840a",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:77ca2ba3621a95208918e6e331199a6c81129690bf7fc570dc61b6e64726840a",
+      "manifest_type": "index",
+      "name": "rabbitmq",
+      "platforms": [
+        "linux/386",
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64",
+        "linux/ppc64le",
+        "linux/riscv64",
+        "linux/s390x"
+      ]
+    },
+    {
+      "image": "redis:7.2.16-alpine3.21@sha256:f2c5eb3d970536f4bd6538875f650cc8482284fc828d7de20fd25a5f16fa7fdc",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:f2c5eb3d970536f4bd6538875f650cc8482284fc828d7de20fd25a5f16fa7fdc",
+      "manifest_type": "image",
+      "name": "redis",
+      "platforms": [
+        "linux/amd64"
+      ]
+    },
+    {
+      "image": "gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.18.0@sha256:1f25a6d95063a031541961fc6256692e0f5e4981e7c9cef2c3d292d234df063f",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:1f25a6d95063a031541961fc6256692e0f5e4981e7c9cef2c3d292d234df063f",
+      "manifest_type": "index",
+      "name": "sql-proxy",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    {
+      "image": "grafana/tempo:3.1.1@sha256:64e2fbd56d9c2b3412a4b430a58ea59e91a670b1e75f920a0c702213ad145044",
+      "kind": "runtime",
+      "linux_amd64": true,
+      "manifest_digest": "sha256:64e2fbd56d9c2b3412a4b430a58ea59e91a670b1e75f920a0c702213ad145044",
+      "manifest_type": "index",
+      "name": "tempo",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    }
+  ],
+  "method": "Official OCI Distribution Registry APIs; fetched each pinned manifest by digest and checked index platforms or leaf config architecture.",
+  "required_platform": "linux/amd64",
+  "schema_version": 1
+}

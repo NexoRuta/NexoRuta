@@ -5,7 +5,10 @@ resource "google_storage_bucket" "delivery" {
   public_access_prevention    = "enforced"
   force_destroy               = false
   lifecycle_rule {
-    condition { age = 30 }
+    condition {
+      age            = 30
+      matches_prefix = ["sources/"]
+    }
     action { type = "Delete" }
   }
   depends_on = [google_project_service.required]

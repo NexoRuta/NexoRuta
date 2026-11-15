@@ -29,6 +29,7 @@ import urllib.request
 BASE = Path("/srv/nexoruta")
 APPS = ("api", "worker-rabbit", "worker-kafka", "worker-push", "worker-webhooks", "admin", "backoffice", "commerce", "tracking",
         "grafana", "otel-collector", "alloy")
+APP_IMAGE_SERVICES = ("api", "worker", "admin", "backoffice", "commerce", "tracking")
 SHARED = ("rabbitmq", "kafka", "mongo", "mailpit", "proxy", "prometheus", "prometheus-write-gateway",
           "gcp-metrics-collector", "loki", "tempo")
 OBSERVABILITY_CORE = ("prometheus", "prometheus-write-gateway", "gcp-metrics-collector", "loki", "tempo")
@@ -128,11 +129,165 @@ def extract(data, destination):
                 directory.chmod(0o755)
             elif directory.is_file():
                 directory.chmod(0o644)
-        dashboards = destination / "grafana/dashboards"
-        if dashboards.exists():
-            dashboards.chmod(0o755)
-            for path in dashboards.rglob("*"):
-                path.chmod(0o755 if path.is_dir() else 0o644)
+    dashboards = destination / "grafana/dashboards"
+    if dashboards.exists():
+        dashboards.chmod(0o755)
+        for path in dashboards.rglob("*"):
+            path.chmod(0o755 if path.is_dir() else 0o644)
+
+
+def validate_release_manifest(manifest, release, project_id, zone):
+    sha = r"[a-f0-9]{40}"
+    hex_256 = r"[a-f0-9]{64}"
+    release_pattern = r"release-[a-f0-9]{32}"
+
+    def matches(pattern, value):
+        return isinstance(value, str) and re.fullmatch(pattern, value) is not None
+
+    def valid_sources(value):
+        return (isinstance(value, dict) and set(value) == {"backend", "frontend", "mobile"}
+                and all(matches(sha, item) for item in value.values()))
+
+    if (not isinstance(manifest, dict) or manifest.get("manifest_version") != 2
+            or manifest.get("release") != release or manifest.get("project_id") != project_id
+            or not matches(r"[a-z]+-[a-z]+[0-9]", manifest.get("region"))):
+        raise ValueError("Release manifest identity is invalid")
+    region = zone.rsplit("-", 1)[0]
+    if manifest["region"] != region:
+        raise ValueError("Release manifest region does not match this VM")
+    if not matches(hex_256, manifest.get("bundle_sha256")):
+        raise ValueError("Release manifest has no valid bundle checksum")
+    sources = manifest.get("sources")
+    if not valid_sources(sources) or not matches(sha, manifest.get("root_sha")):
+        raise ValueError("Release manifest has invalid root or component sources")
+    registry = f"{region}-docker.pkg.dev/{project_id}/nexoruta"
+    images = manifest.get("images")
+    if (not isinstance(images, dict) or set(images) != set(APP_IMAGE_SERVICES)
+            or any(not matches(re.escape(f"{registry}/{name}@sha256:") + hex_256, images.get(name))
+                   for name in APP_IMAGE_SERVICES)):
+        raise ValueError("Release manifest has incomplete or unpinned application images")
+    image_sources = manifest.get("image_sources")
+    if (not isinstance(image_sources, dict) or set(image_sources) != set(APP_IMAGE_SERVICES)
+            or any(image_sources[name] != sources["backend" if name in ("api", "worker") else "frontend"]
+                   for name in APP_IMAGE_SERVICES)):
+        raise ValueError("Release images do not match the recorded source gitlinks")
+    built = manifest.get("built_images")
+    reused = manifest.get("reused_images")
+    if (not isinstance(built, list) or any(not isinstance(name, str) or name not in APP_IMAGE_SERVICES for name in built)
+            or len(built) != len(set(built)) or not isinstance(reused, dict)
+            or set(built).intersection(reused) or set(built).union(reused) != set(APP_IMAGE_SERVICES)
+            or any(not matches(release_pattern, value) for value in reused.values())):
+        raise ValueError("Release manifest has incomplete image provenance")
+    order = manifest.get("publication_order")
+    if (not isinstance(order, list) or len(order) != 2
+            or any(type(value) is not int or value < 1 for value in order)):
+        raise ValueError("Release manifest has invalid publication order")
+    bundle_source = manifest.get("bundle_source")
+    if (not isinstance(bundle_source, dict) or not matches(sha, bundle_source.get("root_sha"))
+            or not matches(sha, bundle_source.get("backend_sha"))
+            or type(manifest.get("bundle_rebuilt")) is not bool
+            or not matches(hex_256, manifest.get("deployment_images_sha256"))):
+        raise ValueError("Release manifest has incomplete bundle provenance")
+    if manifest["bundle_rebuilt"] and (
+        bundle_source["root_sha"] != manifest["root_sha"]
+        or bundle_source["backend_sha"] != sources["backend"]
+    ):
+        raise ValueError("Release bundle does not match the recorded source snapshot")
+    channel = manifest.get("channel")
+    if channel == "main":
+        ci = manifest.get("ci_evidence")
+        if (not matches(r"integration-[1-9][0-9]*-[1-9][0-9]*", manifest.get("integration_tag"))
+                or not isinstance(ci, dict) or ci.get("schema_version") != 1
+                or not isinstance(ci.get("repository_id"), str) or not ci["repository_id"].isdigit()
+                or ci.get("workflow_path") != ".github/workflows/ci.yml"
+                or ci.get("event") != "pull_request" or ci.get("base_branch") != "main"
+                or ci.get("head_branch") != "develop"
+                or ci.get("release_root_sha") != manifest["root_sha"]
+                or ci.get("sources") != sources or not matches(sha, ci.get("root_sha"))
+                or not matches(sha, ci.get("root_tree")) or not matches(hex_256, ci.get("plan_sha256"))):
+            raise ValueError("Main release manifest has no valid protected CI identity")
+        artifact = ci.get("artifact")
+        if (type(ci.get("run_id")) is not int or ci["run_id"] < 1
+                or type(ci.get("run_attempt")) is not int or ci["run_attempt"] < 1
+                or type(ci.get("pull_request")) is not int or ci["pull_request"] < 1
+                or not isinstance(artifact, dict) or type(artifact.get("id")) is not int or artifact["id"] < 1
+                or artifact.get("name") != f"nfr14-ci-evidence-{ci['run_attempt']}"
+                or not matches(r"sha256:[a-f0-9]{64}", artifact.get("digest"))):
+            raise ValueError("Main release manifest has an invalid CI artifact identity")
+        proof = manifest.get("android_verification")
+        if (not isinstance(proof, dict) or proof.get("schema_version") != 1
+                or not matches(hex_256, proof.get("android_input_sha256"))
+                or proof.get("android_input_sha256") != manifest.get("android_input_sha256")
+                or not matches(sha, proof.get("mobile_sha"))
+                or proof.get("mobile_sha") != manifest.get("android_verified_mobile_sha")
+                or not matches(release_pattern, proof.get("origin_release"))):
+            raise ValueError("Main release manifest has no valid Android verification proof")
+        proof_ci = proof.get("verified_by")
+        if not isinstance(proof_ci, dict):
+            raise ValueError("Main release Android proof has no CI identity")
+        proof_artifact = proof_ci.get("artifact")
+        proof_sources = proof_ci.get("sources")
+        if (proof_ci.get("workflow_path") != ".github/workflows/ci.yml"
+                or proof_ci.get("event") != "pull_request"
+                or proof_ci.get("base_branch") != "main" or proof_ci.get("head_branch") != "develop"
+                or proof_ci.get("head_repository_id") != proof_ci.get("repository_id")
+                or not isinstance(proof_ci.get("repository_id"), str) or not proof_ci["repository_id"].isdigit()
+                or type(proof_ci.get("run_id")) is not int or proof_ci["run_id"] < 1
+                or type(proof_ci.get("run_attempt")) is not int or proof_ci["run_attempt"] < 1
+                or not valid_sources(proof_sources) or proof_sources["mobile"] != proof.get("mobile_sha")
+                or not matches(sha, proof_ci.get("root_sha")) or not matches(sha, proof_ci.get("root_tree"))
+                or not isinstance(proof_artifact, dict) or type(proof_artifact.get("id")) is not int
+                or proof_artifact["id"] < 1
+                or proof_artifact.get("name") != f"nfr14-ci-evidence-{proof_ci.get('run_attempt')}"
+                or not matches(r"sha256:[a-f0-9]{64}", proof_artifact.get("digest"))):
+            raise ValueError("Main release Android proof is not linked to a completed CI artifact")
+    elif channel == "develop":
+        if (manifest.get("source_ref") != "refs/heads/develop" or manifest.get("ci_evidence") is not None
+                or manifest.get("android_verification") is not None
+                or manifest.get("android_input_sha256") is not None
+                or manifest.get("android_verified_mobile_sha") is not None):
+            raise ValueError("Develop release cannot claim protected CI or Android verification")
+    else:
+        raise ValueError("Release manifest has an unsupported channel")
+    return manifest
+
+
+def validate_bundle_inventory(manifest, release_directory):
+    module_path = Path(release_directory) / "image_inventory.py"
+    inventory_path = Path(release_directory) / "image-inventory.json"
+    ci_path = Path(release_directory) / "ci_evidence.py"
+    integration_path = Path(release_directory) / "integration.py"
+    host_versions_path = Path(release_directory) / "host_versions.py"
+    deployment_health_path = Path(release_directory) / "deployment_health.py"
+    if (not module_path.is_file() or not inventory_path.is_file() or not ci_path.is_file()
+            or not integration_path.is_file() or not host_versions_path.is_file()
+            or not deployment_health_path.is_file()):
+        raise ValueError("Release bundle is missing its deployment image inventory")
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("nexoruta_release_image_inventory", module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    module.validate_inventory(inventory)
+    module.validate_inventory(manifest.get("deployment_images"))
+    if (inventory != manifest.get("deployment_images")
+            or module.checksum(inventory) != manifest.get("deployment_images_sha256")):
+        raise ValueError("Release bundle image inventory does not match its manifest")
+    previous_integration = sys.modules.pop("integration", None)
+    release_path = str(Path(release_directory))
+    sys.path.insert(0, release_path)
+    try:
+        ci_spec = importlib.util.spec_from_file_location("nexoruta_release_ci_evidence", ci_path)
+        ci_module = importlib.util.module_from_spec(ci_spec)
+        ci_spec.loader.exec_module(ci_module)
+        if manifest.get("channel") == "main":
+            ci_module.validate_manifest_android(manifest)
+    finally:
+        sys.path.remove(release_path)
+        sys.modules.pop("integration", None)
+        if previous_integration is not None:
+            sys.modules["integration"] = previous_integration
+    return inventory
 
 
 def private_file(path, value):
@@ -263,6 +418,10 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
             raise ValueError("Release image must be pinned to a digest in the expected repository")
         result[f"{name.upper()}_IMAGE"] = image
     if hosting is not None:
+        actor_password = runtime.get("demo_actor_password")
+        if (not isinstance(actor_password, str) or len(actor_password) < 16
+                or any(character in actor_password for character in "\r\n\x00")):
+            raise ValueError("Runtime secret is missing a valid general demo actor password")
         if node not in ("a", "b") or not re.fullmatch(r"release-[a-f0-9]{32}", release or ""):
             raise ValueError("A shared deployment needs a valid node and release")
         for address in (private_ip, runtime["frontend_ip"]):
@@ -305,6 +464,7 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
         result.update({
             "NODE_NAME": node, "NODE_PRIVATE_IP": private_ip, "RELEASE_ID": release,
             "SERVICES_HOST": runtime["services_host"], "ALLOWED_HOSTS": ";".join(sorted(allowed_hosts)),
+            "DEMO_DATA_ACTOR_PASSWORD": actor_password,
             "NEXORUTA_CACHE_ENABLED": cache_enabled,
             "REDIS_HOST": redis["host"], "REDIS_PORT": redis["port"], "REDIS_AUTH": redis_password,
             "REDIS_CONFIG_DIR": str(BASE / "redis"),
@@ -650,7 +810,61 @@ def bridge_subnets(deployment):
     return subnets
 
 
+def collect_release_host_versions(module, path):
+    return module.collect_host_versions(path)
+
+
+def release_module(directory, filename, module_name):
+    import importlib.util
+    path = Path(directory) / filename
+    if not path.is_file():
+        raise FileNotFoundError(f"The release bundle is missing {filename}")
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"The release bundle module {filename} cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def compose_health_snapshot(deployment, node, cache_enabled):
+    module = release_module(deployment.directory, "deployment_health.py",
+                            "nexoruta_release_deployment_health")
+    container_ids = deployment.execute(
+        "docker", "ps", "--quiet", "--filter", "label=com.docker.compose.project=nexoruta-demo",
+        capture=True,
+    ).splitlines()
+    if (not container_ids or any(not re.fullmatch(r"[a-f0-9]{12,64}", item)
+                                 for item in container_ids)):
+        raise RuntimeError("The active Compose container inventory is empty or invalid")
+    template = (
+        '{{index .Config.Labels "com.docker.compose.service"}}\t'
+        '{{.State.Status}}\t'
+        '{{if .State.Health}}{{.State.Health.Status}}{{else}}not-configured{{end}}'
+    )
+    output = deployment.execute("docker", "inspect", "--format=" + template, *container_ids, capture=True)
+    lines = output.splitlines()
+    if len(lines) != len(container_ids):
+        raise RuntimeError("Docker returned an incomplete Compose health inventory")
+    services = []
+    for line in lines:
+        fields = line.split("\t")
+        if len(fields) != 3:
+            raise RuntimeError("Docker returned an invalid Compose health record")
+        service, state, health = fields
+        services.append({"service": service, "state": state, "health": health})
+    return module.sanitize_node_snapshot({"node": node, "services": services}, node, cache_enabled)
+
+
 def prepare(args, deployment, runtime, integrations, hosting, redis_identity, manifest, private_ip):
+    host_versions_path = deployment.directory / "host_versions.py"
+    if not host_versions_path.is_file():
+        raise FileNotFoundError("The release bundle is missing host version validation")
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("nexoruta_release_host_versions", host_versions_path)
+    host_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(host_module)
+    host_version_record = collect_release_host_versions(host_module, BASE / "host-versions.json")
     cache_enabled = caching_enabled(integrations)
 
     def configure_and_pull():
@@ -750,13 +964,16 @@ def prepare(args, deployment, runtime, integrations, hosting, redis_identity, ma
                      "redis_subnet_cidr": runtime["subnet_cidr"],
                      "expires_at": args.deadline}))
         deployment.execute("systemctl", "restart", "nexoruta-monitor.service")
-        private_file(deployment.directory / "prepared.json", json.dumps({"node": args.node, "deadline": args.deadline}))
+        private_file(deployment.directory / "prepared.json", json.dumps({
+            "node": args.node, "deadline": args.deadline, "cache_enabled": cache_enabled,
+        }))
     deployment.measure("install_monitoring_and_mark_prepared", install_monitoring_configuration)
-    return {"cache_enabled": cache_enabled, "redis_node": "b", "redis_port": runtime["redis"]["port"],
+    return {"cache_enabled": cache_enabled, "host_versions": host_version_record,
+            "redis_node": "b", "redis_port": runtime["redis"]["port"],
             "redis_server_reconciled": args.node == "b" and cache_enabled}
 
 
-def apply(args, deployment, private_ip):
+def apply(args, deployment, private_ip, cache_enabled):
     try:
         def start_apps():
             try:
@@ -768,7 +985,12 @@ def apply(args, deployment, private_ip):
                 deployment.compose("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", *APPS)
         deployment.measure("start_and_wait_for_apps", start_apps)
         deployment.measure("direct_health_checks", lambda: direct_health(private_ip))
+        compose_health = deployment.measure(
+            "compose_service_health_inventory",
+            lambda: compose_health_snapshot(deployment, args.node, cache_enabled),
+        )
         private_file(BASE / "current-release", args.release + "\n")
+        return {"compose_health": compose_health}
     except Exception as error:
         print(json.dumps({"stage": "apply", "node": args.node, "release": args.release,
                           "status": "failed"}))
@@ -782,6 +1004,36 @@ class MailSmokeError(RuntimeError):
     def __init__(self, message, http_status=None):
         super().__init__(message)
         self.http_status = http_status
+
+
+def validate_authenticated_identity(identity, role, email, organization_ids):
+    expected = {
+        "admin": ("admin@nexoruta.test", "Plataforma"),
+        "operator": ("operador@nexoruta.test", "Operador"),
+        "commerce": ("comercio@nexoruta.test", "Comercio"),
+    }
+    if role not in expected or not isinstance(identity, dict):
+        raise RuntimeError(f"Authenticated actor read returned an invalid identity: {role}")
+    expected_email, expected_type = expected[role]
+    if (not isinstance(email, str) or email.casefold() != expected_email
+            or not isinstance(identity.get("usuarioEmail"), str)
+            or identity["usuarioEmail"].casefold() != expected_email
+            or identity.get("tipo") != expected_type):
+        raise RuntimeError(f"Authenticated actor read returned the wrong actor: {role}")
+    operator_id = identity.get("operadorId")
+    commerce_id = identity.get("comercioId")
+    if role == "admin":
+        valid_organization = operator_id is None and commerce_id is None
+    elif role == "operator":
+        expected_operator_id = organization_ids.get("operator")
+        valid_organization = (isinstance(expected_operator_id, str) and bool(expected_operator_id)
+                              and operator_id == expected_operator_id and commerce_id is None)
+    else:
+        expected_commerce_id = organization_ids.get("commerce")
+        valid_organization = (isinstance(expected_commerce_id, str) and bool(expected_commerce_id)
+                              and commerce_id == expected_commerce_id and operator_id is None)
+    if not valid_organization:
+        raise RuntimeError(f"Authenticated actor read returned the wrong organization: {role}")
 
 
 def smoke(runtime, check_accounts=True):
@@ -827,12 +1079,34 @@ def smoke(runtime, check_accounts=True):
         raise MailSmokeError("The demo mail inbox did not become available", last_status)
     # A database-backed login exercises the migrated schema and runtime RLS role.
     accounts = (("admin", "admin@nexoruta.test"), ("operator", "operador@nexoruta.test"), ("commerce", "comercio@nexoruta.test")) if check_accounts else ()
+    authenticated_reads = []
     for role, email in accounts:
         payload = json.dumps({"email": email, "password": runtime["passwords"][role]}).encode()
         request = urllib.request.Request(endpoints["api"] + "/api/auth/login", data=payload, headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=20) as response:
             if response.status != 200:
                 raise RuntimeError(f"Bootstrap login failed: {role}")
+            try:
+                login = json.loads(response.read())
+            except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                raise RuntimeError(f"Bootstrap login returned an invalid response: {role}") from error
+        access_token = login.get("accessToken") if isinstance(login, dict) else None
+        if not isinstance(access_token, str) or not access_token or any(c in access_token for c in "\r\n\x00"):
+            raise RuntimeError(f"Bootstrap login returned no access token: {role}")
+        request = urllib.request.Request(
+            endpoints["api"] + "/api/usuarios/actual",
+            headers={"Authorization": "Bearer " + access_token, "Accept": "application/json"},
+        )
+        with urllib.request.urlopen(request, timeout=20) as response:
+            if response.status != 200:
+                raise RuntimeError(f"Authenticated actor read failed: {role}")
+            try:
+                identity = json.loads(response.read())
+            except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                raise RuntimeError(f"Authenticated actor read returned an invalid response: {role}") from error
+        validate_authenticated_identity(identity, role, email, runtime["organization_ids"])
+        authenticated_reads.append({"role": role, "login": "passed", "actor_read": "passed"})
+    return {"authenticated_reads": authenticated_reads}
 
 
 def main():
@@ -882,26 +1156,37 @@ def _run_stage(args, timings):
         fcntl.flock(lock, fcntl.LOCK_EX)
         directory = BASE / "releases" / args.release
         manifest = None
+        project = None
+        zone_name = None
+        cache_enabled = None
         if args.stage == "prepare":
+            project = measure(timings, "read_vm_project_identity", lambda: metadata("project/project-id"))
+            zone_name = measure(timings, "read_vm_zone_identity", lambda: metadata("instance/zone").rsplit("/", 1)[-1])
             manifest = measure(timings, "download_manifest", lambda: json.loads(object_bytes(args.bucket, f"releases/{args.release}/manifest.json")))
-            if manifest["release"] != args.release:
-                raise ValueError("Manifest/release mismatch")
+            validate_release_manifest(manifest, args.release, project, zone_name)
             bundle = measure(timings, "download_bundle", lambda: object_bytes(args.bucket, f"releases/{args.release}/bundle.tar.gz"))
             if hashlib.sha256(bundle).hexdigest() != manifest["bundle_sha256"]:
                 raise ValueError("Bundle checksum mismatch")
             directory.mkdir(parents=True, exist_ok=True)
             measure(timings, "verify_and_extract_bundle", lambda: extract(bundle, directory))
+            validate_bundle_inventory(manifest, directory)
         else:
             prepared = json.loads((directory / "prepared.json").read_text(encoding="utf-8"))
-            if prepared != {"node": args.node, "deadline": args.deadline}:
+            if (not isinstance(prepared, dict)
+                    or set(prepared) != {"node", "deadline", "cache_enabled"}
+                    or type(prepared.get("cache_enabled")) is not bool
+                    or prepared != {"node": args.node, "deadline": args.deadline,
+                                    "cache_enabled": prepared.get("cache_enabled")}):
                 raise RuntimeError("The node was prepared for a different session")
-        project = measure(timings, "read_vm_project_identity", lambda: metadata("project/project-id"))
+            cache_enabled = prepared["cache_enabled"]
+        if project is None:
+            project = measure(timings, "read_vm_project_identity", lambda: metadata("project/project-id"))
         private_ip = measure(timings, "read_vm_private_ip", lambda: metadata("instance/network-interfaces/0/ip"))
         runtime = measure(timings, "read_runtime_secret", lambda: secret(project, "nexoruta-demo-runtime"))
         ipaddress.IPv4Address(private_ip)
         identity = runtime["nodes"][args.node]
         if (runtime["project_id"] != project or identity["name"] != metadata("instance/name")
-                or identity["zone"] != metadata("instance/zone").rsplit("/", 1)[-1]):
+                or identity["zone"] != (zone_name or metadata("instance/zone").rsplit("/", 1)[-1])):
             raise RuntimeError("The requested node does not match this VM identity")
         log_dir = BASE / "logs"
         log_dir.mkdir(exist_ok=True)
@@ -926,7 +1211,7 @@ def _run_stage(args, timings):
             elif args.stage == "migrate":
                 deployment.migrate(args.deadline)
             elif args.stage == "apply":
-                apply(args, deployment, private_ip)
+                result = apply(args, deployment, private_ip, cache_enabled)
             elif args.stage == "redis-smoke":
                 sys.path.insert(0, str(directory))
                 from redis_identity import validate_identity
@@ -939,8 +1224,8 @@ def _run_stage(args, timings):
                                      args.release, args.node)
             else:
                 deployment.measure("direct_health_checks", lambda: direct_health(private_ip))
-                deployment.measure("public_https_and_login_smoke", lambda: smoke(runtime))
-                result = {"endpoints": runtime["endpoints"]}
+                smoke_result = deployment.measure("public_https_and_login_smoke", lambda: smoke(runtime))
+                result = {"endpoints": runtime["endpoints"], **smoke_result}
             return result
 
 

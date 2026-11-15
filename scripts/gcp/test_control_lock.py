@@ -135,6 +135,23 @@ class ControlLockTests(unittest.TestCase):
         self.assertEqual([call.method for call in calls], ["GET", "GET", "POST", "DELETE"])
         self.assertTrue(all("private-token" not in call.full_url for call in calls))
 
+    def test_independent_lock_object_uses_its_own_generation_guard(self):
+        calls, replies = [], [{"generation": "2"}, {"owner": "a" * 32, "expires_at": 1000}]
+
+        @contextmanager
+        def opener(request, timeout):
+            calls.append(request)
+            yield io.BytesIO(json.dumps(replies.pop(0)).encode())
+
+        store = locks.JsonStorage("control-bucket", "private-token", opener=opener,
+                                  object_name="locks/nfr14-repro-control.json")
+        store.read()
+        self.assertIn("locks%2Fnfr14-repro-control.json", calls[0].full_url)
+        self.assertEqual(store.object_name, "locks/nfr14-repro-control.json")
+        for invalid in ("../escape", "locks/../escape", "/absolute", "locks\\escape", ""):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                locks.JsonStorage("control-bucket", "private-token", object_name=invalid)
+
 
 if __name__ == "__main__":
     unittest.main()

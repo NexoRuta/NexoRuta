@@ -45,14 +45,16 @@ No interviene en el tráfico de los usuarios. Firebase/IAM son servicios globale
 - `demo/`: red, subred, SSH por IAP, VMs A/B, Application Load Balancer e IP global,
   Hyperdisks, conexión privada a Cloud SQL, base, administrador de migraciones,
   claves/contraseñas generadas y DNS opcional.
+- `reproduction-project/`: módulo externo de creación/borrado controlado del
+  proyecto descartable NFR-14; su estado vive en el bucket de control externo.
 - `deploy/gcp/` en la raíz del repo: imagen .NET común,
   Compose de despliegue, proxy Caddy y comprobaciones SQL.
 - `scripts/gcp/`: bootstrap PowerShell, selección de commits, build, despliegue,
-  verificación de sesiones y pruebas.
+  recreación/verificación NFR-14, sesiones y pruebas.
 
 ```mermaid
 flowchart LR
-    A[Push a main o cambio de componente] --> B[CI de los tres main e infraestructura]
+    A[PR develop a main; gitlinks exactos] --> B[Integrated CI de la combinación exacta]
     B --> C[Cloud Build en Santiago]
     C --> D[Artifact Registry: seis imágenes por digest]
     D --> E[Publicar release completa del canal main]
@@ -61,11 +63,12 @@ flowchart LR
     P --> F[OpenTofu: Cloud SQL y dos VMs]
     U[Botón update manual] --> V[Leer última release publicada]
     E -.-> V
-    V -->|sesión activa| G[Actualizar A y B en rotación]
+    V -->|sesión activa| G[Retirar A y B; detener apps]
     V -->|sesión apagada| O[Finalizar sin encender]
     F --> H[Migraciones, RLS y datos iniciales]
-    G --> H
+    G --> J[Migración única; admitir B y luego A]
     H --> I[HTTPS y smoke tests]
+    J --> I
     I -->|start manual| Q[Publicar endpoints de la sesión]
     K[GCE: cuatro horas] --> L[Apagar las dos VMs]
     M[Scheduler y Workflows] --> L
@@ -75,9 +78,12 @@ flowchart LR
 ## Herramientas de terminal
 
 Se necesitan Git, Python 3.10+, **OpenTofu 1.13.1**, Google Cloud CLI, GitHub CLI y
-OpenSSH. PowerShell es suficiente en Windows; WSL no es un requisito del despliegue.
-Docker y .NET son opcionales para operar desde tu PC: GitHub ejecuta las pruebas,
-Cloud Build compila las imágenes y la VM instala Docker/Compose automáticamente.
+OpenSSH para operar desde una terminal. PowerShell o WSL sirven para estas tareas.
+El despliegue remoto ejecuta CI en GitHub, construye imágenes en Cloud Build e
+instala Docker/Compose en las VMs. Para validación local, `validate_compose.py`
+necesita Docker CLI/Compose, pero no un daemon; las pruebas backend de integración
+con Testcontainers sí necesitan un daemon Docker accesible. No se usa `.env` del
+equipo como fuente de configuración de GitHub Actions.
 
 ```powershell
 winget install --exact --id Google.CloudSDK
@@ -112,16 +118,38 @@ gh auth login --web
 gcloud projects list
 gcloud billing accounts list
 
-# Selecciona un proyecto existente; también se puede pasar -ProjectId explícito.
-./scripts/gcp/setup.ps1
+# Especifica el proyecto dedicado; también se puede ingresar cuando se solicite.
+./scripts/gcp/setup.ps1 -ProjectId ID_DEL_PROYECTO
 ```
 
-`setup.ps1` obtiene los IDs inmutables de GitHub, verifica facturación, genera la
-configuración local, muestra y aplica el plan de bootstrap, migra su estado a
-GCS y configura el environment/variables de GitHub. La cuenta de GitHub debe poder
-administrar el repo madre. La alerta es USD 80/mes **antes de créditos**, con
+`setup.ps1` delega el primer bootstrap a `bootstrap_setup.py`. Antes de inicializar
+OpenTofu, verifica el ID y número del proyecto explícito, el dueño/región del bucket
+GCS, los IDs inmutables del repositorio/owner de GitHub, la facturación activa y la
+capacidad `n4-custom-6-16384` en ambas zonas con al menos 12 vCPU regionales libres.
+No cambia el proyecto global de gcloud. Los inputs y planes transitorios quedan en
+un directorio privado y el plan rechaza cualquier delete/replacement. Un 403 o fallo
+de red no se interpreta como estado ausente; un bucket existente sin estado remoto
+no se adopta. Solo migra un estado local cuya identidad y propiedad del bucket
+coinciden con el destino explícito.
+
+El entorno creado es `nexoruta-demo`. La alerta es USD 80/mes **antes de créditos**, con
 umbrales de 50 %, 80 % y 100 %; es una alerta, no un límite de gasto. Si la cuenta
 no permite crearla, usar `-SkipBudget` y configurar el presupuesto con su administrador.
+
+GitHub Actions usa WIF con el sujeto inmutable basado en IDs de repo/owner y
+`nexoruta-demo`. El código actual del bootstrap acepta ese formato exacto. La
+observación remota del 14/11/2026 encontró que el provider todavía aceptaba,
+además, el sujeto anterior basado en nombre; ese cambio de bootstrap no se ha
+aplicado en GCP. Consultar la [evidencia OIDC](../../docs/auditorias/nfr-14/evidencia/oidc-profile-2026-11-14.json)
+y verificar el provider live antes de operar. Si falla WIF, no agregar subjects
+comodín ni reactivar el formato antiguo; corregir la condición con una identidad
+administrativa y revisar el plan exacto.
+
+La cuenta de ejecución `nexoruta-demo-deployer` conserva actualmente
+`roles/owner` y otros roles de proyecto en el módulo compartido. Es un riesgo
+conocido, no una declaración de mínimo privilegio. La identidad que prepara
+proyectos de ensayo y administra billing debe ser distinta; este bootstrap no
+le concede permisos de organización ni de cuenta de facturación.
 
 El estado y los planes contienen contraseñas generadas. No publicarlos ni subirlos
 como artifacts. Los buckets son privados, con acceso IAM limitado y versionado
@@ -162,12 +190,13 @@ mostrados por `tofu output dns_name_servers`. Con `GCP_MANAGE_DNS=false`, crear
 los registros en el proveedor existente apuntando a la IP estática. La emisión de
 certificados necesita que esos nombres resuelvan y que 80/443 sean accesibles.
 
-El bloque `x-app-settings` de `compose.yaml` configura las variables públicas de SMTP y Mapbox; el
-environment `nexoruta-demo` de GitHub contiene las credenciales SMTP y Geoapify.
-El runner combina ambas fuentes y las sincroniza al secreto privado
-`nexoruta-demo-integrations` de GCP antes de iniciar o actualizar la demo. Usa Mailpit
-inicialmente: los
-correos se capturan en la demo, no se entregan a buzones externos.
+El bloque `x-app-settings` de `compose.yaml` configura las variables públicas de
+SMTP y Mapbox. El runner combina esos valores con los secretos SMTP/Geoapify si
+están configurados y sincroniza la integración al secreto privado
+`nexoruta-demo-integrations` de GCP antes de iniciar o actualizar la demo. La
+inspección de nombres del Environment del 14/11/2026 no encontró secretos SMTP ni
+Geoapify configurados; no se leyeron valores secretos. Mailpit es el destino
+inicial: los correos se capturan en la demo y no se envían a buzones externos.
 Su interfaz HTTPS requiere usuario `demo` y la contraseña generada en el secreto
 runtime. Para correo real, configurar un SMTP válido usando 587/465 según proveedor.
 
@@ -211,13 +240,13 @@ de `develop` a `main`; su merge dispara la publicación, sin repetir las pruebas
 **No inicia la VM ni actualiza una demo activa.** Iniciar, actualizar y apagar requieren `workflow_dispatch`;
 el script también rechaza operaciones de VM originadas en eventos automáticos.
 
-En GitHub: **Actions → NexoRuta - publish images / manual VM controls → Run workflow**,
+En GitHub: **Actions → NexoRuta - publish integration images → Run workflow**,
 con branch `main`, y elegir una operación:
 
 | Operación | Comportamiento |
 | --- | --- |
 | `start` | Selecciona la última release completa ya publicada e inicia dos VMs por cuatro horas con esas imágenes. No ejecuta CI ni construye imágenes. |
-| `update` | Lee la última release completa publicada de `main` y rota el despliegue por B y A. No compila ni enciende VMs detenidas; conserva el vencimiento. |
+| `update` | Lee la última release completa publicada de `main`; retira ambos nodos, detiene apps, migra una vez y admite B/A. Hay corte. No compila ni enciende VMs detenidas; conserva el vencimiento. |
 | `stop` | Apaga las dos VMs y conserva Cloud SQL encendido. |
 
 El canal `main` se registra en `channels/main.json` del bucket privado de delivery
@@ -259,9 +288,12 @@ gh run download ID_CI --repo NexoRuta/NexoRuta --name android-verification-SHA_M
 
 El resumen muestra las URLs y el vencimiento. Cada VM instala Docker y conserva
 su disco y volúmenes; los servicios persistentes (RabbitMQ, Kafka y MongoDB) viven
-solo en A y B los consume por la red privada. Las dos APIs usan Memorystore para la
-caché distribuida con endpoint privado, AUTH y TLS; la conexión se valida desde
-ambas VMs y se observa en el monitor. El despliegue prepara permisos de migración, aplica migraciones, aprovisiona
+solo en A y B los consume por la red privada. El runtime usa Redis TLS/AUTH en un
+contenedor del nodo B, accesible desde ambas VMs. La configuración IaC también
+declara un `google_redis_instance.cache`; el inventario del 14/11/2026 observó
+Memorystore Basic de 1 GiB `READY`, aunque el runtime no lo usa. Mantenerlo en el
+inventario/costo y no retirarlo sin una decisión explícita. El despliegue prepara
+permisos de migración, aplica migraciones, aprovisiona
 logins runtime sin `cloudsqlsuperuser`/`BYPASSRLS`, importa el catálogo de Uruguay,
 crea cuentas/organizaciones iniciales y levanta todos los servicios.
 
@@ -270,10 +302,10 @@ de salud de `monitor`; también se verifica que Grafana y Mailpit exijan login. 
 despliegue se prueba login real contra la base. Los datos y contraseñas posteriores no se
 reinician. Las cuentas iniciales son `admin@nexoruta.test`, `operador@nexoruta.test`
 y `comercio@nexoruta.test`; sus contraseñas están en el secreto runtime, no en el repo.
-Cada `update` tiene un corte breve: retira ambos nodos del balanceador, detiene
-las apps, migra una vez y aplica la release objetivo. Si falla una migración, las
-apps quedan detenidas; si falla un nodo después, queda fuera del balanceador y
-el otro nodo nuevo puede seguir atendiendo. No se recuperan automáticamente
+Cada `update` tiene un corte deliberado: retira ambos nodos del balanceador,
+detiene las apps, migra una vez y aplica la release objetivo, admitiendo B y luego
+A. No es una rotación sin interrupción. Si falla una migración, las apps quedan
+detenidas; si falla un nodo después, no se recuperan automáticamente
 contenedores anteriores ni se revierten migraciones; corregir el código y
 desplegar una release nueva. No hay recuperación mediante backups de la demo.
 
@@ -362,19 +394,24 @@ comprueba cada minuto si venció la lease y ordena detener las VMs. Cloud SQL
 permanece encendido y se factura continuamente. Las operaciones usan concurrency
 en GitHub y bloqueo del estado.
 
-Memorystore Basic de 1 GiB se crea con la primera sesión y **permanece creado y
-facturable cuando se apagan las VMs**. El control manual y el guard apagan las VMs,
-pero no destruyen servicios administrados. Sus entradas no son datos durables: tienen
-TTL y se pueden reconstruir desde PostgreSQL. Retirar Memorystore requiere un cambio
-operativo explícito de infraestructura; no se elimina al detener la demo.
+Redis en contenedor vive con la VM B y se detiene cuando B se apaga. Memorystore
+Basic de 1 GiB es un recurso adicional declarado en IaC y observado `READY` en el
+inventario del 14/11/2026; el runtime actual no lo usa. Tanto este recurso como
+SQL, discos e IP pueden seguir generando costo al detener A/B. No retirar
+Memorystore en esta operación: primero comprobar dependencias, estado IaC y costo.
 
-Apagar conserva discos, IP, secretos, imágenes y Memorystore: esos recursos siguen
-cobrando. Los precios anteriores de Iowa no corresponden a Santiago ni a N4.
-El crédito de USD 300 dura 90 días desde el alta y se comparte con otros consumos
-de la cuenta. La alerta de USD 80/mes deja margen para un proyecto de hasta tres
-meses; monitorear también builds y almacenamiento. Las alertas no suspenden gasto.
-Al cerrar el proyecto, exportar datos y retirar explícitamente las protecciones
-de SQL/discos/bucket antes de `tofu destroy`; el cierre es una operación separada.
+Apagar conserva discos, IP, secretos, imágenes y servicios administrados: esos
+recursos pueden seguir cobrando. La estimación antigua de [costs.md](costs.md)
+describe una topología anterior y no se debe usar como costo actual. El presupuesto
+USD 80/mes observado es una alerta antes de créditos, no un límite de gasto. El
+consumo real, tarifa actual, créditos y plazo restante no están acreditados;
+consultar [el estado de costos NFR-14](../../docs/auditorias/nfr-14/costos.md).
+
+La baja definitiva de la demo persistente requiere exportar/verificar datos y
+una decisión deliberada para cambiar las protecciones de SQL, discos y buckets.
+Un `tofu plan -destroy` bloqueado por esas protecciones no es evidencia de
+destrucción. La prueba de destrucción implementada para NFR-14 se dirige solo al
+proyecto descartable y está documentada en el [runbook](../../docs/auditorias/nfr-14/runbook.md).
 
 ## Diagnóstico y validación
 
@@ -430,6 +467,25 @@ Referencias: [regiones](https://docs.cloud.google.com/compute/docs/regions-zones
 
 ## Deploy directo desde develop para pruebas en GCP
 
-Desde **Actions -> NexoRuta - manual VM controls**, seleccione la rama `develop`. `start` o `update` construye el commit ra?z elegido y los tres SHAs fijados por sus gitlinks, publica seis im?genes completas en el canal `develop` y luego despliega esa version. Esta ruta no ejecuta el Integrated CI; el manifiesto registra `root_sha`, `sources` y `source_ref`, y no la presenta como una integraci?n probada. Inicie despu?s `load-tests.yml` tambi?n desde `develop`.
+Desde **Actions → NexoRuta - publish integration images**, seleccione la rama
+`develop`. `start` o `update` comprueba el commit elegido y los tres SHAs fijados
+por sus gitlinks, publica seis imágenes en `channels/develop.json` y después
+despliega esa versión. Esta ruta no ejecuta Integrated CI ni crea una prerelease
+de main. El manifiesto registra `root_sha`, `sources` y `source_ref`.
 
-Los canales `main` y `develop` est?n separados, pero comparten las mismas VMs y Cloud SQL en el proyecto demo. Las migraciones de `develop` cambian el esquema compartido y pueden impedir volver a ejecutar una version anterior de `main`. Para habilitar el bot?n, aplique primero el cambio de WIF en `infra/gcp/bootstrap` y permita la rama `develop` en el environment GitHub `nexoruta-demo`.
+Los canales `main` y `develop` son punteros separados, pero comparten las mismas
+VMs, Cloud SQL y datos. Las migraciones de `develop` cambian el esquema compartido
+y pueden impedir volver a ejecutar una versión anterior de `main`. `start` y
+`update` desde develop deben tratarse como operaciones sobre la demo compartida.
+
+## Recreación y aceptación de NFR-14
+
+El módulo `infra/gcp/reproduction-project`, `scripts/gcp/reproduce.py` y el
+workflow manual `reproduce.yml` implementan un proyecto descartable, estado
+separado, inventario externo, inspección, planes de creación/destrucción y
+verificación automatizada. La identidad y el bucket de control permanecen fuera
+del proyecto de demo y del descartable. Este camino no se ha ejecutado en GCP;
+no se han creado ni limpiado proyectos de ensayo ni se ha lanzado la publicación
+de la candidata en `main`. Consultar el [runbook](../../docs/auditorias/nfr-14/runbook.md)
+y la [matriz de aceptación](../../docs/auditorias/nfr-14/aceptacion.md) para los
+gates pendientes. La card permanece `In progress`.

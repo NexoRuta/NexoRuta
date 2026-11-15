@@ -67,8 +67,74 @@ variable "github_owner_id" {
   }
 }
 
+variable "github_environment" {
+  type        = string
+  description = "GitHub Actions environment included in the immutable OIDC subject."
+  default     = "nexoruta-demo"
+}
+
+variable "wif_profile" {
+  type        = string
+  description = "Supported workload identity profile used by the immutable provider condition."
+  default     = "demo"
+  validation {
+    condition     = contains(["demo", "reproduction"], var.wif_profile)
+    error_message = "wif_profile must be demo or reproduction."
+  }
+}
+
+variable "github_refs" {
+  type        = list(string)
+  description = "Exact Git refs allowed to obtain credentials from this project's provider."
+  default     = ["refs/heads/main", "refs/heads/develop"]
+  validation {
+    condition = length(var.github_refs) == length(toset(var.github_refs)) && (
+      toset(var.github_refs) == toset(["refs/heads/main", "refs/heads/develop"]) ||
+    toset(var.github_refs) == toset(["refs/heads/main"]))
+    error_message = "Only the demo main/develop profile or reproduction main-only profile is supported."
+  }
+}
+
+variable "github_events" {
+  type        = list(string)
+  description = "Exact GitHub Actions event types allowed by this project's provider."
+  default     = ["workflow_dispatch", "push"]
+  validation {
+    condition = length(var.github_events) == length(toset(var.github_events)) && (
+      toset(var.github_events) == toset(["workflow_dispatch", "push"]) ||
+    toset(var.github_events) == toset(["workflow_dispatch"]))
+    error_message = "Only the demo workflow_dispatch/push profile or reproduction workflow_dispatch profile is supported."
+  }
+}
+
+variable "github_workflows" {
+  type        = list(string)
+  description = "Exact workflow_ref claims allowed by this project's provider."
+  default = [
+    "NexoRuta/NexoRuta/.github/workflows/publish.yml@refs/heads/main",
+    "NexoRuta/NexoRuta/.github/workflows/vm-controls.yml@refs/heads/main",
+    "NexoRuta/NexoRuta/.github/workflows/vm-controls.yml@refs/heads/develop",
+    "NexoRuta/NexoRuta/.github/workflows/load-tests.yml@refs/heads/main",
+    "NexoRuta/NexoRuta/.github/workflows/load-tests.yml@refs/heads/develop",
+  ]
+  validation {
+    condition = length(var.github_workflows) == length(toset(var.github_workflows)) && (
+      toset(var.github_workflows) == toset([
+        "NexoRuta/NexoRuta/.github/workflows/publish.yml@refs/heads/main",
+        "NexoRuta/NexoRuta/.github/workflows/vm-controls.yml@refs/heads/main",
+        "NexoRuta/NexoRuta/.github/workflows/vm-controls.yml@refs/heads/develop",
+        "NexoRuta/NexoRuta/.github/workflows/load-tests.yml@refs/heads/main",
+        "NexoRuta/NexoRuta/.github/workflows/load-tests.yml@refs/heads/develop",
+    ]) || toset(var.github_workflows) == toset(["NexoRuta/NexoRuta/.github/workflows/reproduce.yml@refs/heads/main"]))
+    error_message = "Only the existing demo workflows or the main-only NFR-14 reproduction workflow is supported."
+  }
+}
+
 locals {
-  state_bucket = "${var.project_id}-tofu-state"
+  state_bucket     = "${var.project_id}-tofu-state"
+  github_refs      = join(", ", [for value in var.github_refs : "'${value}'"])
+  github_events    = join(", ", [for value in var.github_events : "'${value}'"])
+  github_workflows = join(", ", [for value in var.github_workflows : "'${value}'"])
   services = toset([
     "cloudresourcemanager.googleapis.com",
     "compute.googleapis.com",
@@ -267,13 +333,35 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "assertion.repository_id == '${var.github_repository_id}'",
     "assertion.repository_owner_id == '${var.github_owner_id}'",
     "assertion.repository == '${var.github_repository}'",
-    "assertion.ref in ['refs/heads/main', 'refs/heads/develop']",
-    "assertion.sub in ['repo:${var.github_repository}:environment:nexoruta-demo', 'repo:${split("/", var.github_repository)[0]}@${var.github_owner_id}/${split("/", var.github_repository)[1]}@${var.github_repository_id}:environment:nexoruta-demo']",
-    "assertion.workflow_ref in ['${var.github_repository}/.github/workflows/publish.yml@refs/heads/main', '${var.github_repository}/.github/workflows/vm-controls.yml@refs/heads/main', '${var.github_repository}/.github/workflows/vm-controls.yml@refs/heads/develop', '${var.github_repository}/.github/workflows/load-tests.yml@refs/heads/main', '${var.github_repository}/.github/workflows/load-tests.yml@refs/heads/develop']",
-    "assertion.event_name in ['workflow_dispatch', 'push']",
+    "assertion.ref in [${local.github_refs}]",
+    "assertion.sub == 'repo:${split("/", var.github_repository)[0]}@${var.github_owner_id}/${split("/", var.github_repository)[1]}@${var.github_repository_id}:environment:${var.github_environment}'",
+    "assertion.workflow_ref in [${local.github_workflows}]",
+    "assertion.event_name in [${local.github_events}]",
   ])
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
+  }
+  lifecycle {
+    precondition {
+      condition = var.wif_profile == "demo" ? (
+        var.github_environment == "nexoruta-demo" &&
+        toset(var.github_refs) == toset(["refs/heads/main", "refs/heads/develop"]) &&
+        toset(var.github_events) == toset(["workflow_dispatch", "push"]) &&
+        toset(var.github_workflows) == toset([
+          "NexoRuta/NexoRuta/.github/workflows/publish.yml@refs/heads/main",
+          "NexoRuta/NexoRuta/.github/workflows/vm-controls.yml@refs/heads/main",
+          "NexoRuta/NexoRuta/.github/workflows/vm-controls.yml@refs/heads/develop",
+          "NexoRuta/NexoRuta/.github/workflows/load-tests.yml@refs/heads/main",
+          "NexoRuta/NexoRuta/.github/workflows/load-tests.yml@refs/heads/develop",
+        ])
+        ) : (
+        var.github_environment == "nexoruta-demo" &&
+        toset(var.github_refs) == toset(["refs/heads/main"]) &&
+        toset(var.github_events) == toset(["workflow_dispatch"]) &&
+        toset(var.github_workflows) == toset(["NexoRuta/NexoRuta/.github/workflows/reproduce.yml@refs/heads/main"])
+      )
+      error_message = "The WIF profile inputs must exactly match the supported demo or NFR-14 reproduction workflow."
+    }
   }
 }
 
@@ -306,6 +394,20 @@ output "github_variables" {
     GCP_DEPLOY_SERVICE_ACCOUNT        = google_service_account.deployer.email
     GCP_LOAD_SERVICE_ACCOUNT          = google_service_account.load_controller.email
     GCP_LOAD_PREPARER_SERVICE_ACCOUNT = google_service_account.load_preparer.email
+  }
+}
+
+output "bootstrap_configuration" {
+  value = {
+    project_id           = var.project_id
+    project_number       = data.google_project.current.number
+    state_bucket         = google_storage_bucket.state.name
+    github_repository    = var.github_repository
+    github_repository_id = var.github_repository_id
+    github_owner_id      = var.github_owner_id
+    github_environment   = var.github_environment
+    wif_profile          = var.wif_profile
+    billing_account_id   = var.billing_account_id
   }
 }
 

@@ -71,9 +71,20 @@ resource "google_sql_database" "app" {
 }
 
 resource "random_password" "password" {
-  for_each = toset(["migrator", "api", "worker", "bootstrap", "rabbit", "mongo", "mail", "admin", "operator", "commerce", "keys_api", "keys_admin", "keys_backoffice", "keys_commerce", "keys_tracking", "monitor", "grafana"])
-  length   = 40
-  special  = false
+  for_each    = toset(["migrator", "api", "worker", "bootstrap", "rabbit", "mongo", "mail", "admin", "operator", "commerce", "keys_api", "keys_admin", "keys_backoffice", "keys_commerce", "keys_tracking", "monitor", "grafana"])
+  length      = 40
+  special     = false
+  min_lower   = 1
+  min_numeric = 1
+  min_upper   = 1
+}
+
+resource "random_password" "demo_actor" {
+  length      = 40
+  special     = false
+  min_lower   = 1
+  min_numeric = 1
+  min_upper   = 1
 }
 
 resource "random_bytes" "key" {
@@ -94,8 +105,7 @@ resource "google_sql_user" "migrator" {
 }
 
 locals {
-  demo_actor_password = "Demo12345!2026"
-  domain              = var.base_domain != "" ? var.base_domain : "${replace(google_compute_global_address.frontend.address, ".", "-")}.sslip.io"
+  domain = var.base_domain != "" ? var.base_domain : "${replace(google_compute_global_address.frontend.address, ".", "-")}.sslip.io"
   endpoints = {
     for name in ["api", "admin", "backoffice", "commerce", "tracking", "mail", "monitor"] : name => "https://${name}.${local.domain}"
   }
@@ -105,18 +115,19 @@ resource "google_secret_manager_secret_version" "runtime" {
   secret          = "projects/${var.project_id}/secrets/nexoruta-demo-runtime"
   deletion_policy = "ABANDON"
   secret_data = jsonencode({
-    project_id       = var.project_id
-    region           = local.region
-    services_host    = "nexoruta-demo.${var.zone}.c.${var.project_id}.internal"
-    subnet_cidr      = google_compute_subnetwork.demo.ip_cidr_range
-    frontend_ip      = google_compute_global_address.frontend.address
-    nodes            = { a = { name = local.name, zone = var.zone }, b = { name = "${local.name}-b", zone = var.secondary_zone } }
-    sql_connection   = google_sql_database_instance.demo.connection_name
-    sql_database     = google_sql_database.app.name
-    passwords        = { for key, item in random_password.password : key => key == "admin" ? local.demo_actor_password : item.result }
-    keys             = { for key, item in random_bytes.key : key => item.base64 }
-    organization_ids = { for key, item in random_uuid.organization : key => item.result }
-    endpoints        = local.endpoints
+    project_id          = var.project_id
+    region              = local.region
+    services_host       = "nexoruta-demo.${var.zone}.c.${var.project_id}.internal"
+    subnet_cidr         = google_compute_subnetwork.demo.ip_cidr_range
+    frontend_ip         = google_compute_global_address.frontend.address
+    nodes               = { a = { name = local.name, zone = var.zone }, b = { name = "${local.name}-b", zone = var.secondary_zone } }
+    sql_connection      = google_sql_database_instance.demo.connection_name
+    sql_database        = google_sql_database.app.name
+    passwords           = { for key, item in random_password.password : key => item.result }
+    demo_actor_password = random_password.demo_actor.result
+    keys                = { for key, item in random_bytes.key : key => item.base64 }
+    organization_ids    = { for key, item in random_uuid.organization : key => item.result }
+    endpoints           = local.endpoints
     redis = {
       # Internal DNS is derived from the existing B VM inventory. This avoids
       # a dependency cycle with the runtime secret that the VM itself consumes.
@@ -132,7 +143,7 @@ resource "google_secret_manager_secret_version" "load_preparer_credentials" {
   deletion_policy = "ABANDON"
   secret_data = jsonencode({
     email    = "admin@nexoruta.test"
-    password = local.demo_actor_password
+    password = random_password.password["admin"].result
   })
 }
 

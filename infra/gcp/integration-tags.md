@@ -1,94 +1,94 @@
-# Versiones automáticas mediante tags de integración
+# Tags de integración y canales de publicación
 
-Cada integración publicada se identifica con un tag anotado del repo madre:
-`integration-<GITHUB_RUN_ID>-<GITHUB_RUN_ATTEMPT>`. No se abre una PR ni se hace
-un commit automático sobre `main` o `develop`.
+## Qué activa cada workflow
 
-## Secuencia
+- `.github/workflows/ci.yml` corre para PRs hacia `develop`/`main`, `workflow_dispatch`
+  y el schedule semanal. Las PRs con destino `main` deben tener `develop` como
+  rama de origen. El CI prueba el commit raíz y sus tres gitlinks de Backend,
+  Frontend y Mobile; no sustituye esos punteros por las puntas actuales de sus ramas.
+- `.github/workflows/publish.yml` se activa únicamente con `push` a `main`. Consume
+  la combinación de gitlinks del commit que llegó a `main` y exige la evidencia
+  Integrated CI correspondiente antes de publicar. Cambiar una rama secundaria,
+  por sí solo, no dispara este workflow; integrar el gitlink en el repo raíz y
+  pasar por el gate de `main`.
+- `.github/workflows/vm-controls.yml` es manual (`workflow_dispatch`). Desde
+  `main`, `start` y `update` usan el canal `main`. Desde `develop`, esas dos
+  operaciones construyen los gitlinks exactos del commit seleccionado y avanzan
+  el canal `develop`, sin presentar el resultado como Integrated CI aprobado.
+  Ambos canales comparten las mismas VMs y Cloud SQL. `stop` detiene la sesión y
+  no publica una versión.
+- `.github/workflows/reproduce.yml` es manual y acepta solamente la rama `main`,
+  un `run_id` aislado y un tag main completo que el orquestador valida. Ver el
+  [runbook NFR-14](../../docs/auditorias/nfr-14/runbook.md).
 
-1. Un push al `main` del madre o la notificación de un componente solicita probar y publicar.
-   `start` manual no publica: selecciona la última release completa del canal.
-2. CI resuelve una sola vez los `main` de backend, frontend y mobile. Sus tres SHAs
-   se reutilizan para todas las pruebas de aplicaciones y Cloud SQL.
-3. Solo si todos los jobs de CI terminan bien, se crea un commit de integración
-   cuyo padre es el commit exacto del madre que ejecutó CI. Únicamente cambian los
-   tres gitlinks de submódulos; infraestructura y configuración conservan sus bytes.
-4. Se publica un tag anotado sobre ese commit. Los reintentos sobre el mismo tag
-   aceptan solamente el mismo commit; nunca se usa force push ni se mueve un tag.
-5. El build hace checkout del tag con sus submódulos y comprueba sus SHAs. No vuelve
-   a resolver ramas de componentes. Las seis imágenes se publican por digest y el
-   manifiesto incluye `integration_tag`, `root_sha`, `sources` y `publication_order`.
-6. Después de publicar imágenes y assets se crea una **GitHub prerelease** con ese
-   tag y el manifiesto completo en sus notas. No se marca como release estable/latest.
-7. `start` y `update` pueden desplegar la última release completa del canal. `start`
-   además enciende Cloud SQL y las dos VMs; no vuelve a ejecutar CI ni construye un APK.
+## Snapshot inmutable de main
 
-El tag significa **código probado**. La GitHub prerelease significa **imágenes y
-bundle publicados**. Ninguno de los dos significa que una VM esté encendida ni
-que el despliegue haya terminado correctamente. Si el build falla después de CI,
-queda el tag probado, pero no se publica una nueva GitHub prerelease.
+Cuando el push a `main` requiere publicación, `integration.py` crea el tag anotado
+`integration-<GITHUB_RUN_ID>-<GITHUB_RUN_ATTEMPT>`. El tag apunta a un commit de
+snapshot cuyo padre es el commit raíz probado y cuyos gitlinks identifican los
+tres SHAs exactos. No actualiza ramas ni crea una PR. Si se reintenta el mismo
+tag, solo se acepta el mismo commit; nunca se mueve ni se fuerza.
 
-## Ejecuciones simultáneas y reintentos
+Después, `publish.yml` construye las seis imágenes, las publica por digest y
+publica el bundle. El manifiesto registra el tag, la raíz, los tres componentes,
+los digests, el orden de publicación y la evidencia aprobada de Integrated CI y
+Android. El canal privado `channels/main.json` se cambia solo después de que
+imágenes y assets estén completos. Finalmente se crea una GitHub prerelease con
+el manifiesto; no es una release estable.
 
-El canal privado `channels/main.json` cambia únicamente después de publicar las
-seis imágenes y sus assets. La escritura utiliza una precondición de generación
-de Cloud Storage: ante una colisión, se vuelve a leer el objeto antes de intentar
-actualizarlo. La pareja `(GITHUB_RUN_NUMBER, GITHUB_RUN_ATTEMPT)` impide que una
-publicación antigua, aunque termine después, reemplace una más reciente. Su tag
-y release pueden conservarse para inspección, sin convertirse en la versión del canal.
+El tag identifica una combinación aprobada de fuentes. El manifiesto/release
+identifica artefactos publicados. Ninguno acredita por sí solo que una VM esté
+encendida o que el despliegue haya pasado smoke tests. Un tag sin prerelease puede
+indicar que el build posterior falló.
 
-Se admiten las releases previas sin tag para que `update` pueda seguir usando la
-última publicación válida durante la transición. La primera publicación nueva
-agrega el tag y la información de orden al canal. Los números de ejecución se
-comparan dentro del mismo workflow `publish.yml`; no publicar ese canal desde otro
-workflow con una numeración independiente.
+La escritura del puntero usa precondición de generación de Cloud Storage. El orden
+`(GITHUB_RUN_NUMBER, GITHUB_RUN_ATTEMPT)` impide que una publicación anterior que
+termine tarde reemplace una posterior. Los jobs serializan escrituras del canal;
+los reintentos vuelven a leer el objeto antes de actualizarlo. No publicar un
+mismo canal desde workflows con numeración independiente.
 
-`update` selecciona una sola release completa del canal. No prueba ni compila de
-nuevo y no modifica la duración de la sesión. `stop` no necesita crear tags.
-Los pushes de tags no son un trigger del workflow, por lo que no generan bucles;
-los jobs continúan en la misma ejecución que los creó.
+`start`/`update` leen una versión completa del canal una vez y la validan antes
+de desplegarla. No vuelven a ejecutar CI ni construyen APK/imágenes. `update`
+retira A y B del balanceador, detiene las aplicaciones, migra una sola vez y
+admite B y después A. Es un corte deliberado durante el cambio de esquema; si la
+migración falla, no se garantiza que el runtime anterior se reactive. `stop` no
+requiere tag y conserva Cloud SQL y otros recursos persistentes.
 
-## Permisos y operación
+## Identidad y permisos
 
-El job `integration` necesita `contents: write` únicamente para publicar el tag.
-`github_release` lo necesita para crear la prerelease. Los controles manuales de
-VM solo requieren lectura sobre GitHub. Ninguno modifica ramas.
-Las reglas del repositorio deben permitir al token de Actions crear tags con el
-prefijo `integration-`; las protecciones de ramas pueden permanecer activas.
-Se mantiene `SUBMODULES_TOKEN` de lectura para repositorios privados. El token de
-notificación de los componentes sigue sirviendo únicamente para solicitar la integración.
+El tag se crea con `contents: write` en el job de integración. La prerelease usa
+el permiso de contenido requerido en su job. La publicación/despliegue usa OIDC/
+WIF en jobs separados; el job que crea el tag no necesita credenciales GCP. Los
+tokens no escriben en `main` ni `develop`. Las protecciones de ramas se mantienen.
 
-Las credenciales GCP solo se usan en los jobs existentes de publicación/despliegue.
-El job que escribe tags no necesita secretos de GCP ni el environment de despliegue.
-El permiso de Storage existente para escribir el canal permite la escritura condicional.
-
-Para inspeccionar exactamente el código de una release:
+Para revisar exactamente una publicación:
 
 ```sh
 git fetch origin tag integration-123456789-1
 git switch --detach integration-123456789-1
 git submodule update --init --recursive
+python3 scripts/gcp/integration.py check
 ```
 
-Esto es una inspección de una versión, no una rama de desarrollo. Las modificaciones
-del proyecto se preparan en `develop`; el pipeline operativo sigue publicando fuentes
-aprobadas que llegaron a los `main` de los componentes.
+El tag es un checkout de inspección; preparar cambios en `develop` y promoverlos
+por PR. Para reconstruirlo, conservar los gitlinks del tag, no actualizar los
+submódulos a `main`.
 
-Los punteros de submódulos visibles en la rama del madre pueden ser anteriores a
-una integración. Para reproducir una release se usa su **tag**, no los punteros de
-la rama. No se requiere crear tags en cada repositorio secundario.
+## Camino directo de develop
 
-## Verificación local
+`vm-controls.yml` puede ejecutarse manualmente desde `develop` con `start` o
+`update`. Comprueba el commit del evento y sus tres gitlinks, publica seis
+imágenes completas en `channels/develop.json` y despliega esa versión. No crea un
+tag `integration-*`, una prerelease de main ni evidencia de Integrated CI. La
+separación de canales no separa recursos: las migraciones cambian la base
+compartida y pueden impedir volver a una versión anterior de `main`.
+
+## Validación local
 
 ```sh
 python3 -m unittest discover -s scripts/gcp -p 'test_*.py' -v
-go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -ignore 'unexpected key "queue" for "concurrency" section' .github/workflows/*.yml
 ```
 
-Las pruebas de integración Git crean remotos bare temporales; las peticiones a
-GitHub, Cloud Storage y Cloud Build están simuladas. No publican tags reales,
-no suben imágenes y no operan la VM.
-
-## Despliegue directo de develop
-
-Para pruebas remotas sin esperar el Integrated CI, ejecutar manualmente `vm-controls.yml` desde `develop`. El job verifica el commit del evento y los tres gitlinks exactos, construye una release completa y avanza solamente `channels/develop.json`. No crea el tag `integration-*` ni una GitHub prerelease que implique que CI paso. El manifiesto conserva los SHAs de root y componentes. Las VMs y Cloud SQL son compartidos con `main`; aplicar migraciones puede afectar la siguiente version desplegada.
+Las pruebas de scripts simulan operaciones GitHub/GCP/Cloud Build. No crean tags
+remotos, publican imágenes ni operan las VMs.

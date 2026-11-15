@@ -12,6 +12,11 @@ import tempfile
 import time
 import json
 
+import bootstrap_setup
+import host_versions
+import deployment_health
+from infra_safety import check_plan as _check_infra_plan
+
 
 ROOT = Path(__file__).resolve().parents[2]
 INFRA = ROOT / "infra" / "gcp" / "demo"
@@ -39,6 +44,12 @@ def measure(phase, operation, **dimensions):
 
 
 def configuration():
+    profile = os.environ.get("NEXORUTA_EXECUTION_PROFILE", "demo")
+    if profile not in ("demo", "reproduction"):
+        raise ValueError("NEXORUTA_EXECUTION_PROFILE must be demo or reproduction")
+    if profile == "reproduction":
+        import reproduce
+        reproduce.validate_runtime_environment(os.environ)
     patterns = {
         "GCP_PROJECT_ID": r"[a-z][a-z0-9-]{4,28}[a-z0-9]",
         "GCP_ZONE": r"[a-z]+(?:-[a-z]+)*[0-9]-[a-z]",
@@ -51,6 +62,7 @@ def configuration():
         if not re.fullmatch(pattern, value):
             raise ValueError(f"Missing or invalid {key}")
         values[key] = value
+    values["NEXORUTA_EXECUTION_PROFILE"] = profile
     if os.environ.get("GITHUB_ACTIONS") == "true":
         for key in ("GCP_WORKLOAD_IDENTITY_PROVIDER", "GCP_DEPLOY_SERVICE_ACCOUNT"):
             if not os.environ.get(key):
@@ -174,21 +186,7 @@ def ensure_start_schedule(node):
 
 
 def check_plan(plan, operation="start"):
-    for resource in plan.get("resource_changes", []):
-        if operation == "stop" and "create" in resource["change"]["actions"]:
-            raise RuntimeError("Stopping a session must not create missing resources")
-        if "delete" in resource["change"]["actions"]:
-            # New immutable secret versions retain their predecessors (ABANDON).
-            # This exception never permits deleting a secret or persistent resource.
-            if (resource.get("type") == "google_secret_manager_secret_version"
-                    and resource["change"].get("before", {}).get("deletion_policy") == "ABANDON"
-                    and resource["change"].get("after", {}).get("deletion_policy") == "ABANDON"
-                    and "create" in resource["change"]["actions"]):
-                continue
-            raise RuntimeError(
-                f"Plan would delete or replace {resource['address']}. "
-                "This session workflow does not destroy resources; review locally."
-            )
+    return _check_infra_plan(plan, operation)
 
 
 def check_deadline(vm, now=None):
@@ -306,6 +304,11 @@ def run(config):
     if os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch":
         raise RuntimeError("VM operations require a manual workflow_dispatch; pushes only publish images")
     if operation == "stop":
+        if config.get("NEXORUTA_EXECUTION_PROFILE") == "reproduction":
+            measure("validate_infrastructure_target", lambda: bootstrap_setup.validate_runtime_target(
+                config["GCP_PROJECT_ID"], config.get("GCP_REGION", REGION),
+                config["GCP_STATE_BUCKET"], "demo/vm", wif_profile="reproduction",
+            ))
         errors = stop_session(config)
         if errors:
             raise RuntimeError("Cleanup incomplete; independent guard will retry: " + "; ".join(errors))
@@ -331,6 +334,10 @@ def run(config):
             raise RuntimeError("Demo is degraded: both VMs must be RUNNING before update; the session will not be extended.")
         for vm in existing:
             check_deadline(vm)
+        measure("validate_infrastructure_target", lambda: bootstrap_setup.validate_runtime_target(
+            config["GCP_PROJECT_ID"], config.get("GCP_REGION", REGION), config["GCP_STATE_BUCKET"], "demo/vm",
+            wif_profile=config["NEXORUTA_EXECUTION_PROFILE"],
+        ))
         from delivery import deploy, latest_release
         release = measure("select_latest_release", lambda: latest_release(config))
         deployed = measure("application_deployment", lambda: deploy(config, release))
@@ -342,6 +349,10 @@ def run(config):
         print("Application updated without extending the existing four-hour session.")
         publish_endpoints(config, deployed["endpoints"])
         return
+    measure("validate_infrastructure_target", lambda: bootstrap_setup.validate_runtime_target(
+        config["GCP_PROJECT_ID"], config.get("GCP_REGION", REGION), config["GCP_STATE_BUCKET"], "demo/vm",
+        wif_profile=config["NEXORUTA_EXECUTION_PROFILE"],
+    ))
     from delivery import latest_release
     release = measure("select_latest_release", lambda: latest_release(config))
     now = dt.datetime.now(dt.timezone.utc).timestamp()
@@ -400,7 +411,9 @@ def start_session(config, release):
         deadline = min(deadlines)
         measure("set_common_session_lease", lambda: write_lease(config, deadline.timestamp()))
         from delivery import deploy
-        measure("application_deployment", lambda: deploy(config, release))
+        deployment = measure("application_deployment", lambda: deploy(config, release))
+        if config.get("NEXORUTA_EXECUTION_PROFILE") == "reproduction":
+            publish_reproduction_deployment_smoke(config, release, deployment)
         message = (
             f"Both demo VMs running with {release}. Common automatic stop: {deadline.isoformat()}.\n\n"
             "The four hours start when Compute Engine starts the VM, including bootstrap. "
@@ -412,6 +425,46 @@ def start_session(config, release):
     if summary:
         with open(summary, "a", encoding="utf-8") as output:
             output.write(message)
+
+
+def publish_reproduction_deployment_smoke(config, release, deployment):
+    if not re.fullmatch(r"release-[a-f0-9]{32}", release) or not isinstance(deployment, dict):
+        raise ValueError("The isolated deployment smoke identity is invalid")
+    if type(deployment.get("cache_enabled")) is not bool:
+        raise ValueError("The isolated deployment cache mode is invalid")
+    reads = deployment.get("authenticated_reads")
+    roles = {"admin", "operator", "commerce"}
+    if (not isinstance(reads, list) or len(reads) != len(roles)
+            or any(not isinstance(item, dict) or item.get("role") not in roles for item in reads)
+            or {item["role"] for item in reads} != roles
+            or any(not isinstance(item, dict) or item.get("login") != "passed"
+                   or item.get("actor_read") != "passed" for item in reads)):
+        raise RuntimeError("The isolated deployment did not authenticate and read as every synthetic runtime role")
+    clients = deployment.get("redis_smoke_clients")
+    expected_clients = ["a", "b"] if deployment.get("cache_enabled") else []
+    if clients != expected_clients or deployment.get("redis_node") != "b":
+        raise RuntimeError("The isolated Redis TLS/AUTH smoke evidence is incomplete")
+    host_version_evidence = host_versions.sanitize_node_map(deployment.get("host_versions"))
+    compose_health_evidence = deployment_health.sanitize_node_map(
+        deployment.get("compose_health"), deployment["cache_enabled"],
+    )
+    sanitized_reads = [
+        {"role": item["role"], "login": "passed", "actor_read": "passed"}
+        for item in reads
+    ]
+    proof = {
+        "schema_version": 3, "project_id": config["GCP_PROJECT_ID"], "release": release,
+        "authenticated_reads": sorted(sanitized_reads, key=lambda item: item["role"]),
+        "redis_node": "b", "redis_smoke_clients": clients,
+        "cache_enabled": deployment["cache_enabled"], "host_versions": host_version_evidence,
+        "compose_health": compose_health_evidence,
+    }
+    if os.environ.get("GITHUB_OUTPUT"):
+        delimiter = "NFR14_SMOKE_" + os.urandom(12).hex()
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+            output.write(f"nfr14_smoke<<{delimiter}\n")
+            output.write(json.dumps(proof, sort_keys=True, separators=(",", ":")) + "\n")
+            output.write(delimiter + "\n")
 
 
 def publish_endpoints(config, endpoints=None):

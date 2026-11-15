@@ -1,0 +1,110 @@
+﻿{
+    "observed_at":  "2026-11-14T20:44:47.4130483Z",
+    "bucket":  "nexoruta-demo-20261022-nexoruta-delivery",
+    "channels":  {
+                     "develop":  {
+                                     "pointer":  {
+                                                     "channel":  "develop",
+                                                     "release":  "release-bd39c48fde2b49fa80b18a01f173ebd6",
+                                                     "publication_order":  [
+                                                                               124,
+                                                                               1
+                                                                           ]
+                                                 },
+                                     "manifest":  {
+                                                      "release":  "release-bd39c48fde2b49fa80b18a01f173ebd6",
+                                                      "build_id":  "b47edff9-9be1-4275-a9f2-cee3be4c4da6",
+                                                      "channel":  "develop",
+                                                      "root_sha":  "86e234e7bc0a2be1ce8911cc186ecf0e55d628e4",
+                                                      "sources":  {
+                                                                      "backend":  "5b6f0f9f052348aed27da40ed202da953b39ea2a",
+                                                                      "frontend":  "2540041ba267d8a48e6c2b8a644247134f5b47f4",
+                                                                      "mobile":  "90976706c7db6a54c06ac552811f20f04d90375e"
+                                                                  },
+                                                      "images":  {
+                                                                     "api":  "southamerica-west1-docker.pkg.dev/nexoruta-demo-20261022/nexoruta/api@sha256:3a0f470a9cfbc9aaf8e7c4f59443abd713388fa427a8e2f051feb4bf67443f03",
+                                                                     "worker":  "southamerica-west1-docker.pkg.dev/nexoruta-demo-20261022/nexoruta/worker@sha256:bcaee45377aeb72be92f5d2841947ea5888b097b5db8584207126d9681889d83",
+                                                                     "admin":  "southamerica-west1-docker.pkg.dev/nexoruta-demo-20261022/nexoruta/admin@sha256:da95f6ebf064bb1d1283617fbe3df187505e26f237ef941b407fc2583457b7ad",
+                                                                     "backoffice":  "southamerica-west1-docker.pkg.dev/nexoruta-demo-20261022/nexoruta/backoffice@sha256:f3d5524cde19720260c4e9828e8ba73cb376f4372586964bcc9a2bc4006587cd",
+                                                                     "commerce":  "southamerica-west1-docker.pkg.dev/nexoruta-demo-20261022/nexoruta/commerce@sha256:3402dbadf4aa997e1b6eb14f34ad847d51db34768a08fc2f7fb20c80d81f95b5",
+                                                                     "tracking":  "southamerica-west1-docker.pkg.dev/nexoruta-demo-20261022/nexoruta/tracking@sha256:790fecf3c0f618dcb05123e957d118eb000ef0c0857213d4e7f7d0c47f7a565b"
+                                                                 },
+                                                      "image_sources":  {
+                                                                            "api":  "5b6f0f9f052348aed27da40ed202da953b39ea2a",
+                                                                            "worker":  "5b6f0f9f052348aed27da40ed202da953b39ea2a",
+                                                                            "admin":  "2540041ba267d8a48e6c2b8a644247134f5b47f4",
+                                                                            "backoffice":  "2540041ba267d8a48e6c2b8a644247134f5b47f4",
+                                                                            "commerce":  "2540041ba267d8a48e6c2b8a644247134f5b47f4",
+                                                                            "tracking":  "2540041ba267d8a48e6c2b8a644247134f5b47f4"
+                                                                        },
+                                                      "reused_images":  {
+
+                                                                        },
+                                                      "bundle_sha256":  "12bb73c4caaae928c0a6d934e4fdb9d3e718734b0705221c5ac68819e5cebdf4",
+                                                      "android_input_sha256":  null,
+                                                      "android_verified_mobile_sha":  "90976706c7db6a54c06ac552811f20f04d90375e",
+                                                      "publication_order":  [
+                                                                                124,
+                                                                                1
+                                                                            ],
+                                                      "bundle_source":  {
+                                                                            "root_sha":  "86e234e7bc0a2be1ce8911cc186ecf0e55d628e4",
+                                                                            "backend_sha":  "5b6f0f9f052348aed27da40ed202da953b39ea2a"
+                                                                        }
+                                                  }
+                                 },
+                     "main":  {
+                                  "pointer":  {
+                                                  "channel":  "main",
+                                                  "release":  "release-17bcf47546124de5acb87adc7f84e00d",
+                                                  "integration_tag":  "integration-41946941369-1",
+                                                  "publication_order":  [
+                                                                            27,
+                                                                            1
+                                                                        ]
+                                              },
+                                  "manifest":  {
+                                                   "release":  "release-17bcf47546124de5acb87adc7f84e00d",
+                                                   "build_id":  "cbe278fd-f40a-49fb-8103-a559cc2df99b",
+                                                   "channel":  "main",
+                                                   "root_sha":  "aaa1090921b29d0efe7c4a5634d3cafb69254911",
+                                                   "sources":  {
+                                                                   "backend":  "947b3f7e2c90f05b01d4911b1512e07b827d4528",
+                                                                   "frontend":  "5c1c008d5a62ea3f7e5f043b2b3a178e154a4ef6",
+                                                                   "mobile":  "4b9032bc54be3faf7549b33a65315aca87a69df5"
+                                                               },
+                                                   "integration_tag":  "integration-41946941369-1",
+                                                   "images":  {
+                                                                  "api":  "southamerica-west1-docker.pkg.dev/nexoruta-demo-20261022/nexoruta/api@sha256:5327f19f61e5695ebc17289d5ed142732c6ac8a2aedb869b7e291c9dc41c2bb7",
+                                                                  "worker":  "southamerica-west1-docker.pkg.dev/nexoruta-demo-20261022/nexoruta/worker@sha256:419e985d713c63ff95407ebdddb97c360313f7b990611630e19e5720d85da0c5",
+                                                                  "admin":  "southamerica-west1-docker.pkg.dev/nexoruta-demo-20261022/nexoruta/admin@sha256:f9667647ba61db22b2a178f5e273f9f377b57eee20e0866d07c96c9b017209a0",
+                                                                  "backoffice":  "southamerica-west1-docker.pkg.dev/nexoruta-demo-20261022/nexoruta/backoffice@sha256:18bc1373396ea9517866254ab1d1898753d0f75edcddc421a92e35175d0d3e86",
+                                                                  "commerce":  "southamerica-west1-docker.pkg.dev/nexoruta-demo-20261022/nexoruta/commerce@sha256:7b552f5a43565173dcca409c06855b7e6dd62987acff3d431f1e0679f8450a47",
+                                                                  "tracking":  "southamerica-west1-docker.pkg.dev/nexoruta-demo-20261022/nexoruta/tracking@sha256:95020c9f9d99025147283e7c868e8b4f997c390a5fa98f34212df8152133fae3"
+                                                              },
+                                                   "image_sources":  {
+                                                                         "api":  "947b3f7e2c90f05b01d4911b1512e07b827d4528",
+                                                                         "worker":  "947b3f7e2c90f05b01d4911b1512e07b827d4528",
+                                                                         "admin":  "5c1c008d5a62ea3f7e5f043b2b3a178e154a4ef6",
+                                                                         "backoffice":  "5c1c008d5a62ea3f7e5f043b2b3a178e154a4ef6",
+                                                                         "commerce":  "5c1c008d5a62ea3f7e5f043b2b3a178e154a4ef6",
+                                                                         "tracking":  "5c1c008d5a62ea3f7e5f043b2b3a178e154a4ef6"
+                                                                     },
+                                                   "reused_images":  {
+
+                                                                     },
+                                                   "bundle_sha256":  "8ecf512be79d2b849e19f328ac70d73912080eb7ccc5ff184af6b6642332ced2",
+                                                   "android_input_sha256":  "1eb299111154f664a161a4e252543fd2b7ca578d419115bcdeb50114cba6cfec",
+                                                   "android_verified_mobile_sha":  "4b9032bc54be3faf7549b33a65315aca87a69df5",
+                                                   "publication_order":  [
+                                                                             27,
+                                                                             1
+                                                                         ],
+                                                   "bundle_source":  {
+                                                                         "root_sha":  "aaa1090921b29d0efe7c4a5634d3cafb69254911",
+                                                                         "backend_sha":  "947b3f7e2c90f05b01d4911b1512e07b827d4528"
+                                                                     }
+                                               }
+                              }
+                 }
+}

@@ -13,9 +13,36 @@ from unittest.mock import Mock, patch
 import delivery
 import integration
 import demo_session as session
+import bootstrap_setup
+import image_inventory
 import github_environment
+import load_tests as load_test_control
 import monitor_agent
 import vm_deploy
+import host_versions
+import deployment_health
+
+
+def valid_host_versions():
+    return {
+        "schema_version": 1, "recorded_at": "2026-11-14T12:00:00+00:00",
+        "os_id": "debian", "os_version_id": "12", "kernel": "6.1.0-cloud-amd64",
+        "architecture": "x86_64", "docker_server": "29.1.3", "docker_compose": "2.40.3",
+        "docker_buildx": "github.com/docker/buildx v0.29.1",
+        "containerd": "containerd github.com/containerd/containerd v2.1.5",
+        "packages": {name: "1.2.3-1" for name in host_versions.PACKAGE_NAMES},
+    }
+
+
+def valid_compose_health(node="a", cache_enabled=True):
+    return {
+        "node": node,
+        "services": [
+            {"service": name, "state": "running",
+             "health": "healthy" if name in deployment_health.HEALTHCHECK_SERVICES else "not-configured"}
+            for name in deployment_health.expected_services(node, cache_enabled)
+        ],
+    }
 
 
 class DeliveryTests(unittest.TestCase):
@@ -23,6 +50,16 @@ class DeliveryTests(unittest.TestCase):
         environment = patch.dict("os.environ", {"GITHUB_ACTIONS": "false"})
         environment.start()
         self.addCleanup(environment.stop)
+
+    def test_isolated_project_builds_every_image_without_mutating_the_tested_ci_plan(self):
+        plan = {"images": ["api"], "publish_required": True}
+        self.assertEqual(delivery.selected_build_services(plan), ["api"])
+        self.assertEqual(delivery.selected_build_services(plan, reproduction=True), list(delivery.SERVICES))
+        self.assertEqual(plan["images"], ["api"])
+        for invalid in ({"images": "api"}, {"images": ["api", "api"]},
+                        {"images": ["unknown"]}, {"images": [{"name": "api"}]}):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, "invalid image selection"):
+                delivery.selected_build_services(invalid, reproduction=True)
 
     def test_load_balancer_health_wait_has_wall_clock_limit(self):
         with (patch.object(delivery.time, "monotonic", side_effect=[0, 0, 0, 301]),
@@ -49,6 +86,14 @@ class DeliveryTests(unittest.TestCase):
 
         self.assertFalse(delivery.prepared_cache_mode([
             {"cache_enabled": False}, {"cache_enabled": False}]))
+        nodes = [{"NODE_ID": "a"}, {"NODE_ID": "b"}]
+        host_record = valid_host_versions()
+        host_map = delivery.prepared_host_versions(nodes, [
+            {"host_versions": host_record}, {"host_versions": host_record},
+        ])
+        self.assertEqual(host_map, {"a": host_record, "b": host_record})
+        with self.assertRaisesRegex(ValueError, "host version record"):
+            delivery.prepared_host_versions(nodes, [{}, {"host_versions": host_record}])
         self.assertEqual(delivery.redis_smoke_clients_if_enabled(False, inventory, stage, measure), [])
         stage.assert_not_called()
         measure.assert_not_called()
@@ -271,6 +316,12 @@ class DeliveryTests(unittest.TestCase):
                 packaged_identity = archive.extractfile("redis_identity.py")
                 self.assertIsNotNone(packaged_identity)
                 self.assertEqual(packaged_identity.read(), redis_identity.read_bytes())
+                self.assertIsNotNone(archive.extractfile("image-inventory.json"))
+                self.assertIsNotNone(archive.extractfile("image_inventory.py"))
+                self.assertIsNotNone(archive.extractfile("ci_evidence.py"))
+                self.assertIsNotNone(archive.extractfile("host_versions.py"))
+                self.assertIsNotNone(archive.extractfile("deployment_health.py"))
+                self.assertIsNotNone(archive.extractfile("integration.py"))
                 packaged_mongo_users = archive.extractfile("mongo/create-operational-users.js")
                 self.assertIsNotNone(packaged_mongo_users)
                 self.assertEqual(packaged_mongo_users.read(),
@@ -394,11 +445,20 @@ class DeliveryTests(unittest.TestCase):
                     events.append(("stage", node["NODE_ID"], stage))
                     result = {"release": release, "node": node["NODE_ID"], "stage": stage,
                               "status": "healthy", "cache_enabled": True}
+                    if stage == "prepare":
+                        result["host_versions"] = valid_host_versions()
+                    if stage == "apply":
+                        result["compose_health"] = valid_compose_health(node["NODE_ID"], True)
                     if stage == "redis-smoke":
                         result.update({"redis_node": "b", "redis_client_node": node["NODE_ID"],
                                        "redis_probe": "tls-auth-set-get-delete-passed"})
                     if stage == "verify":
                         result["endpoints"] = {"api": "https://api.example.test"}
+                        result["authenticated_reads"] = [
+                            {"role": role, "login": "passed", "actor_read": "passed",
+                             "email": f"{role}@example.test"}
+                            for role in ("admin", "operator", "commerce")
+                        ]
                     return json.dumps(result)
                 return ""
             if args[:4] == ("compute", "instance-groups", "unmanaged", "list-instances"):
@@ -430,6 +490,8 @@ class DeliveryTests(unittest.TestCase):
             patch.object(delivery.time, "sleep", side_effect=lambda seconds: events.append(("sleep", seconds))),
         ):
             result = delivery.deploy(config, release)
+        self.assertTrue(all(set(item) == {"role", "login", "actor_read"}
+                            for item in result["authenticated_reads"]))
 
         operations = [event for event in events if event[0] in ("remove-instances", "add-instances", "stage")]
         self.assertCountEqual(operations[:2], [("stage", "a", "prepare"), ("stage", "b", "prepare")])
@@ -446,6 +508,61 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(result["endpoints"]["api"], "https://api.example.test")
         self.assertEqual(result["redis_node"], "b")
         self.assertEqual(result["redis_smoke_clients"], ["a", "b"])
+        self.assertEqual(result["host_versions"], {"a": valid_host_versions(), "b": valid_host_versions()})
+        self.assertEqual(result["compose_health"], {
+            "a": valid_compose_health("a"), "b": valid_compose_health("b"),
+        })
+
+    def test_invalid_release_manifest_fails_during_prepare_before_load_balancer_drain(self):
+        release = "release-" + "a" * 32
+        nodes = [
+            {"NODE_ID": "a", "VM_NAME": "nexoruta-a"},
+            {"NODE_ID": "b", "VM_NAME": "nexoruta-b"},
+        ]
+        events = []
+
+        def gcloud(node, *args, capture=False):
+            if args[:2] == ("compute", "scp"):
+                return ""
+            if args[:3] == ("compute", "ssh", node["VM_NAME"]):
+                command = args[-1]
+                if "bootstrap-ready" in command:
+                    return ""
+                if "--stage" in command:
+                    operation = command.split("--stage", 1)[1].split()[0]
+                    events.append(("stage", node["NODE_ID"], operation))
+                    if operation == "prepare":
+                        return json.dumps({
+                            "release": release, "node": node["NODE_ID"], "stage": operation,
+                            "status": "failed", "failed_phase": "release_manifest_validation",
+                            "error_type": "ValueError",
+                        })
+                return ""
+            operation = next((item for item in args if item in ("remove-instances", "add-instances")), None)
+            if operation:
+                events.append((operation, node["NODE_ID"]))
+                return ""
+            raise AssertionError(args)
+
+        def command(*args, capture=False, timeout=None):
+            if args[1:3] == ("storage", "cat"):
+                return json.dumps({"expires_at": 2000})
+            if args[1:4] == ("sql", "backups"):
+                return ""
+            raise AssertionError(args)
+
+        with (
+            patch.object(session, "node_configs", return_value=nodes),
+            patch.object(session, "command", side_effect=command),
+            patch.object(session, "gcloud", side_effect=gcloud),
+            patch.object(delivery.time, "time", return_value=1000),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Node a stage prepare failed"):
+                delivery.deploy({"GCP_PROJECT_ID": "demo-project", "GCP_STATE_BUCKET": "demo-state"}, release)
+
+        self.assertIn(("stage", "a", "prepare"), events)
+        self.assertFalse(any(event[0] in ("remove-instances", "add-instances") for event in events))
+        self.assertFalse(any(event[0] == "stage" and event[2] in ("stop", "migrate", "apply") for event in events))
 
     def test_remote_error_reports_safe_http_status(self):
         output = json.dumps({"node": "a", "stage": "verify", "status": "failed",
@@ -466,19 +583,23 @@ class DeliveryTests(unittest.TestCase):
         }
         with (
             patch.dict("os.environ", {"DEMO_RELEASE": "release-" + "a" * 32}),
+            patch.object(load_test_control, "assert_no_active"),
             patch.object(session, "instance", return_value=vm),
             patch.object(session, "check_deadline"),
+            patch.object(bootstrap_setup, "validate_runtime_target"),
             patch.object(session, "publish_endpoints"),
             patch.object(session, "command") as command,
             patch.object(session, "write_lease") as lease,
             patch.object(delivery, "latest_release", return_value="release-" + "b" * 32) as latest,
             patch.object(delivery, "deploy") as deploy,
         ):
-            session.run({"DEMO_OPERATION": "update"})
+            config = {"DEMO_OPERATION": "update", "GCP_PROJECT_ID": "demo-project",
+                      "GCP_STATE_BUCKET": "demo-state", "NEXORUTA_EXECUTION_PROFILE": "demo"}
+            session.run(config)
             command.assert_not_called()
             lease.assert_not_called()
             latest.assert_called_once()
-            deploy.assert_called_once_with({"DEMO_OPERATION": "update"}, "release-" + "b" * 32)
+            deploy.assert_called_once_with(config, "release-" + "b" * 32)
 
     def test_automatic_events_cannot_operate_the_vm_even_if_a_job_is_misconfigured(self):
         for event in ("push", "repository_dispatch", "pull_request"):
@@ -544,15 +665,62 @@ class DeliveryTests(unittest.TestCase):
 
     def release_manifest(self):
         release = "release-" + "a" * 32
+        sources = {name: char * 40 for name, char in zip(integration.COMPONENTS, "bcd")}
+        inventory = image_inventory.collect(Path(__file__).parents[2])
+        proof = {
+            "schema_version": 1,
+            "android_input_sha256": "f" * 64,
+            "mobile_sha": sources["mobile"],
+            "verified_by": {
+                "repository_id": "123", "workflow_path": ".github/workflows/ci.yml",
+                "run_id": 7, "run_attempt": 1, "event": "pull_request",
+                "pull_request": 11, "base_branch": "main", "head_branch": "develop",
+                "head_repository_id": "123", "root_sha": "8" * 40,
+                "root_tree": "9" * 40, "sources": dict(sources),
+                "artifact": {"id": 31, "name": "nfr14-ci-evidence-1",
+                             "digest": "sha256:" + "a" * 64},
+            },
+            "origin_release": release,
+        }
+        ci = {
+            "schema_version": 1, "repository_id": "123", "workflow_path": ".github/workflows/ci.yml",
+            "run_id": 7, "run_attempt": 1, "run_number": 20, "event": "pull_request",
+            "pull_request": 11, "base_branch": "main", "head_branch": "develop",
+            "root_sha": "8" * 40, "release_root_sha": "c" * 40,
+            "root_tree": "9" * 40, "sources": dict(sources), "android_job": "success",
+            "artifact": {"id": 31, "name": "nfr14-ci-evidence-1", "digest": "sha256:" + "a" * 64},
+            "plan_sha256": "f" * 64,
+        }
         return {
+            "manifest_version": 2,
+            "project_id": "demo-project", "region": session.REGION,
             "channel": "main", "release": release,
             "images": {name: f"{session.REGION}-docker.pkg.dev/demo-project/nexoruta/{name}@sha256:" + "b" * 64
                        for name in delivery.SERVICES},
+            "deployment_images": inventory,
+            "deployment_images_sha256": image_inventory.checksum(inventory),
+            "root_sha": "c" * 40, "sources": sources,
+            "ci_evidence": ci,
+            "ci_plan": {"android_input_sha256": proof["android_input_sha256"],
+                        "components": {"mobile_android": {"run": True}}},
+            "android_input_sha256": proof["android_input_sha256"],
+            "android_verified_mobile_sha": proof["mobile_sha"],
+            "android_verification": proof,
+            "bundle_sha256": "e" * 64,
+            "bundle_source": {"root_sha": "c" * 40, "backend_sha": sources["backend"]},
+            "image_sources": {name: sources["backend"] if name in ("api", "worker") else sources["frontend"]
+                              for name in delivery.SERVICES},
+            "reused_images": {},
+            "built_images": list(delivery.SERVICES),
+            "bundle_rebuilt": True,
+            "publication_order": [20, 1],
+            "integration_tag": "integration-20-1",
         }
 
     def test_build_requires_the_pinned_tag_before_any_cloud_build(self):
         with patch.object(session, "configuration", return_value={}), patch.dict("os.environ", {
             "RELEASE_CHANNEL": "main", "INTEGRATION_TAG": "integration-123-1",
+            "TESTED_CI_PLAN": "{}",
         }), patch.object(integration, "verify_checkout", side_effect=ValueError("wrong snapshot")), patch.object(session, "command") as command:
             with self.assertRaisesRegex(ValueError, "wrong snapshot"):
                 delivery.build()
@@ -562,6 +730,7 @@ class DeliveryTests(unittest.TestCase):
         snapshot = {"integration_tag": "integration-123-1", "root_sha": "a" * 40,
                     "sources": {name: "b" * 40 for name in integration.COMPONENTS}}
         registry = f"{session.REGION}-docker.pkg.dev/demo-project/nexoruta"
+        expected_inventory = image_inventory.collect(Path(__file__).parents[2])
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             bundle = root / "bundle.tar.gz"
@@ -586,10 +755,20 @@ class DeliveryTests(unittest.TestCase):
                   patch.object(delivery, "ROOT", root), patch.object(delivery, "stage_sources"),
                   patch.object(delivery, "create_bundle", return_value=bundle),
                   patch.object(delivery, "latest_manifest", return_value=None),
+                  patch.object(image_inventory, "collect", return_value=expected_inventory),
+                  patch.object(delivery.ci_evidence, "bind_for_release", side_effect=lambda *args, release, **kwargs: (
+                      {"schema_version": 1}, {"schema_version": 1, "origin_release": release,
+                       "android_input_sha256": "f" * 64, "mobile_sha": snapshot["sources"]["mobile"]})),
                   patch.object(integration, "verify_checkout", return_value=snapshot),
                   patch.object(session, "command", side_effect=command) as calls,
                   patch.object(delivery.publication, "promote", return_value=True) as promote,
                   patch.dict("os.environ", {"RELEASE_CHANNEL": "main", "INTEGRATION_TAG": snapshot["integration_tag"],
+                                            "TESTED_CI_PLAN": json.dumps({"version": 1, "current": {"sources": snapshot["sources"]},
+                                                                           "publish_required": True, "images": list(delivery.SERVICES),
+                                                                           "bundle_required": True,
+                                                                           "android_input_sha256": "f" * 64,
+                                                                           "components": {"mobile_android": {"run": True}}}),
+                                            "NEXORUTA_CI_EVIDENCE_FILE": str(root / "evidence.json"),
                                             "GITHUB_RUN_NUMBER": "20", "GITHUB_RUN_ATTEMPT": "2",
                                             "GITHUB_OUTPUT": str(outputs),
                                             "GITHUB_STEP_SUMMARY": str(step_summary),
@@ -600,6 +779,11 @@ class DeliveryTests(unittest.TestCase):
                 self.assertEqual(manifest["sources"], snapshot["sources"])
                 self.assertEqual(manifest["integration_tag"], snapshot["integration_tag"])
                 self.assertEqual(manifest["publication_order"], [20, 2])
+                self.assertEqual(manifest["manifest_version"], 2)
+                self.assertEqual(manifest["ci_evidence"]["schema_version"], 1)
+                self.assertEqual(manifest["android_verification"]["mobile_sha"], snapshot["sources"]["mobile"])
+                self.assertEqual(manifest["deployment_images_sha256"], image_inventory.checksum(expected_inventory))
+                self.assertTrue(manifest["bundle_rebuilt"])
                 self.assertTrue(all(image.startswith(registry) and "@sha256:" in image for image in manifest["images"].values()))
                 self.assertEqual(promote.call_args.args[1]["integration_tag"], snapshot["integration_tag"])
                 self.assertFalse(any(call.args[0] == "git" for call in calls.call_args_list))
@@ -611,6 +795,7 @@ class DeliveryTests(unittest.TestCase):
         snapshot = {"root_sha": "a" * 40,
                     "sources": {name: "b" * 40 for name in integration.COMPONENTS},
                     "source_ref": "refs/heads/develop"}
+        expected_inventory = image_inventory.collect(Path(__file__).parents[2])
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             bundle = root / "bundle.tar.gz"
@@ -630,6 +815,7 @@ class DeliveryTests(unittest.TestCase):
                   patch.object(delivery, "ROOT", root), patch.object(delivery, "stage_sources"),
                   patch.object(delivery, "create_bundle", return_value=bundle),
                   patch.object(delivery, "latest_manifest", return_value=None),
+                  patch.object(image_inventory, "collect", return_value=expected_inventory),
                   patch.object(integration, "verify_develop_checkout", return_value=snapshot) as verify,
                   patch.object(session, "command", side_effect=command),
                   patch.object(delivery.publication, "promote", return_value=True) as promote,
@@ -644,6 +830,10 @@ class DeliveryTests(unittest.TestCase):
             self.assertEqual(manifest["channel"], "develop")
             self.assertEqual(manifest["source_ref"], "refs/heads/develop")
             self.assertNotIn("integration_tag", manifest)
+            self.assertIsNone(manifest["ci_evidence"])
+            self.assertIsNone(manifest["android_verification"])
+            self.assertIsNone(manifest["android_input_sha256"])
+            self.assertIsNone(manifest["android_verified_mobile_sha"])
             self.assertEqual(promote.call_args.args[1]["channel"], "develop")
             self.assertNotIn("integration_tag", promote.call_args.args[1])
 
@@ -689,11 +879,15 @@ class DeliveryTests(unittest.TestCase):
                   patch.object(delivery, "ROOT", root), patch.object(delivery, "stage_sources"),
                   patch.object(delivery, "create_bundle") as create_bundle,
                   patch.object(delivery, "latest_manifest", return_value=previous),
+                  patch.object(delivery.ci_evidence, "bind_for_release", side_effect=lambda *args, release, **kwargs: (
+                      {"schema_version": 1}, {"schema_version": 1, "origin_release": release,
+                       "android_input_sha256": "1" * 64, "mobile_sha": sources["mobile"]})),
                   patch.object(integration, "verify_checkout", return_value=snapshot),
                   patch.object(session, "command", side_effect=command),
                   patch.object(delivery.publication, "promote", return_value=True),
                   patch.dict("os.environ", {"RELEASE_CHANNEL": "main", "INTEGRATION_TAG": snapshot["integration_tag"],
                                             "GITHUB_RUN_NUMBER": "21", "GITHUB_RUN_ATTEMPT": "1",
+                                            "NEXORUTA_CI_EVIDENCE_FILE": str(root / "evidence.json"),
                                             "TESTED_CI_PLAN": json.dumps(plan), "GITHUB_OUTPUT": str(outputs)})):
                 delivery.build()
 
@@ -720,11 +914,15 @@ class DeliveryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "snapshot"):
                 delivery.latest_release({"GCP_PROJECT_ID": "demo-project"})
 
+    def test_legacy_manifest_is_not_deployable_or_reusable(self):
+        manifest = {"channel": "main", "release": "release-" + "a" * 32}
+        pointer = {"channel": "main", "release": manifest["release"]}
+        with patch.object(session, "command", side_effect=[json.dumps(pointer), json.dumps(manifest)]):
+            with self.assertRaisesRegex(RuntimeError, "version 2 publication"):
+                delivery.latest_manifest({"GCP_PROJECT_ID": "demo-project"})
+
     def test_update_resolves_one_complete_main_release_without_building(self):
         manifest = self.release_manifest()
-        manifest.update(integration_tag="integration-20-1", root_sha="c" * 40,
-                        sources={name: "d" * 40 for name in integration.COMPONENTS},
-                        publication_order=[20, 1])
         pointer = {"channel": "main", "release": manifest["release"],
                    "integration_tag": manifest["integration_tag"], "publication_order": [20, 1]}
         with patch.dict("os.environ", {"GCP_DELIVERY_BUCKET": "demo-delivery"}), patch.object(
@@ -739,6 +937,10 @@ class DeliveryTests(unittest.TestCase):
         manifest.update(channel="develop", source_ref="refs/heads/develop", root_sha="c" * 40,
                         sources={name: "d" * 40 for name in integration.COMPONENTS},
                         publication_order=[21, 1])
+        manifest.update(ci_evidence=None, android_verification=None,
+                        android_input_sha256=None, android_verified_mobile_sha=None,
+                        image_sources={name: "d" * 40 for name in delivery.SERVICES},
+                        bundle_source={"root_sha": "c" * 40, "backend_sha": "d" * 40})
         pointer = {"channel": "develop", "release": manifest["release"], "publication_order": [21, 1]}
         with (patch.dict("os.environ", {"RELEASE_CHANNEL": "develop", "GCP_DELIVERY_BUCKET": "demo-delivery"}),
               patch.object(session, "command", side_effect=[json.dumps(pointer), json.dumps(manifest)]) as command):

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "status": "pending",
+  "observation_date": "2026-11-14",
+  "query_performed": false,
+  "reason": "No se consultaron Cloud Billing Reports ni Cost table; no hay consumo facturado, créditos o costo neto observados para registrar.",
+  "currency": "USD",
+  "billing_period": null,
+  "last_usage_date_included": null,
+  "gross_cost": null,
+  "credits": null,
+  "net_cost": null,
+  "services": [],
+  "budget": {
+    "observed_monthly_usd": 80,
+    "credit_treatment": "EXCLUDE_ALL_CREDITS",
+    "thresholds": [0.5, 0.8, 1.0],
+    "is_spending_limit": false
+  },
+  "next_steps": [
+    "Obtener el Billing Report o Cost table autorizado, filtrado por proyecto y período.",
+    "Sanitizar y registrar costo bruto, créditos, neto, moneda, fecha máxima incluida y desfase.",
+    "Actualizar después de que el período incluya la ventana completa del ensayo, si se autoriza ejecutarlo."
+  ]
+}

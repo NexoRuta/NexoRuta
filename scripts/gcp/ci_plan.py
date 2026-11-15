@@ -8,6 +8,8 @@ import re
 import subprocess
 import sys
 
+import ci_evidence
+import image_inventory
 import integration
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -92,14 +94,51 @@ def release_baseline():
         if not match:
             continue
         manifest = json.loads(match.group(1))
+        # Releases written before the evidence contract are not reusable baselines.
+        if manifest.get("manifest_version") != 2:
+            continue
         if manifest.get("integration_tag") != tag:
             raise ValueError("Latest integration release manifest has a mismatched tag")
+        if (manifest.get("channel") != "main"
+                or not isinstance(manifest.get("project_id"), str)
+                or not re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", manifest["project_id"])
+                or manifest.get("region") != "southamerica-west1"
+                or not re.fullmatch(r"[a-f0-9]{64}", manifest.get("bundle_sha256", ""))):
+            raise ValueError("Latest integration release has incomplete project or bundle provenance")
         integration.validate_sources(manifest.get("sources", {}))
         if not SHA.fullmatch(manifest.get("root_sha", "")):
             raise ValueError("Latest integration release has an invalid root SHA")
         images = manifest.get("images", {})
         if set(images) != set(SERVICES) or any(not re.search(r"@sha256:[a-f0-9]{64}\Z", images[name]) for name in SERVICES):
             raise ValueError("Latest integration release is missing a complete image manifest")
+        image_sources = manifest.get("image_sources", {})
+        if set(image_sources) != set(SERVICES) or any(
+            image_sources[name] != manifest["sources"]["backend" if name in ("api", "worker") else "frontend"]
+            for name in SERVICES
+        ):
+            raise ValueError("Latest integration release images do not match their source gitlinks")
+        built = manifest.get("built_images")
+        reused = manifest.get("reused_images")
+        if (not isinstance(built, list) or any(not isinstance(name, str) or name not in SERVICES for name in built)
+                or len(built) != len(set(built)) or not isinstance(reused, dict)
+                or set(built).intersection(reused) or set(built).union(reused) != set(SERVICES)
+                or any(not isinstance(source, str) or not re.fullmatch(r"release-[a-f0-9]{32}", source)
+                       for source in reused.values())):
+            raise ValueError("Latest integration release has incomplete application image provenance")
+        bundle_source = manifest.get("bundle_source")
+        if (not isinstance(bundle_source, dict)
+                or not SHA.fullmatch(bundle_source.get("root_sha", ""))
+                or not SHA.fullmatch(bundle_source.get("backend_sha", ""))
+                or type(manifest.get("bundle_rebuilt")) is not bool):
+            raise ValueError("Latest integration release has incomplete bundle source provenance")
+        publication_order = manifest.get("publication_order")
+        if (not isinstance(publication_order, list) or len(publication_order) != 2
+                or any(type(value) is not int or value < 1 for value in publication_order)):
+            raise ValueError("Latest integration release has an invalid publication order")
+        inventory = image_inventory.validate_inventory(manifest.get("deployment_images"))
+        if image_inventory.checksum(inventory) != manifest.get("deployment_images_sha256"):
+            raise ValueError("Latest integration release has an altered deployment image inventory")
+        ci_evidence.validate_manifest_android(manifest)
         return manifest
     return None
 
@@ -138,7 +177,16 @@ def make_plan(root_sha, sources, baseline, root_paths, component_paths, android_
     frontend = source_changes["frontend"]
     mobile = source_changes["mobile"]
     backend_contract = bool(contract_changes["backend"])
-    current_android_verified = baseline and baseline.get("android_input_sha256") == android_key
+    baseline_android = None
+    if baseline:
+        try:
+            baseline_android = ci_evidence.validate_proof(baseline.get("android_verification"))
+            if (baseline_android["android_input_sha256"] != baseline.get("android_input_sha256")
+                    or baseline_android["mobile_sha"] != baseline.get("android_verified_mobile_sha")):
+                baseline_android = None
+        except (TypeError, ValueError):
+            baseline_android = None
+    current_android_verified = baseline_android and baseline_android["android_input_sha256"] == android_key
     mobile_android = build_changes["mobile"] or not current_android_verified or bool(unknown)
 
     components = {
@@ -186,6 +234,7 @@ def make_plan(root_sha, sources, baseline, root_paths, component_paths, android_
             "sources": baseline.get("sources") if baseline else None,
             "android_verified_mobile_sha": baseline.get("android_verified_mobile_sha") if baseline else None,
             "android_input_sha256": baseline.get("android_input_sha256") if baseline else None,
+            "android_verification": baseline_android,
         },
         "current": {"root_sha": root_sha, "sources": sources},
         "android_input_sha256": android_key,
