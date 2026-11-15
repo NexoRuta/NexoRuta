@@ -1,6 +1,6 @@
 # Auditoría y plan de corrección de push Android con Firebase
 
-Fecha: 14/11/2026. Alcance original: push en Android y dependencias de API, Worker, Firebase y distribucion. iOS queda fuera por indicacion del usuario. La implementacion Android se publico en `develop` el 15/11/2026 y la recepcion Firebase quedo comprobada en el telefono. Dos intentos de despliegue GCP fallaron durante el bootstrap de datos, antes de aplicar las imagenes. La consulta de solo lectura identifico una identidad administrativa huérfana que el bootstrap rehusa elevar; el Worker desplegado y el flujo de apertura/confirmacion siguen pendientes.
+Fecha: 14/11/2026. Alcance original: push Android con Firebase; iOS queda fuera por indicacion del usuario. La app Android y la configuracion de nexoruta-mobile estan publicadas en develop; el telefono recibio pushes directos en la barra. El workflow 43757741975 publico release-8c64bbe06a8341eea3c6b3f95a0cc00d (raiz eae114a, Backend 2ff4b85), pero fallo en vm_migrate_bootstrap_data. El Worker de esa release y el evento de negocio con apertura/ACK siguen pendientes.
 
 ## 1. Dictamen y fuentes examinadas
 
@@ -292,14 +292,14 @@ La guia operativa Android de la seccion 4 sigue siendo el procedimiento de acept
 
 ### Estado del despliegue GCP y pendientes (2026-11-15)
 
-- Los cambios de raiz, Backend y Mobile están publicados en `develop`: raiz `152f368`, Backend `f7d05e7`, Mobile `4dc2904`; el estado actualizado de este plan también está publicado en `develop`. Las acciones [43682929092](https://github.com/NexoRuta/NexoRuta/actions/runs/43682929092) y [43729545386](https://github.com/NexoRuta/NexoRuta/actions/runs/43729545386) publicaron correctamente los releases `release-a03dfa49040749b1b5b271742cd73594` y `release-b75f6e4f50ba4d70bbb142d9f3125ebe`, y sincronizaron `firebase_project_id=nexoruta-mobile`.
-- Ambos intentos `operation=start` fallaron en el nodo A durante `vm_migrate_bootstrap_data`. Pasaron SQL preflight, migraciones de esquema, provisión de roles y catálogo departamental; no se llegó a la etapa `apply` de las imágenes. El error del proceso remoto quedó sanitizado como `CalledProcessError`.
-- La causa de bootstrap quedó identificada con una consulta SQL de solo lectura: existe `admin@nexoruta.test` en `Usuarios`, pero no tiene fila en `AccesosPlataforma`. `EfPlataformaRepository.AsegurarConfiguradaAsync` detecta el correo ya ocupado y se niega a elevar esa identidad; `DatosInicialesSeeder` convierte el conflicto en fallo de inicialización. No se modificó la cuenta, su acceso ni sus credenciales. Para reintentar hay que decidir si se conserva esa identidad y se crea un administrador sintético distinto, o si se autoriza explícitamente cambiar el acceso de la existente.
-- El workflow ejecutó la limpieza de fallo: cerró el lease y detuvo A y B. La consulta posterior a Compute reportó ambas instancias `TERMINATED`. El proyecto y la base GCP se conservaron.
-- `/ready` respondió HTTP 200 durante el arranque, antes del drenaje del balanceador; no acredita que el release nuevo quedara aplicado. La etapa de aplicación de imágenes y health del Worker no se alcanzó, por lo que no se comprobó el `FIREBASE_PROJECT_ID` dentro de un Worker corriendo.
-- Verificación portable repetida: Mobile 33/33 pruebas focales, validador Firebase 6/6, clasificación push del Worker 9/9 y build del Worker sin errores. Persisten advertencias NU1510 y EF1003 ajenas a push. La integración PostgreSQL/outbox no se ejecutó en este Windows sin Docker; no se usaron servicios del host como fixture.
-- El repartidor sintético `repartidor_demo` no tiene una hoja de ruta activa. Por eso no se generó un aviso de negocio y siguen pendientes la apertura del aviso y su confirmación/ACK. Los dos mensajes FCM directos sí aparecieron en la barra de Android, según verificó el usuario.
-- El APK instalado es Debug, firmado localmente; antes de uso real se necesita una compilación Release y que el usuario inicie sesión con su cuenta.
+- La configuracion real de Firebase sigue apuntando a nexoruta-mobile; las acciones 43682929092 y 43729545386 publicaron releases previas y sincronizaron firebase_project_id. La accion 43757741975 publico la nueva release con raiz eae114a y Backend 2ff4b85.
+- La tercera accion 43757741975 paso SQL preflight, migraciones de esquema, roles, catalogo y preparacion de imagenes; fallo en el nodo A durante vm_migrate_bootstrap_data, antes de aplicar las imagenes. El error remoto quedo sanitizado por el controlador.
+- La causa es una identidad huerfana: existe admin@nexoruta.test en Usuarios, pero no en AccesosPlataforma. El comando explicito platform-admin sync-demo-password salio con codigo 1; el repositorio solo sincroniza una cuenta de plataforma ya existente y se niega a elevar esa identidad. No se cambio su password ni sus permisos. Se prepara un administrador sintetico separado admin-demo@nexoruta.test, con la misma clave de seed, y se conserva intacta la cuenta huerfana.
+- El workflow cerro su lease y apago A y B tras el fallo. La prueba manual acotada tambien cerro su lease; ambas VMs quedaron TERMINATED. Se conserva el proyecto GCP, la base y nexoruta-demo-runtime; se elimino el Secret Manager dedicado solo a credenciales de carga.
+- /ready respondio HTTP 200 durante el arranque, antes del drenaje del balanceador; no acredita que la release nueva quedara aplicada. No se comprobo el FIREBASE_PROJECT_ID dentro de un Worker nuevo.
+- Verificacion portable anterior: Mobile 33/33 pruebas focales, validador Firebase 6/6, clasificacion push del Worker 9/9 y build del Worker sin errores. Los cambios recientes de identidad sintetica pasaron 49 pruebas Python; el filtro de comandos Backend esta en ejecucion. La integracion PostgreSQL/outbox no se ejecuto en Windows sin Docker.
+- El repartidor sintetico no tiene una ruta activa, asi que no se genero un aviso de negocio ni se probaron apertura/ACK. Los dos mensajes FCM directos si aparecieron en la barra, segun confirmo el usuario. ADB esta conectado otra vez; la verificacion de negocio se retoma tras el despliegue.
+- El APK instalado es Debug, firmado localmente; falta un APK Release firmado. El telefono disponible es Galaxy S21 con Android 14.
 
 ### Estado de los pasos de verificación del plan
 
@@ -317,4 +317,4 @@ La guia operativa Android de la seccion 4 sigue siendo el procedimiento de acept
 | 10. Fallas controladas del proveedor | Parcial | Clasificación unitaria 9/9. Falta la matriz integrada de cuotas, respuesta parcial, carreras y persistencia con PostgreSQL. |
 | 11. Revisión visual y evidencia | Parcial | El usuario confirmó las notificaciones en la barra; no se guardó captura y no se revisaron visualmente estados de error/denegación ni accesibilidad. |
 
-El ADB del teléfono está actualmente `offline`; el último puerto/código de emparejamiento proporcionado ya no conectó. Se conserva la evidencia de las dos entregas anteriores, pero hacen falta datos ADB vigentes para repetir las pruebas de los pasos 6–9.
+El dispositivo adb-R5CRA1L7Z4E-inGwTF aparece como device en ADB (Galaxy S21, Android 14). Se conservan las entregas directas anteriores; quedan pendientes el evento real, toque, apertura y ACK.

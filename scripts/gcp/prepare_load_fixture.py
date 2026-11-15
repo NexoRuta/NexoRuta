@@ -16,7 +16,7 @@ import load_tests
 
 
 FIXTURE_SECRET = "nexoruta-load-fixtures"
-ADMIN_EMAIL = "admin@nexoruta.test"
+ADMIN_EMAIL = "admin-demo@nexoruta.test"
 SEED_PASSWORD = "ChangeMe123!"
 READ_PATH = "/api/mobile/perfil"
 MAX_BATCH = 5
