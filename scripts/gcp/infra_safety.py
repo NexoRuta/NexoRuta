@@ -13,8 +13,8 @@ def _abandoned_secret_version_replacement(resource, actions):
     )
 
 
-def _retired_load_preparer_secret_cleanup(resource, actions):
-    """Allow only the explicitly retired synthetic-admin credential secret and its access grants."""
+def _retired_demo_seed_credentials_cleanup(resource, actions):
+    """Allow deletion only of retired demo login credentials and their access grants."""
     if actions != ["delete"]:
         return False
     address = resource.get("address")
@@ -35,6 +35,13 @@ def _retired_load_preparer_secret_cleanup(resource, actions):
         secret_id = before.get("secret_id", "")
         return (isinstance(secret_id, str)
                 and secret_id.endswith("/secrets/nexoruta-load-preparer-credentials"))
+    if (address in (
+            "random_password.demo_actor",
+            'random_password.password["admin"]',
+            'random_password.password["operator"]',
+            'random_password.password["commerce"]',
+    ) and resource_type == "random_password"):
+        return True
     return False
 
 
@@ -60,7 +67,7 @@ def check_plan(plan, operation):
             continue
         if operation in ("bootstrap", "start", "update") and _abandoned_secret_version_replacement(resource, actions):
             continue
-        if operation in ("bootstrap", "start", "update") and _retired_load_preparer_secret_cleanup(resource, actions):
+        if operation in ("bootstrap", "start", "update") and _retired_demo_seed_credentials_cleanup(resource, actions):
             continue
         if operation == "bootstrap":
             raise RuntimeError(f"Bootstrap plan deletes/replaces resources: {address}")
