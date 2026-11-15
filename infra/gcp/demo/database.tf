@@ -77,6 +77,13 @@ resource "random_password" "password" {
   min_lower   = 1
   min_numeric = 1
   min_upper   = 1
+
+  # Older remote state uses the provider defaults for these three constraints.
+  # Keep its generated database credentials stable; new instances still use
+  # the configured character-class requirements.
+  lifecycle {
+    ignore_changes = [min_lower, min_numeric, min_upper]
+  }
 }
 
 resource "random_password" "demo_actor" {
@@ -85,6 +92,10 @@ resource "random_password" "demo_actor" {
   min_lower   = 1
   min_numeric = 1
   min_upper   = 1
+
+  lifecycle {
+    ignore_changes = [min_lower, min_numeric, min_upper]
+  }
 }
 
 resource "random_bytes" "key" {
