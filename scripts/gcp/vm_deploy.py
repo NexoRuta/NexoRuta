@@ -71,6 +71,13 @@ def bootstrap_failure_diagnostic(log, start_offset):
     except (AttributeError, OSError, ValueError):
         return "BootstrapProcessFailed"
     categories = (
+        ("Existing platform account email differs from configured initialization", "BootstrapPlatformEmailMismatch"),
+        ("Existing platform account has no password hash", "BootstrapPlatformPasswordHashMissing"),
+        ("Existing platform account is inactive", "BootstrapPlatformAccountInactive"),
+        ("Existing platform role is incompatible with configured initialization", "BootstrapPlatformRoleIncompatible"),
+        ("Existing platform role permissions differ from the protected catalog", "BootstrapPlatformPermissionsMismatch"),
+        ("Existing platform account also has organization access", "BootstrapPlatformHasOrganizationAccess"),
+        ("Configured platform password differs from the existing password", "BootstrapPlatformPasswordMismatch"),
         ("Platform initialization email belongs to an existing identity", "BootstrapPlatformEmailConflict"),
         ("Existing platform account is incompatible", "BootstrapPlatformIdentityIncompatible"),
         ("No existing platform account was found to synchronize", "BootstrapPlatformAccountMissing"),

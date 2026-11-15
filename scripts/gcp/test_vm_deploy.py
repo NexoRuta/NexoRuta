@@ -65,11 +65,20 @@ class VmDeploymentTests(unittest.TestCase):
         raw_log = io.StringIO(
             "secret=must-not-escape\n"
             "Unhandled exception. System.InvalidOperationException: "
-            "Platform initialization email belongs to an existing identity; it will not be elevated.\n"
+            "Existing platform account email differs from configured initialization; no account was changed.\n"
         )
         diagnostic = vm_deploy.bootstrap_failure_diagnostic(raw_log, 0)
-        self.assertEqual("BootstrapPlatformEmailConflict", diagnostic)
+        self.assertEqual("BootstrapPlatformEmailMismatch", diagnostic)
         self.assertNotIn("must-not-escape", diagnostic)
+
+    def test_bootstrap_password_mismatch_is_classified_without_password_output(self):
+        raw_log = io.StringIO(
+            "Configured platform password differs from the existing password; "
+            "do-not-print-this-password\n"
+        )
+        diagnostic = vm_deploy.bootstrap_failure_diagnostic(raw_log, 0)
+        self.assertEqual("BootstrapPlatformPasswordMismatch", diagnostic)
+        self.assertNotIn("do-not-print-this-password", diagnostic)
 
     def test_bootstrap_failure_diagnostic_reports_only_exception_type_as_fallback(self):
         raw_log = io.StringIO("Unhandled exception. Npgsql.PostgresException: private database details\n")
