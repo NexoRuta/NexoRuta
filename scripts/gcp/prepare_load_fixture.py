@@ -16,7 +16,8 @@ import load_tests
 
 
 FIXTURE_SECRET = "nexoruta-load-fixtures"
-PREPARER_SECRET = "nexoruta-load-preparer-credentials"
+ADMIN_EMAIL = "admin@nexoruta.test"
+SEED_PASSWORD = "ChangeMe123!"
 READ_PATH = "/api/mobile/perfil"
 MAX_BATCH = 5
 
@@ -93,19 +94,6 @@ def add_secret_version(token, project, value):
     return json.loads(response)["name"].rsplit("/", 1)[-1]
 
 
-def preparer_credentials(token, project):
-    name = urllib.parse.quote(PREPARER_SECRET, safe="")
-    url = f"https://secretmanager.googleapis.com/v1/projects/{project}/secrets/{name}/versions/latest:access"
-    status, body = google_request(token, "GET", url)
-    if status != 200:
-        raise RuntimeError(f"Could not read the fixture-preparer credential (HTTP {status})")
-    value = json.loads(base64.b64decode(json.loads(body)["payload"]["data"], validate=True))
-    email, password = value.get("email"), value.get("password")
-    if email != "admin@nexoruta.test" or not isinstance(password, str) or len(password) < 12:
-        raise RuntimeError("The fixture-preparer secret has no valid platform credential")
-    return email, password
-
-
 def existing_accounts(value):
     accounts = value.get("accounts") if isinstance(value, dict) else None
     expected = [f"opt06-load-{number:03d}@nexoruta.test" for number in range(1, 51)]
@@ -120,11 +108,10 @@ def existing_accounts(value):
 def fixture_accounts(value, token, project):
     indexed = existing_accounts(value or {})
     expected = [f"opt06-load-{number:03d}@nexoruta.test" for number in range(1, 51)]
-    accounts = [{"email": email, "password": indexed.get(email) or
-                 base64.urlsafe_b64encode(os.urandom(36)).decode("ascii").rstrip("=")} for email in expected]
-    if len(indexed) == len(expected) and isinstance(value, dict) and value.get("fixtureStatus") == "ready":
-        return accounts
-    if len(indexed) == len(expected) and isinstance(value, dict) and value.get("fixtureStatus") == "preparing":
+    accounts = [{"email": email, "password": SEED_PASSWORD} for email in expected]
+    if (len(indexed) == len(expected)
+            and all(indexed.get(email) == SEED_PASSWORD for email in expected)
+            and isinstance(value, dict) and value.get("fixtureStatus") in ("ready", "preparing")):
         return accounts
     # Persist credentials before touching SQL so an interrupted seed can resume.
     add_secret_version(token, project, {"fixtureStatus": "preparing", "readPath": READ_PATH,
@@ -226,7 +213,6 @@ def main():
         raise ValueError("A valid fixture-preparation run ID is required")
     token = access_token(project)
     current, current_bytes, current_version = secret_version(token, project)
-    admin_email, password = preparer_credentials(token, project)
     origin = load_tests.application_origin(config)
     check_active = lambda: assert_preparation_active(config, token, run_id)
     check_active()
@@ -234,7 +220,7 @@ def main():
     if status != 200:
         raise RuntimeError("The remote application is not ready for fixture preparation")
     accounts = fixture_accounts(current, token, project)
-    seeded = prepare_application(origin, admin_email, password, accounts, check_active)
+    seeded = prepare_application(origin, ADMIN_EMAIL, SEED_PASSWORD, accounts, check_active)
     check_active()
     prepared_accounts, object_name, digest = pin_operations(token, project, seeded)
     credentials = {item["email"]: item["password"] for item in accounts}

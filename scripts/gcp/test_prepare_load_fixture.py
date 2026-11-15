@@ -104,38 +104,47 @@ class PrepareLoadFixtureTests(unittest.TestCase):
         self.assertEqual(50, len(accounts))
         self.assertEqual([f"opt06-load-{number:03d}@nexoruta.test" for number in range(1, 51)],
                          [account["email"] for account in accounts])
-        self.assertTrue(all(len(account["password"]) >= 12 for account in accounts))
+        self.assertTrue(all(account["password"] == prepare.SEED_PASSWORD for account in accounts))
         pending = persist.call_args.args[2]
         self.assertEqual("preparing", pending["fixtureStatus"])
         self.assertEqual(accounts, pending["accounts"])
 
-    def test_existing_credentials_survive_a_sql_reset(self):
+    def test_existing_random_credentials_are_replaced_with_the_seed_password(self):
         accounts = [{"email": f"opt06-load-{number:03d}@nexoruta.test", "password": f"stored-{number:03d}-password"}
                     for number in range(1, 51)]
         with patch.object(prepare, "add_secret_version") as persist:
             actual = prepare.fixture_accounts({"fixtureStatus": "ready", "accounts": accounts}, "token", "demo-project")
-        self.assertEqual(accounts, actual)
-        persist.assert_not_called()
+        self.assertTrue(all(account["password"] == prepare.SEED_PASSWORD for account in actual))
+        persist.assert_called_once()
+        self.assertEqual("preparing", persist.call_args.args[2]["fixtureStatus"])
+        self.assertEqual(actual, persist.call_args.args[2]["accounts"])
 
-    def test_expanding_a_smoke_fixture_preserves_existing_passwords(self):
+    def test_expanding_a_smoke_fixture_uses_one_seed_password_for_every_account(self):
         existing = [{"email": f"opt06-load-{number:03d}@nexoruta.test", "password": f"stored-{number:03d}-password"}
                     for number in range(1, 6)]
         with patch.object(prepare, "add_secret_version") as persist:
             actual = prepare.fixture_accounts({"fixtureStatus": "ready", "accounts": existing},
                                               "token", "demo-project")
-        self.assertEqual(existing, actual[:5])
         self.assertEqual(50, len(actual))
-        self.assertTrue(all(len(account["password"]) >= 12 for account in actual))
+        self.assertTrue(all(account["password"] == prepare.SEED_PASSWORD for account in actual))
         pending = persist.call_args.args[2]
         self.assertEqual("preparing", pending["fixtureStatus"])
         self.assertEqual(actual, pending["accounts"])
 
     def test_retrying_pending_fixture_reuses_the_persisted_credentials(self):
-        accounts = [{"email": f"opt06-load-{number:03d}@nexoruta.test", "password": f"stored-{number:03d}-password"}
+        accounts = [{"email": f"opt06-load-{number:03d}@nexoruta.test", "password": prepare.SEED_PASSWORD}
                     for number in range(1, 51)]
         with patch.object(prepare, "add_secret_version") as persist:
             actual = prepare.fixture_accounts({"fixtureStatus": "preparing", "accounts": accounts},
                                               "token", "demo-project")
+        self.assertEqual(accounts, actual)
+        persist.assert_not_called()
+
+    def test_ready_fixture_with_seed_password_does_not_create_another_secret_version(self):
+        accounts = [{"email": f"opt06-load-{number:03d}@nexoruta.test", "password": prepare.SEED_PASSWORD}
+                    for number in range(1, 51)]
+        with patch.object(prepare, "add_secret_version") as persist:
+            actual = prepare.fixture_accounts({"fixtureStatus": "ready", "accounts": accounts}, "token", "demo-project")
         self.assertEqual(accounts, actual)
         persist.assert_not_called()
 

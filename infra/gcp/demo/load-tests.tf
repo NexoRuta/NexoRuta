@@ -214,12 +214,6 @@ resource "google_secret_manager_secret_iam_member" "load_preparer_fixture_writer
   member    = "serviceAccount:nexoruta-load-preparer@${var.project_id}.iam.gserviceaccount.com"
 }
 
-resource "google_secret_manager_secret_iam_member" "load_preparer_credentials" {
-  secret_id = "projects/${var.project_id}/secrets/nexoruta-load-preparer-credentials"
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:nexoruta-load-preparer@${var.project_id}.iam.gserviceaccount.com"
-}
-
 resource "google_secret_manager_secret_iam_member" "load_controller_fixture_versions" {
   for_each  = toset(["roles/secretmanager.viewer"])
   secret_id = google_secret_manager_secret.load_fixtures.secret_id

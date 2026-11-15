@@ -18,6 +18,7 @@ import urllib.request
 METADATA = "http://metadata.google.internal/computeMetadata/v1/"
 SECRET_NAME = "nexoruta-demo-runtime"
 ADMIN_EMAIL = "admin@nexoruta.test"
+SEED_PASSWORD = "ChangeMe123!"
 MAX_RESPONSE_BYTES = 1024 * 1024
 
 
@@ -70,15 +71,12 @@ def read_runtime_secret():
     try:
         payload = json.loads(body)["payload"]["data"]
         runtime = json.loads(base64.b64decode(payload, validate=True))
-        password = runtime["passwords"]["admin"]
         origin = runtime["endpoints"]["api"]
-        if not isinstance(password, str) or len(password) < 12:
-            raise ValueError
         if not isinstance(origin, str):
             raise ValueError
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-        raise RuntimeError("Runtime configuration is missing the platform login settings.") from None
-    return origin, password
+        raise RuntimeError("Runtime configuration is missing the application endpoint.") from None
+    return origin
 
 
 def validate_api_origin(origin):
@@ -274,14 +272,14 @@ def main():
     parser.add_argument("--diagnose-last-failure", action="store_true")
     options = parser.parse_args()
 
-    origin, password = read_runtime_secret()
+    origin = read_runtime_secret()
     origin = validate_api_origin(origin)
 
     status, login = api_request(
         origin,
         "POST",
         "/api/auth/login",
-        payload={"email": ADMIN_EMAIL, "password": password},
+        payload={"email": ADMIN_EMAIL, "password": SEED_PASSWORD},
     )
     if status != 200 or login.get("contexto") != "Plataforma":
         raise RuntimeError(f"Platform login failed or returned the wrong context (HTTP {status}).")

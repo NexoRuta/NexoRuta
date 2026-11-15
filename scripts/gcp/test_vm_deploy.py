@@ -17,6 +17,8 @@ import vm_deploy
 import image_inventory
 import monitor_agent
 import deployment_health
+import seed_demo_data
+import prepare_load_fixture
 
 
 def valid_host_versions():
@@ -42,8 +44,6 @@ def install_host_version_fixtures(root, release):
 class VmDeploymentTests(unittest.TestCase):
     def test_bootstrap_config_reuses_the_existing_platform_identity(self):
         runtime = {
-            "passwords": {"admin": "synthetic-platform-password",
-                          "operator": "operator-password", "commerce": "commerce-password"},
             "organization_ids": {"operator": "operator-id", "commerce": "commerce-id"},
         }
 
@@ -51,8 +51,15 @@ class VmDeploymentTests(unittest.TestCase):
 
         self.assertEqual("admin@nexoruta.test",
                          configuration["PlatformInitialization"]["Email"])
-        self.assertEqual("synthetic-platform-password",
+        self.assertEqual(vm_deploy.DEMO_SEED_PASSWORD,
                          configuration["PlatformInitialization"]["Password"])
+        self.assertEqual(vm_deploy.DEMO_SEED_PASSWORD,
+                         configuration["AccesoInicial"]["OperadorUsuarioPassword"])
+        self.assertEqual(vm_deploy.DEMO_SEED_PASSWORD,
+                         configuration["AccesoInicial"]["UsuarioPassword"])
+        self.assertEqual(vm_deploy.DEMO_SEED_PASSWORD, seed_demo_data.SEED_PASSWORD)
+        self.assertEqual(vm_deploy.DEMO_SEED_PASSWORD, prepare_load_fixture.SEED_PASSWORD)
+        self.assertNotIn("SynchronizePassword", configuration["PlatformInitialization"])
 
     def test_authenticated_identity_smoke_matches_each_synthetic_actor_and_organization(self):
         organization_ids = {"operator": "operator-id", "commerce": "commerce-id"}
@@ -462,7 +469,7 @@ class VmDeploymentTests(unittest.TestCase):
         registry = "southamerica-west1-docker.pkg.dev/demo-project/nexoruta"
         passwords = {name: "private-" + name for name in (
             "migrator", "api", "worker", "bootstrap", "rabbit", "mongo", "mail", "monitor", "grafana",
-            "keys_api", "keys_admin", "keys_backoffice", "keys_commerce", "keys_tracking", "admin", "operator", "commerce")}
+            "keys_api", "keys_admin", "keys_backoffice", "keys_commerce", "keys_tracking")}
         passwords["mongo"] = "private-mongo"
         runtime = {"project_id": "demo-project", "sql_connection": "demo-project:region:sql", "registry": registry,
                    "services_host": "10.0.0.1", "frontend_ip": "34.0.0.1", "subnet_cidr": "10.0.0.0/24",
@@ -472,8 +479,7 @@ class VmDeploymentTests(unittest.TestCase):
                    "passwords": passwords, "keys": {name: "key" for name in ("jwt", "tracking", "push", "evidence")},
                    "endpoints": {name: f"https://{name}.34-0-0-1.sslip.io" for name in (
                        "api", "admin", "backoffice", "commerce", "tracking", "mail", "monitor")},
-                   "organization_ids": {"operator": "operator-id", "commerce": "commerce-id"},
-                   "demo_actor_password": "synthetic-demo-actor-password-2026"}
+                   "organization_ids": {"operator": "operator-id", "commerce": "commerce-id"}}
         integrations = {"smtp_host": "mailpit", "smtp_port": 1025, "smtp_ssl": False,
                         "firebase_project_id": "nexoruta-mobile",
                         "smtp_from": "demo@example.test", "monitor_google_client_id": "oauth-client",
@@ -502,7 +508,7 @@ class VmDeploymentTests(unittest.TestCase):
         self.assertEqual(values["REDIS_HOST"], runtime["redis"]["host"])
         self.assertEqual(values["REDIS_AUTH"], runtime["redis_identity_fixture"]["password"])
         self.assertEqual(values["REDIS_PORT"], 6378)
-        self.assertEqual(values["DEMO_DATA_ACTOR_PASSWORD"], runtime["demo_actor_password"])
+        self.assertEqual(values["DEMO_DATA_ACTOR_PASSWORD"], vm_deploy.DEMO_SEED_PASSWORD)
         import base64
         expected_ca = base64.b64encode(runtime["redis_identity_fixture"]["ca_certificate"].encode()).decode()
         self.assertEqual(json.loads(values["REDIS_CA_CERTIFICATES_BASE64_JSON"]), [expected_ca])
@@ -523,13 +529,11 @@ class VmDeploymentTests(unittest.TestCase):
                                        "release-" + "a" * 32, ("172.22.0.0/16",), runtime["redis_identity_fixture"])
         self.assertEqual(enabled["WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN"], "true")
 
-    def test_shared_environment_requires_a_valid_external_demo_actor_password(self):
+    def test_shared_environment_uses_the_fixed_demo_seed_password(self):
         runtime, integrations, hosting, images = self.configuration()
-        for password in (None, "short", "long-password-with\nnewline", "long-password-with\x00nul"):
-            with self.subTest(password="missing-or-invalid"), self.assertRaisesRegex(ValueError, "demo actor password"):
-                runtime["demo_actor_password"] = password
-                vm_deploy.environment(runtime, integrations, images, "hash", hosting, "a", "10.0.0.1",
-                                      "release-" + "a" * 32, ("172.22.0.0/16",), runtime["redis_identity_fixture"])
+        values = vm_deploy.environment(runtime, integrations, images, "hash", hosting, "a", "10.0.0.1",
+                                       "release-" + "a" * 32, ("172.22.0.0/16",), runtime["redis_identity_fixture"])
+        self.assertEqual(vm_deploy.DEMO_SEED_PASSWORD, values["DEMO_DATA_ACTOR_PASSWORD"])
 
     def test_shared_environment_rejects_open_google_access_and_default_proxy_routes(self):
         runtime, integrations, hosting, images = self.configuration()

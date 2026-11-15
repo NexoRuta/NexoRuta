@@ -301,7 +301,9 @@ Tras los healthchecks internos se comprueba HTTPS de las cinco apps y el endpoin
 de salud de `monitor`; también se verifica que Grafana y Mailpit exijan login. En cada
 despliegue se prueba login real contra la base. Los datos y contraseñas posteriores no se
 reinician. Las cuentas iniciales son `admin@nexoruta.test`, `operador@nexoruta.test`
-y `comercio@nexoruta.test`; sus contraseñas están en el secreto runtime, no en el repo.
+y `comercio@nexoruta.test`; todas las cuentas sintéticas de demo usan la contraseña
+fija `ChangeMe123!`, definida en el seed para este entorno de desarrollo. No reutilizarla
+en cuentas ni entornos productivos.
 Cada `update` tiene un corte deliberado: retira ambos nodos del balanceador,
 detiene las apps, migra una vez y aplica la release objetivo, admitiendo B y luego
 A. No es una rotación sin interrupción. Si falla una migración, las apps quedan

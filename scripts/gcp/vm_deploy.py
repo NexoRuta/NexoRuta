@@ -30,6 +30,7 @@ BASE = Path("/srv/nexoruta")
 APPS = ("api", "worker-rabbit", "worker-kafka", "worker-push", "worker-webhooks", "admin", "backoffice", "commerce", "tracking",
         "grafana", "otel-collector", "alloy")
 APP_IMAGE_SERVICES = ("api", "worker", "admin", "backoffice", "commerce", "tracking")
+DEMO_SEED_PASSWORD = "ChangeMe123!"
 SHARED = ("rabbitmq", "kafka", "mongo", "mailpit", "proxy", "prometheus", "prometheus-write-gateway",
           "gcp-metrics-collector", "loki", "tempo")
 OBSERVABILITY_CORE = ("prometheus", "prometheus-write-gateway", "gcp-metrics-collector", "loki", "tempo")
@@ -362,14 +363,14 @@ def ensure_mongo_runtime_users(deployment):
 
 
 def bootstrap_config(runtime):
-    passwords, ids = runtime["passwords"], runtime["organization_ids"]
+    ids = runtime["organization_ids"]
     return {
-        "PlatformInitialization": {"Enabled": True, "Email": "admin@nexoruta.test", "Password": passwords["admin"]},
+        "PlatformInitialization": {"Enabled": True, "Email": "admin@nexoruta.test", "Password": DEMO_SEED_PASSWORD},
         "AccesoInicial": {
             "OperadorId": ids["operator"], "ComercioId": ids["commerce"],
             "OperadorNombre": "Operador Demo Uruguay", "ComercioNombre": "Comercio Demo Uruguay",
             "OperadorUsuarioEmail": "operador@nexoruta.test", "UsuarioEmail": "comercio@nexoruta.test",
-            "OperadorUsuarioPassword": passwords["operator"], "UsuarioPassword": passwords["commerce"],
+            "OperadorUsuarioPassword": DEMO_SEED_PASSWORD, "UsuarioPassword": DEMO_SEED_PASSWORD,
             "OperadorRolCodigo": "propietario-operador", "ComercioRolCodigo": "propietario-comercio",
         },
         "Bootstrap": {"Roles": [
@@ -422,10 +423,7 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
             raise ValueError("Release image must be pinned to a digest in the expected repository")
         result[f"{name.upper()}_IMAGE"] = image
     if hosting is not None:
-        actor_password = runtime.get("demo_actor_password")
-        if (not isinstance(actor_password, str) or len(actor_password) < 16
-                or any(character in actor_password for character in "\r\n\x00")):
-            raise ValueError("Runtime secret is missing a valid general demo actor password")
+        actor_password = DEMO_SEED_PASSWORD
         if node not in ("a", "b") or not re.fullmatch(r"release-[a-f0-9]{32}", release or ""):
             raise ValueError("A shared deployment needs a valid node and release")
         for address in (private_ip, runtime["frontend_ip"]):
@@ -1085,7 +1083,7 @@ def smoke(runtime, check_accounts=True):
     accounts = (("admin", "admin@nexoruta.test"), ("operator", "operador@nexoruta.test"), ("commerce", "comercio@nexoruta.test")) if check_accounts else ()
     authenticated_reads = []
     for role, email in accounts:
-        payload = json.dumps({"email": email, "password": runtime["passwords"][role]}).encode()
+        payload = json.dumps({"email": email, "password": DEMO_SEED_PASSWORD}).encode()
         request = urllib.request.Request(endpoints["api"] + "/api/auth/login", data=payload, headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=20) as response:
             if response.status != 200:

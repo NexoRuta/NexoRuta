@@ -128,18 +128,16 @@ Cada fase termina en su gate. Si falla, conservar evidencia y corregir esa fase;
 
 **Gate P0:** fuentes exactas y destino identificados; ninguna divergencia de submódulos sin explicar; precondiciones del ensayo/costo anotadas. Una VM RUNNING o una release antigua no reemplaza este registro.
 
-### P1 — Sacar credenciales operativas del código
+### P1 — Credenciales sintéticas de desarrollo
 
 Archivos: infra/gcp/demo/database.tf; scripts/gcp/github_environment.py, vm_deploy.py, seed_demo_data.py, prepare_load_fixture.py si consume ese contrato; deploy/gcp/compose.yaml; backend/src/NexoRuta.Infrastructure/Persistence/DatosDemoSeeder.cs, inicializadores y tests que realmente consumen la contraseña.
 
-1. Reutilizar random_password.password["admin"], ya existente; dejar de sustituirlo con una constante en runtime y load_preparer_credentials. Añadir una credencial aleatoria persistente dedicada para actores de demo. No reutilizar contraseñas de SQL, cifrado, Redis o firma Android para personas.
-2. Contrato propuesto para actores: sección backend "DemoData:ActorPassword", recibida como DemoData__ActorPassword desde el secreto runtime privado. Validarla solo al ejecutar el seed general que la necesita: mínimo 16 caracteres, sin CR/LF/NUL. Ausencia o formato inválido aborta antes de escribir actores; el arranque ordinario de API y la fixture de carga con credenciales propias no deben exigirla.
-3. Usar ese único valor validado en creación/sincronización/verificación del seed; eliminar la constante del backend y fallbacks al valor anterior. Actualizar tests/documentos de acceso que la asuman. Los passwords sintéticos de tests aislados pueden existir en fixtures; no deben convertirse en credenciales del despliegue.
-4. Conservar los endpoints, transacciones, RLS y revocación de sesiones de DatosDemoSeeder. No pasar la contraseña por HTTP en query, CLI, resumen, JSON de evidencia o resultados públicos del seed.
-5. Para base nueva, bootstrap y preparador leen el mismo admin generado. Para la base existente, **no basta cambiar Secret Manager**: el bootstrap puede conservar el usuario existente. Preparar un comando administrativo idempotente que sincronice únicamente el admin sintético identificado y sus metadatos de credenciales, con transacción, validación de identidad y sin imprimir valores. No resetear otros usuarios.
-6. La transición existente requiere ventana acordada, respaldo verificable y plan específico: detener consumidores del admin/preparador, generar versión nueva, sincronizar password real del admin, actualizar referencia del preparador y desplegar ambos consumidores. Las sesiones anteriores deben revocarse mediante el comportamiento existente. Si falla, no intentar el password anterior como fallback; reparar la coherencia explícitamente.
-7. El seed general es una operación manual aparte: no ejecutarlo en cada deploy ni convertir su sincronización en una rotación silenciosa de todos los actores. Preservar idempotencia de envíos y datos.
-8. Mantener hosting_identity.ensure y redis_identity.ensure: versión válida existente es autoritativa; una identidad malformada debe fallar. No regenerar PFX, claves de Grafana o CA Redis para lograr un smoke verde.
+1. Para el demo de desarrollo, el seed usa `ChangeMe123!` para los administradores y actores sintéticos, incluidos los usuarios OPT-06. No reutilizar esta contraseña en cuentas ni entornos productivos.
+2. El runtime Secret Manager conserva exclusivamente configuración y secretos de infraestructura; no contiene contraseñas de usuarios sintéticos. El preparador de carga usa la contraseña del seed y `nexoruta-load-fixtures` continúa almacenando el fixture reproducible.
+3. El bootstrap de plataforma es create-only para una identidad existente. Un cambio de contraseña requiere la operación administrativa explícita `platform-admin sync-demo-password`; la contraseña no se rota automáticamente al desplegar.
+4. El seed general puede sincronizar actores sintéticos durante la operación manual de seed. El preparador OPT-06 actualiza las cuentas sintéticas existentes al valor uniforme y revoca sus sesiones previas.
+5. Conservar endpoints, transacciones, RLS y revocación de sesiones. No pasar credenciales en query, argumentos CLI, resúmenes o evidencia pública.
+6. Mantener hosting_identity.ensure y redis_identity.ensure: una versión válida existente es autoritativa; una identidad malformada debe fallar. No regenerar PFX, claves de Grafana o CA Redis para lograr un smoke verde.
 
 Pruebas necesarias: ausencia de credencial detiene seed sin escrituras; credencial externa crea los actores y su segundo seed conserva entidades; fixture de carga independiente sigue funcionando; admin nuevo/preparador autentican con la misma credencial; transición del admin existente preserva identidad/permisos/datos y revoca sesiones; logs/error no contienen canarios secretos.
 
