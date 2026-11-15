@@ -92,6 +92,8 @@ La API `fcm.googleapis.com` debe estar habilitada en `nexoruta-mobile`. El
 deployer no recibe permisos para modificar IAM en el proyecto Firebase; el rol
 de envio se concede a la identidad runtime por separado. El secreto de Android
 se escribe con politica `ABANDON`, que agrega versiones y conserva las previas.
+El bootstrap olvida en el estado la version antigua que tenia politica
+`DELETE` antes de agregar la nueva; la version remota anterior se conserva.
 
 ## Environment de CI
 

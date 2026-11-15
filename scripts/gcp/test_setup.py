@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
+import bootstrap
 import bootstrap_setup
 import infra_safety
 
@@ -289,6 +290,34 @@ class BootstrapSetupValidationTests(unittest.TestCase):
             infra_safety.check_plan(create, "stop")
         with self.assertRaisesRegex(RuntimeError, "invalid plan"):
             infra_safety.check_plan(None, "update")
+
+    def test_legacy_mobile_secret_migration_forgets_state_without_deleting_version(self):
+        state = {"values": {"root_module": {"resources": [{
+            "address": "google_secret_manager_secret_version.mobile",
+            "type": "google_secret_manager_secret_version",
+            "name": "mobile",
+            "values": {
+                "id": "projects/1090571196455/secrets/nexoruta-mobile-config/versions/1",
+                "secret": "projects/nexoruta-demo-20261022/secrets/nexoruta-mobile-config",
+                "deletion_policy": "DELETE",
+            },
+        }]}}}
+        tofu = ("tofu", "-chdir=infra/gcp/bootstrap")
+        with patch.object(bootstrap, "command") as execute:
+            self.assertTrue(bootstrap.detach_legacy_mobile_config_version(tofu, state))
+        execute.assert_called_once_with(
+            *tofu, "state", "rm", "-lock-timeout=5m",
+            "google_secret_manager_secret_version.mobile",
+        )
+
+        wrong_secret = json.loads(json.dumps(state))
+        wrong_secret["values"]["root_module"]["resources"][0]["values"]["secret"] = (
+            "projects/nexoruta-demo-20261022/secrets/another-secret"
+        )
+        with patch.object(bootstrap, "command") as execute:
+            with self.assertRaisesRegex(RuntimeError, "unexpected Secret Manager"):
+                bootstrap.detach_legacy_mobile_config_version(tofu, wrong_secret)
+        execute.assert_not_called()
 
     def test_bootstrap_wif_condition_uses_only_the_verified_immutable_subject(self):
         main_tf = (Path(__file__).resolve().parents[2] / "infra/gcp/bootstrap/main.tf").read_text(encoding="utf-8")

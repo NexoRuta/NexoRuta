@@ -24,6 +24,37 @@ def resources(module):
         yield from resources(child)
 
 
+def detach_legacy_mobile_config_version(tofu, state):
+    """Forget the legacy DELETE-tracked version without deleting it in GCP."""
+    root = state.get("values", {}).get("root_module", {})
+    matches = [resource for resource in resources(root)
+               if resource.get("address") == "google_secret_manager_secret_version.mobile"]
+    if not matches:
+        return False
+    if len(matches) != 1:
+        raise RuntimeError("The legacy mobile config secret has ambiguous Terraform state")
+
+    resource = matches[0]
+    values = resource.get("values") or {}
+    secret = values.get("secret")
+    if (resource.get("type") != "google_secret_manager_secret_version"
+            or not isinstance(secret, str)
+            or not secret.endswith("/secrets/nexoruta-mobile-config")):
+        raise RuntimeError("Refusing to detach an unexpected Secret Manager resource")
+    if values.get("deletion_policy") != "DELETE":
+        return False
+    version_id = values.get("id")
+    if (not isinstance(version_id, str)
+            or "/secrets/nexoruta-mobile-config/versions/" not in version_id):
+        raise RuntimeError("Refusing to detach an unexpected mobile config version")
+
+    address = resource["address"]
+    command(*tofu, "state", "rm", "-lock-timeout=5m", address)
+    print("Detached the legacy mobile config version from Terraform state; the GCP version remains.",
+          flush=True)
+    return True
+
+
 def settings(environment, state, default_billing_account_id=""):
     # Preserve the optional budget chosen during initial setup. Never infer a
     # billing account from the current user's machine or silently remove it.
@@ -122,6 +153,7 @@ def main():
                 "owner_id": environment["BOOTSTRAP_OWNER_ID"], "project_number": project_number,
                 "wif_profile": environment.get("BOOTSTRAP_WIF_PROFILE", "demo")}
     bootstrap_setup.validate_state_identity(state, **identity)
+    detach_legacy_mobile_config_version(tofu, state)
     with tempfile.TemporaryDirectory(prefix="nexoruta-bootstrap-") as directory:
         inputs = Path(directory) / "inputs.tfvars.json"
         inputs.write_text(json.dumps(settings(environment, state)), encoding="utf-8")
