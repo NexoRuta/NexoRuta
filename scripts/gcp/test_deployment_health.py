@@ -36,7 +36,8 @@ class DeploymentHealthTests(unittest.TestCase):
             block = services_text[match.start():end]
             if re.search(r"^    healthcheck:", block, re.MULTILINE):
                 healthchecked.add(match.group(1))
-        self.assertEqual(healthchecked, set(deployment_health.HEALTHCHECK_SERVICES))
+        # The pinned Mailpit image supplies its own Docker healthcheck.
+        self.assertEqual(healthchecked | {"mailpit"}, set(deployment_health.HEALTHCHECK_SERVICES))
 
     def test_exact_running_service_snapshot_is_sanitized_and_sorted(self):
         value = snapshot("a", True)

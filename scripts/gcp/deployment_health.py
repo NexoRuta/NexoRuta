@@ -14,7 +14,7 @@ SERVICES_B_BASE = (
 HEALTHCHECK_SERVICES = frozenset((
     "api", "admin", "backoffice", "commerce", "tracking", "worker-rabbit",
     "worker-kafka", "worker-push", "worker-webhooks", "grafana", "proxy",
-    "rabbitmq", "kafka", "mongo", "redis",
+    "rabbitmq", "kafka", "mongo", "redis", "mailpit",
 ))
 NODES = ("a", "b")
 
