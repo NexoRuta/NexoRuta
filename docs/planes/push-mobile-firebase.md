@@ -318,3 +318,11 @@ La guia operativa Android de la seccion 4 sigue siendo el procedimiento de acept
 | 11. Revisión visual y evidencia | Parcial | El usuario confirmó las notificaciones en la barra; no se guardó captura y no se revisaron visualmente estados de error/denegación ni accesibilidad. |
 
 El dispositivo adb-R5CRA1L7Z4E-inGwTF aparece como device en ADB (Galaxy S21, Android 14). Se conservan las entregas directas anteriores; quedan pendientes el evento real, toque, apertura y ACK.
+
+### Continuación en GCP (2026-11-16)
+
+- Por autorización explícita se recreó la base `nexoruta`; la afirmación anterior de que se conservó la base ya no describe el estado actual. El despliegue [43793778146](https://github.com/NexoRuta/NexoRuta/actions/runs/43793778146) aplicó `df5193a` y terminó correctamente. El Worker del nodo A se observó ejecutándose con `Push:ProjectId=nexoruta-mobile` y `Messaging:Transport=Push`.
+- El seed general falló primero por dos restricciones diferidas de PostgreSQL. Se corrigió la evaluación de cada transferencia y publicación; [43795060980](https://github.com/NexoRuta/NexoRuta/actions/runs/43795060980) terminó correctamente y creó 5 operadores, 5 comercios, 70 envíos, 35 rutas y 252 operaciones. Se comprobó login HTTP de `r1@demo.nexoruta.test` y consulta de su ruta despachada.
+- Para la aceptación se creó un envío sintético `PUSH-TEST-20261116-01`, se registró su recepción simulada y se despachó la ruta `01a1e24c-5baa-7a16-a432-155f0d13ebec` a R1; la ruta futura `01a1e24c-b8a1-7a25-924e-b4b3a0e33871` quedó planificada. No se ha realizado la reasignación ni se ha generado el aviso.
+- La CI Mobile [43748153148](https://github.com/NexoRuta/NexoRuta-Mobile/actions/runs/43748153148) pasó en el gitlink `8aa3a5f`: compilación de verificación, restores ARM64/x64 y checksum, con artefacto `android-verificacion`. Esto actualiza el resultado anterior de CI; sigue faltando un APK Release de distribución firmado y validado con Firebase real.
+- El teléfono estuvo conectado por ADB y se desconectó antes de iniciar sesión con R1. Siguen pendientes la inscripción de esta cuenta, el evento de negocio, correlación outbox/FCM, recepción, toque y confirmación, así como los escenarios adicionales de los pasos 6–10. Las notificaciones directas anteriores no cierran esta aceptación.
