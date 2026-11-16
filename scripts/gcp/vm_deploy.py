@@ -916,9 +916,12 @@ def compose_health_snapshot(deployment, node, cache_enabled):
                       for item in services if item["service"] in expected
                       and (item["state"] != "running" or item["health"] != (
                           "healthy" if item["service"] in module.HEALTHCHECK_SERVICES else "not-configured")))
-        print(json.dumps({"node": node, "health_inventory_issues": issues,
-                          "unexpected_service_count": sum(item["service"] not in expected for item in services)}), flush=True)
-        raise
+        error = RuntimeError("Compose health inventory is inconsistent")
+        if issues:
+            error.safe_diagnostic = "Inventory" + re.sub(r"[^A-Za-z0-9]", "", issues[0]["service"].title())
+        else:
+            error.safe_diagnostic = "InventoryUnexpectedService"
+        raise error from None
 
 
 def prepare(args, deployment, runtime, integrations, hosting, redis_identity, manifest, private_ip):
@@ -1062,6 +1065,8 @@ def apply(args, deployment, private_ip, cache_enabled):
         failure = RuntimeError("Node application update failed; it remains out of the load balancer")
         if hasattr(error, "nexoruta_phase"):
             failure.nexoruta_phase = error.nexoruta_phase
+        if hasattr(error, "safe_diagnostic"):
+            failure.safe_diagnostic = error.safe_diagnostic
         raise failure from None
 
 
