@@ -906,7 +906,19 @@ def compose_health_snapshot(deployment, node, cache_enabled):
             raise RuntimeError("Docker returned an invalid Compose health record")
         service, state, health = fields
         services.append({"service": service, "state": state, "health": health})
-    return module.sanitize_node_snapshot({"node": node, "services": services}, node, cache_enabled)
+    try:
+        return module.sanitize_node_snapshot({"node": node, "services": services}, node, cache_enabled)
+    except ValueError:
+        expected = set(module.expected_services(node, cache_enabled))
+        counts = {name: sum(item["service"] == name for item in services) for name in expected}
+        issues = [{"service": name, "count": counts[name]} for name in sorted(expected) if counts[name] != 1]
+        issues.extend({"service": item["service"], "state": item["state"], "health": item["health"]}
+                      for item in services if item["service"] in expected
+                      and (item["state"] != "running" or item["health"] != (
+                          "healthy" if item["service"] in module.HEALTHCHECK_SERVICES else "not-configured")))
+        print(json.dumps({"node": node, "health_inventory_issues": issues,
+                          "unexpected_service_count": sum(item["service"] not in expected for item in services)}), flush=True)
+        raise
 
 
 def prepare(args, deployment, runtime, integrations, hosting, redis_identity, manifest, private_ip):
