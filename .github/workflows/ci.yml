@@ -241,6 +241,7 @@ jobs:
       NEXORUTA_B3_BROWSER_DIR: ${{ github.workspace }}/artifacts/browser/frontend/b3
       NEXORUTA_B4_BROWSER_DIR: ${{ github.workspace }}/artifacts/browser/frontend/b4
       NEXORUTA_B5_BROWSER_DIR: ${{ github.workspace }}/artifacts/browser/frontend/b5
+      NEXORUTA_INTERNAL_MESSAGES_UI_DIR: ${{ github.workspace }}/artifacts/browser/frontend/internal-messages
       NEXORUTA_DESTINATION_BROWSER_DIR: ${{ github.workspace }}/artifacts/browser/frontend/destination
     needs: sources
     if: fromJSON(needs.sources.outputs.plan).components.frontend.run
