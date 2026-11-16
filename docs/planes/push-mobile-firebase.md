@@ -2,6 +2,8 @@
 
 Fecha: 14/11/2026. Alcance original: push Android con Firebase; iOS queda fuera por indicacion del usuario. La app Android y la configuracion de nexoruta-mobile estan publicadas en develop; el telefono recibio pushes directos en la barra. El workflow 43757741975 publico release-8c64bbe06a8341eea3c6b3f95a0cc00d (raiz eae114a, Backend 2ff4b85), pero fallo en vm_migrate_bootstrap_data. El Worker de esa release y el evento de negocio con apertura/ACK siguen pendientes.
 
+**Actualización 2026-11-16:** el Worker con `Push:ProjectId=nexoruta-mobile` y `Messaging:Transport=Push` entregó al Galaxy S21 un aviso de negocio de una ruta activa. Se verificaron la notificación en Android, su apertura y el ACK dentro de la app. La matriz adicional de permisos, primer plano, proceso terminado, rotación/revocación y fallas integradas continúa parcialmente pendiente; iOS permanece fuera de alcance.
+
 ## 1. Dictamen y fuentes examinadas
 
 **Android dispone de las piezas principales para enviar y recibir push. No corresponde afirmar que su circuito esté completamente verificado o correctamente configurado para cualquier entorno.** Hay defectos de recuperación y de estado de activación, y comprobaciones de configuración y diagnóstico que faltan. En este alcance se identifican tres problemas de código y un riesgo de configuración.
@@ -301,23 +303,23 @@ La guia operativa Android de la seccion 4 sigue siendo el procedimiento de acept
 - El repartidor sintetico no tiene una ruta activa, asi que no se genero un aviso de negocio ni se probaron apertura/ACK. Los dos mensajes FCM directos si aparecieron en la barra, segun confirmo el usuario. ADB esta conectado otra vez; la verificacion de negocio se retoma tras el despliegue.
 - El APK instalado es Debug, firmado localmente; falta un APK Release firmado. El telefono disponible es Galaxy S21 con Android 14.
 
-### Estado de los pasos de verificación del plan
+### Estado de los pasos de verificación del plan (actualizado 2026-11-16)
 
 | Paso | Estado | Evidencia / límite |
 | --- | --- | --- |
 | 1. Fuentes y efectos | Completo | SHAs de raíz/submódulos registrados; cambios publicados en `develop`; se conservaron proyecto, base y volúmenes GCP. No se usaron proveedores de mapas reales. |
 | 2. Regresiones portables | Parcial | Pasaron los filtros Mobile 33/33, Python 6/6 y Worker 9/9. No se ejecutó cada combinación de carreras enumerada en la guía. |
 | 3. API, SQL y Worker controlados | Parcial | Build Worker y clasificación unitaria pasaron. Fixture de integración PostgreSQL/outbox no se ejecutó en Windows sin Docker. |
-| 4. Configuración Firebase efectiva | Parcial | JSON real validado; `nexoruta-mobile`, FCM API e IAM runtime verificados; secreto GCP apunta al proyecto correcto. Worker no llegó a correr el release nuevo y no se leyó su entorno efectivo. |
+| 4. Configuración Firebase efectiva | Completo para el entorno de aceptación | JSON real, proyecto `nexoruta-mobile`, API FCM e IAM runtime verificados. El Worker en GCP corrió con `Push:ProjectId=nexoruta-mobile` y `Messaging:Transport=Push`; el aviso de negocio llegó al Android con su ID. |
 | 5. Artefacto nativo | Parcial | APK Debug ARM64 con configuración real instalada y abierta en Galaxy S21 Android 14; el CI también compiló el APK Release de verificación. No se produjo APK Release firmado ni SHA256: el job falló en la comprobación posterior de lockfiles y omitió la publicación del artefacto. |
-| 6. Inscripción y permisos | Parcial | Sesión `repartidor_demo`, notificaciones activadas y alta confirmada por API. No se probaron permiso/canal denegado, primer arranque sin red o recuperación tras API caída. |
-| 7. Evento real con app abierta | Pendiente | La cuenta sintética no tiene ruta activa; no se creó un aviso de negocio ni se correlacionó su outbox. |
-| 8. Segundo plano y proceso ausente | Parcial | Llegó el push directo con la app minimizada y el usuario vio la notificación. No se probó proceso ausente, toque, apertura ni ACK de negocio. |
+| 6. Inscripción y permisos | Parcial | R1 activó las notificaciones en Android 14 y la API confirmó el alta de la instalación. No se probaron permiso/canal denegado, primer arranque sin red o recuperación tras API caída. |
+| 7. Evento real con app abierta | Parcial | La cancelación sintética generó un aviso de negocio y llegó mientras la app estaba en segundo plano. La variante con la app en primer plano queda pendiente. |
+| 8. Segundo plano y proceso ausente | Parcial | La cancelación llegó a la barra de Android en segundo plano. El toque abrió el aviso, se consultó su detalle y la app confirmó “Entendido”. No se probó con el proceso terminado. |
 | 9. Rotación, reconexión y salida | Pendiente | No se rotó FID ni se probaron logout/revocación/cambio de cuenta en esta aceptación. |
 | 10. Fallas controladas del proveedor | Parcial | Clasificación unitaria 9/9. Falta la matriz integrada de cuotas, respuesta parcial, carreras y persistencia con PostgreSQL. |
 | 11. Revisión visual y evidencia | Parcial | El usuario confirmó las notificaciones en la barra; no se guardó captura y no se revisaron visualmente estados de error/denegación ni accesibilidad. |
 
-El dispositivo adb-R5CRA1L7Z4E-inGwTF aparece como device en ADB (Galaxy S21, Android 14). Se conservan las entregas directas anteriores; quedan pendientes el evento real, toque, apertura y ACK.
+El dispositivo adb-R5CRA1L7Z4E-inGwTF aparece como device en ADB (Galaxy S21, Android 14). La aceptación de negocio y la verificación de toque, apertura y confirmación se completaron el 2026-11-16; siguen pendientes los escenarios adicionales indicados en la matriz.
 
 ### Continuación en GCP (2026-11-16)
 
@@ -326,3 +328,13 @@ El dispositivo adb-R5CRA1L7Z4E-inGwTF aparece como device en ADB (Galaxy S21, An
 - Para la aceptación se creó un envío sintético `PUSH-TEST-20261116-01`, se registró su recepción simulada y se despachó la ruta `01a1e24c-5baa-7a16-a432-155f0d13ebec` a R1; la ruta futura `01a1e24c-b8a1-7a25-924e-b4b3a0e33871` quedó planificada. No se ha realizado la reasignación ni se ha generado el aviso.
 - La CI Mobile [43748153148](https://github.com/NexoRuta/NexoRuta-Mobile/actions/runs/43748153148) pasó en el gitlink `8aa3a5f`: compilación de verificación, restores ARM64/x64 y checksum, con artefacto `android-verificacion`. Esto actualiza el resultado anterior de CI; sigue faltando un APK Release de distribución firmado y validado con Firebase real.
 - El teléfono estuvo conectado por ADB y se desconectó antes de iniciar sesión con R1. Siguen pendientes la inscripción de esta cuenta, el evento de negocio, correlación outbox/FCM, recepción, toque y confirmación, así como los escenarios adicionales de los pasos 6–10. Las notificaciones directas anteriores no cierran esta aceptación.
+
+### Aceptación real Android con Firebase (2026-11-16)
+
+- El endpoint público de API respondió `/health` con HTTP 200 y estado `healthy`. Se verificó que el envío sintético `PUSH-TEST-20261116-01` estaba en tránsito, versión 3, en la ruta despachada de R1.
+- La cuenta de comercio propietaria canceló ese envío sintético. La API respondió estado `Cancelado`, versión 4. El código SQL de cancelación permite ese estado, selecciona la ruta custodio activa e inserta `AvisosReparto` más `OutboxMessages` con destino `PushFcm`.
+- La API móvil de notificaciones devolvió el aviso `01a1e581-e7fc-71f3-abb0-516833d2869e`, tipo `Cancelacion`, versión 4, vigente, para el mismo envío. La sesión móvil temporal usada para consultarlo se cerró al finalizar la consulta.
+- En el Galaxy S21 con Android 14, NotificationManager mostró una notificación activa en el canal `nexoruta.avisos`. Su ID coincidió con el ID del aviso recién creado y el panel mostró “Cambio en tu hoja de ruta”. Esto confirma la llegada por el flujo nativo de Firebase/Android, no solo la aceptación de una llamada directa de prueba.
+- Se tocó la notificación, se abrió “Novedades de tu ruta”, se consultó “Entrega cancelada” y el detalle mostró el motivo sintético. Al tocar “Entendido”, la app respondió “Aviso confirmado. Podés continuar con tu recorrido.” El proceso estaba en segundo plano cuando se generó el aviso.
+- El APK instalado es el Debug ARM64 ya documentado; no se generó ni firmó un APK Release. No se guardó una captura del dispositivo. La conexión SSH directa a la VM expiró, por lo que no se inspeccionó el registro interno del outbox ni el log del Worker; la correlación del ID desde el aviso de API hasta la notificación nativa y el ACK de la app acredita el recorrido end-to-end.
+- Las dos VMs del proyecto de demo se detuvieron con el workflow manual [43925040105](https://github.com/NexoRuta/NexoRuta/actions/runs/43925040105) y GCP las reportó `TERMINATED`.
