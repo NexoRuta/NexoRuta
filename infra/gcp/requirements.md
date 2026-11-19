@@ -69,8 +69,9 @@ usarlos como presupuesto disponible ni para aprobar una sesión o ensayo.
   `x-app-settings`. `SMTP_USERNAME`, `SMTP_PASSWORD` y `GEOAPIFY_API_KEY` son
   opcionales según la integración que se habilite. Si se usa autenticación SMTP,
   se configuran ambos secretos de usuario y contraseña.
-- El mapa de Comercio y la geocodificación temporal de la API se configuran con
-  `MAPBOX_COMMERCE_PUBLIC_TOKEN` y `MAPBOX_GEOCODING_TOKEN`, respectivamente.
+- Los mapas de Backoffice y Comercio se configuran con `MAPBOX_BACKOFFICE_PUBLIC_TOKEN`
+  y `MAPBOX_COMMERCE_PUBLIC_TOKEN`, respectivamente. La geocodificación temporal de la
+  API se configura con `MAPBOX_GEOCODING_TOKEN`.
 - El inventario de nombres consultado el 14/11/2026 encontró en `nexoruta-demo`
   las variables documentadas y los dos nombres de secretos OAuth de monitor.
   No se observaron secretos SMTP, Geoapify ni de submódulos; no se leyeron valores

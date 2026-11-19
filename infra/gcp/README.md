@@ -191,7 +191,7 @@ los registros en el proveedor existente apuntando a la IP estática. La emisión
 certificados necesita que esos nombres resuelvan y que 80/443 sean accesibles.
 
 El bloque `x-app-settings` de `compose.yaml` configura las variables públicas de
-SMTP y Mapbox. El runner combina esos valores con los secretos SMTP/Geoapify si
+SMTP. El runner combina esos valores con los secretos SMTP, Geoapify y Mapbox si
 están configurados y sincroniza la integración al secreto privado
 `nexoruta-demo-integrations` de GCP antes de iniciar o actualizar la demo. La
 inspección de nombres del Environment del 14/11/2026 no encontró secretos SMTP ni
@@ -205,6 +205,7 @@ runtime. Para correo real, configurar un SMTP válido usando 587/465 según prov
 gh secret set SMTP_USERNAME --repo NexoRuta/NexoRuta --env nexoruta-demo
 gh secret set SMTP_PASSWORD --repo NexoRuta/NexoRuta --env nexoruta-demo
 gh secret set GEOAPIFY_API_KEY --repo NexoRuta/NexoRuta --env nexoruta-demo
+gh secret set MAPBOX_BACKOFFICE_PUBLIC_TOKEN --repo NexoRuta/NexoRuta --env nexoruta-demo
 gh secret set MAPBOX_COMMERCE_PUBLIC_TOKEN --repo NexoRuta/NexoRuta --env nexoruta-demo
 gh secret set MAPBOX_GEOCODING_TOKEN --repo NexoRuta/NexoRuta --env nexoruta-demo
 ```

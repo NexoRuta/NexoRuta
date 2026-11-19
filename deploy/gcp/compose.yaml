@@ -553,6 +553,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       Api__BaseAddress: ${API_URL:?}/
+      Mapbox__PublicAccessToken: ${MAPBOX_BACKOFFICE_PUBLIC_TOKEN:-}
       OpenTelemetry__Enabled: 'true'
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc

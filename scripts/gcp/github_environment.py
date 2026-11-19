@@ -182,6 +182,7 @@ def integrations():
         "webhook_allowed_origins": parse_webhook_allowed_origins(os.environ.get("WEBHOOK_ALLOWED_ORIGINS", "")),
         "webhook_allow_any_public_https_origin": str(parse_allow_any_public_https_origin(
             os.environ.get("WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN", "false"))).lower(),
+        "mapbox_backoffice_public_token": os.environ.get("MAPBOX_BACKOFFICE_PUBLIC_TOKEN", ""),
         "mapbox_commerce_public_token": os.environ.get("MAPBOX_COMMERCE_PUBLIC_TOKEN", ""),
         "mapbox_geocoding_token": os.environ.get("MAPBOX_GEOCODING_TOKEN", ""),
         "cache_enabled": cache_enabled,
@@ -193,7 +194,7 @@ def integrations():
             raise ValueError(f"Invalid multiline application configuration: {name.upper()}")
     if bool(result["smtp_username"]) != bool(result["smtp_password"]):
         raise ValueError("Configure both SMTP_USERNAME and SMTP_PASSWORD secrets, or neither")
-    for name in ("mapbox_commerce_public_token", "mapbox_geocoding_token"):
+    for name in ("mapbox_backoffice_public_token", "mapbox_commerce_public_token", "mapbox_geocoding_token"):
         token = result[name]
         if token and not re.fullmatch(r"pk\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", token):
             raise ValueError(f"{name.upper()} must be a public Mapbox token (pk.)")

@@ -171,6 +171,7 @@ jobs:
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           GEOAPIFY_API_KEY: ${{ secrets.GEOAPIFY_API_KEY }}
+          MAPBOX_BACKOFFICE_PUBLIC_TOKEN: ${{ secrets.MAPBOX_BACKOFFICE_PUBLIC_TOKEN }}
           MAPBOX_COMMERCE_PUBLIC_TOKEN: ${{ secrets.MAPBOX_COMMERCE_PUBLIC_TOKEN }}
           MAPBOX_GEOCODING_TOKEN: ${{ secrets.MAPBOX_GEOCODING_TOKEN }}
         run: python3 scripts/gcp/github_environment.py sync-integrations

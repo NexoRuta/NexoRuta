@@ -447,6 +447,7 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
         "SMTP_SSL": str(integrations["smtp_ssl"]).lower(), "SMTP_FROM": integrations["smtp_from"],
         "SMTP_USERNAME": integrations.get("smtp_username", ""), "SMTP_PASSWORD": integrations.get("smtp_password", ""),
         "GEOAPIFY_API_KEY": integrations.get("geoapify_api_key", ""),
+        "MAPBOX_BACKOFFICE_PUBLIC_TOKEN": integrations.get("mapbox_backoffice_public_token", ""),
         "MAPBOX_COMMERCE_PUBLIC_TOKEN": integrations.get("mapbox_commerce_public_token", ""),
         "MAPBOX_GEOCODING_TOKEN": integrations.get("mapbox_geocoding_token", ""),
         "MAPBOX_GEOCODING_ENABLED": str(bool(integrations.get("mapbox_geocoding_token"))).lower(),

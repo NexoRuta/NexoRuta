@@ -100,6 +100,7 @@ class GitHubEnvironmentTests(unittest.TestCase):
         self.assertEqual(defaults["firebase_project_id"], "nexoruta-mobile")
         self.assertEqual((defaults["smtp_host"], defaults["smtp_port"], defaults["smtp_ssl"]), ("mailpit", 1025, False))
         self.assertEqual(defaults["cache_enabled"], "true")
+        self.assertEqual(defaults["mapbox_backoffice_public_token"], "")
         self.assertEqual(defaults["mapbox_commerce_public_token"], "")
         self.assertEqual(defaults["mapbox_geocoding_token"], "")
         with patch.dict(os.environ, {"SMTP_USERNAME": "demo"}):
@@ -129,6 +130,7 @@ class GitHubEnvironmentTests(unittest.TestCase):
             data = json.loads(path.read_text())
             self.assertEqual(data["smtp_password"], "private-password")
             self.assertEqual(data["geoapify_api_key"], "private-geo-key")
+            self.assertEqual(data["mapbox_backoffice_public_token"], "pk.backoffice.signature")
             self.assertEqual(data["mapbox_commerce_public_token"], "pk.commerce.signature")
             self.assertEqual(data["mapbox_geocoding_token"], "pk.geocoding.signature")
             self.assertEqual(data["smtp_port"], 587)
@@ -136,6 +138,7 @@ class GitHubEnvironmentTests(unittest.TestCase):
         with (
             patch.dict(os.environ, {
                 "SMTP_USERNAME": "demo", "SMTP_PASSWORD": "private-password", "GEOAPIFY_API_KEY": "private-geo-key",
+                "MAPBOX_BACKOFFICE_PUBLIC_TOKEN": "pk.backoffice.signature",
                 "MAPBOX_COMMERCE_PUBLIC_TOKEN": "pk.commerce.signature", "MAPBOX_GEOCODING_TOKEN": "pk.geocoding.signature",
             }),
             patch.object(settings.session, "command", side_effect=upload) as command,

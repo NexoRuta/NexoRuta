@@ -553,11 +553,13 @@ class VmDeploymentTests(unittest.TestCase):
         self.assertEqual(values["WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN"], "false")
         self.assertEqual(values["MAPBOX_GEOCODING_ENABLED"], "false")
         integrations["webhook_allow_any_public_https_origin"] = True
+        integrations["mapbox_backoffice_public_token"] = "pk.backoffice.signature"
         integrations["mapbox_commerce_public_token"] = "pk.commerce.signature"
         integrations["mapbox_geocoding_token"] = "pk.geocoding.signature"
         enabled = vm_deploy.environment(runtime, integrations, images, "hash", hosting, "b", "10.0.0.2",
                                        "release-" + "a" * 32, ("172.22.0.0/16",), runtime["redis_identity_fixture"])
         self.assertEqual(enabled["WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN"], "true")
+        self.assertEqual(enabled["MAPBOX_BACKOFFICE_PUBLIC_TOKEN"], "pk.backoffice.signature")
         self.assertEqual(enabled["MAPBOX_COMMERCE_PUBLIC_TOKEN"], "pk.commerce.signature")
         self.assertEqual(enabled["MAPBOX_GEOCODING_TOKEN"], "pk.geocoding.signature")
         self.assertEqual(enabled["MAPBOX_GEOCODING_ENABLED"], "true")
