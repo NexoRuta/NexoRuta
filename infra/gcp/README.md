@@ -232,6 +232,12 @@ con el prefijo `whsec_`. Ambas se consultan en Secret Manager. Probá el
 recorrido con un dato sintético y verificá que el envío figure como entregado
 en Comercio y recibido en el historial del receptor.
 
+El botón **Ver seguimiento** recupera el enlace con la sesión de Comercio y abre
+la página pública de Tracking. La API publica la consulta del envío en su propio
+origen HTTPS. Los enlaces a Administración y Backoffice usan los dominios de
+sus portales, y el contrato OpenAPI está disponible en la API en
+`/openapi/v1.json`.
+
 ## CI/CD entre los cuatro repositorios
 
 El root fija por gitlink los SHAs de backend, frontend y mobile. La PR del root

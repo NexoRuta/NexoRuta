@@ -24,7 +24,7 @@ x-api-env: &id001
   Email__Smtp__Password: ${SMTP_PASSWORD:-}
   Email__Smtp__FromAddress: ${SMTP_FROM:?}
   PasswordRecovery__ResetPageUrl: ${COMMERCE_URL:?}/restablecer-contrasena
-  Tracking__PublicBaseUrl: ${TRACKING_URL:?}
+  Tracking__PublicBaseUrl: ${API_URL:?}
   Seguimiento__EncryptionKey: ${TRACKING_KEY:?}
   Push__RegistrationEncryptionKey: ${PUSH_KEY:?}
   Reparto__EvidenciasEncryptionKey: ${EVIDENCE_KEY:?}
@@ -580,6 +580,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       Api__BaseAddress: ${API_URL:?}/
       Tracking__BaseAddress: ${TRACKING_URL:?}/
+      Portales__BackofficeLoginUrl: ${BACKOFFICE_URL:?}/ingresar
+      Portales__AdminLoginUrl: ${ADMIN_URL:?}/ingresar
       Mapbox__PublicAccessToken: ${MAPBOX_COMMERCE_PUBLIC_TOKEN:-}
       OpenTelemetry__Enabled: 'true'
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
