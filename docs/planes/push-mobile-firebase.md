@@ -81,7 +81,7 @@ Dos JSON pueden tener el mismo package y pertenecer a proyectos Firebase distint
 
 ### Configuraciones esperadas que no son errores
 
-- `compose.override.yaml:46` activa `Push:NoSend=true` en Development. Ese transporte deja destinos reintentables y evita contactar Firebase; no acredita entrega. `Program.cs` impide usarlo fuera de Development.
+- La configuración local activa `Push:NoSend=true` para simular el envío. El transporte simulado evita contactar Firebase y deja los destinos reintentables. La aceptación de entregas usa el transporte real de Firebase.
 - El CI Android de la raíz produce un APK de verificación sin exigir Firebase. No debe confundirse con el APK de distribución ni cerrarse esta auditoría con ese resultado.
 - No versionar `google-services.json`, ADC, keystores o claves no es código faltante. Son entradas externas necesarias.
 - Una aceptación FCM, una publicación del outbox, una recepción, una apertura y una confirmación del repartidor son hechos diferentes. El modelo existente los distingue y debe conservarse.

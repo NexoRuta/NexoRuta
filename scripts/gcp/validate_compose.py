@@ -19,6 +19,7 @@ with tempfile.TemporaryDirectory(prefix="nexoruta-compose-") as temp:
     values["SMTP_SSL"] = "false"
     values["NODE_PRIVATE_IP"] = "127.0.0.1"
     values["NODE_NAME"] = "node-a"
+    values["COMMERCE_RECEIVER_ENABLED"] = "true"
     values["RELEASE_ID"] = "release-validation"
     values["NEXORUTA_CACHE_ENABLED"] = "true"
     values["REDIS_CONFIG_DIR"] = str(redis_config)

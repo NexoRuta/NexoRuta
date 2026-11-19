@@ -496,6 +496,7 @@ class VmDeploymentTests(unittest.TestCase):
             "migrator", "api", "worker", "bootstrap", "rabbit", "mongo", "mail", "monitor", "grafana",
             "keys_api", "keys_admin", "keys_backoffice", "keys_commerce", "keys_tracking")}
         passwords["mongo"] = "private-mongo"
+        passwords["commerce_receiver"] = "receiver-controls-fixture-password"
         runtime = {"project_id": "demo-project", "sql_connection": "demo-project:region:sql", "registry": registry,
                    "services_host": "10.0.0.1", "frontend_ip": "34.0.0.1", "subnet_cidr": "10.0.0.0/24",
                    "nodes": {"a": {"name": "nexoruta-demo", "zone": "southamerica-west1-a"},
@@ -505,6 +506,7 @@ class VmDeploymentTests(unittest.TestCase):
                    "endpoints": {name: f"https://{name}.34-0-0-1.sslip.io" for name in (
                        "api", "admin", "backoffice", "commerce", "tracking", "mail", "monitor")},
                    "organization_ids": {"operator": "operator-id", "commerce": "commerce-id"}}
+        runtime["keys"]["commerce_receiver"] = "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg="
         integrations = {"smtp_host": "mailpit", "smtp_port": 1025, "smtp_ssl": False,
                         "firebase_project_id": "nexoruta-mobile",
                         "smtp_from": "demo@example.test", "monitor_google_client_id": "oauth-client",
@@ -547,7 +549,7 @@ class VmDeploymentTests(unittest.TestCase):
         self.assertEqual(values["MONITOR_ROLE_EXPRESSION"], "contains(['reader@example.test'], email) && 'Viewer' || 'None'")
         self.assertEqual(values["JWT_KEY"], runtime["keys"]["jwt"])
         self.assertEqual(values["WEBHOOK_ALLOWED_ORIGINS"],
-                         "https://merchant.example.test;https://events.example.test")
+                         "https://merchant.example.test;https://events.example.test;" + runtime["endpoints"]["tracking"])
         self.assertEqual(values["WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN"], "false")
         self.assertEqual(values["MAPBOX_GEOCODING_ENABLED"], "false")
         integrations["webhook_allow_any_public_https_origin"] = True
@@ -565,6 +567,20 @@ class VmDeploymentTests(unittest.TestCase):
         values = vm_deploy.environment(runtime, integrations, images, "hash", hosting, "a", "10.0.0.1",
                                        "release-" + "a" * 32, ("172.22.0.0/16",), runtime["redis_identity_fixture"])
         self.assertEqual(vm_deploy.DEMO_SEED_PASSWORD, values["DEMO_DATA_ACTOR_PASSWORD"])
+
+    def test_receiver_credentials_are_only_passed_to_the_node_serving_the_inbox(self):
+        runtime, integrations, hosting, images = self.configuration()
+        release = "release-" + "a" * 32
+        primary = vm_deploy.environment(runtime, integrations, images, "hash", hosting, "a", "10.0.0.1",
+                                        release, (), runtime["redis_identity_fixture"])
+        secondary = vm_deploy.environment(runtime, integrations, images, "hash", hosting, "b", "10.0.0.2",
+                                          release, (), runtime["redis_identity_fixture"])
+        self.assertEqual("true", primary["COMMERCE_RECEIVER_ENABLED"])
+        self.assertEqual(runtime["passwords"]["commerce_receiver"], primary["COMMERCE_RECEIVER_ADMIN_PASSWORD"])
+        self.assertEqual("whsec_" + runtime["keys"]["commerce_receiver"], primary["COMMERCE_RECEIVER_SIGNING_SECRET"])
+        self.assertEqual("false", secondary["COMMERCE_RECEIVER_ENABLED"])
+        self.assertNotIn("COMMERCE_RECEIVER_ADMIN_PASSWORD", secondary)
+        self.assertNotIn("COMMERCE_RECEIVER_SIGNING_SECRET", secondary)
 
     def test_shared_environment_rejects_open_google_access_and_default_proxy_routes(self):
         runtime, integrations, hosting, images = self.configuration()
