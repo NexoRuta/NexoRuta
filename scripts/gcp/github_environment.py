@@ -197,8 +197,6 @@ def integrations():
         token = result[name]
         if token and not re.fullmatch(r"pk\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", token):
             raise ValueError(f"{name.upper()} must be a public Mapbox token (pk.)")
-    if result["mapbox_geocoding_token"] and result["mapbox_geocoding_token"] == result["mapbox_commerce_public_token"]:
-        raise ValueError("Configure distinct Mapbox tokens for Commerce and API geocoding")
     result["smtp_port"] = int(result["smtp_port"])
     result["smtp_ssl"] = result["smtp_ssl"].lower() == "true"
     if os.environ.get("DEMO_OPERATION") in ("start", "update"):

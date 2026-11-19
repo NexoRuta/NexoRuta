@@ -49,8 +49,11 @@ runbook de carga y no copiar sus identidades al proyecto de reproducción.
 | `SUBMODULES_TOKEN` | Solo si un repositorio de componente pasa a privado; lectura `Contents` de los tres repos. |
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | Ambos juntos, solo si se habilita un proveedor SMTP autenticado. |
 | `GEOAPIFY_API_KEY` | Solo para habilitar y probar geocodificación Geoapify. |
-| `MAPBOX_COMMERCE_PUBLIC_TOKEN` | Token `pk.` para el mapa de Comercio, restringido al origen HTTPS activo de Comercio. |
-| `MAPBOX_GEOCODING_TOKEN` | Token `pk.` distinto para geocodificación temporal en la API. Las solicitudes de la API salen sin `Referer`, por lo que necesita un token sin restricción por URL. |
+| `MAPBOX_COMMERCE_PUBLIC_TOKEN` | Token `pk.` visible en el navegador de Comercio. Puede restringirse al origen HTTPS activo de Comercio cuando tiene su propio token. |
+| `MAPBOX_GEOCODING_TOKEN` | Token `pk.` para geocodificación temporal en la API. Las solicitudes de la API salen sin `Referer`, por lo que necesita un token sin restricción por URL. |
+
+Para la demo, ambas claves pueden contener el mismo token público sin restricción
+por URL. En ese caso, el navegador de Comercio también expone el token que usa la API.
 
 El URI de redirect de OAuth debe corresponder al hostname activo de monitor,
 `https://monitor.<dominio>/login/google`. No fijar un IP histórico si el balanceador
