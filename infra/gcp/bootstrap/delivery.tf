@@ -104,6 +104,11 @@ resource "google_secret_manager_secret" "config" {
 resource "google_secret_manager_secret_version" "integrations" {
   secret      = google_secret_manager_secret.config["nexoruta-demo-integrations"].id
   secret_data = jsonencode({ smtp_host = "mailpit", smtp_port = 1025, smtp_ssl = false, smtp_username = "", smtp_password = "", smtp_from = "demo@nexoruta.test", geoapify_api_key = "", mapbox_commerce_public_token = "", mapbox_geocoding_token = "" })
+
+  # Bootstrap seeds the initial version. The deployment workflow adds runtime versions.
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
 }
 
 resource "google_secret_manager_secret_iam_member" "runtime" {
