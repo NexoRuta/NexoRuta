@@ -388,6 +388,8 @@ services:
     restart: unless-stopped
     environment:
       <<: *id001
+      # Match the four-hour GCP demo window for web logins.
+      Jwt__VigenciaWebMinutos: '240'
       Mapbox__PublicAccessToken: ${MAPBOX_GEOCODING_TOKEN:-}
       Geocoding__MapboxTemporal__Habilitado: ${MAPBOX_GEOCODING_ENABLED:-false}
       DemoData__ActorPassword: ${DEMO_DATA_ACTOR_PASSWORD:?}
