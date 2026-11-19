@@ -34,7 +34,8 @@ es histórico y no una lectura actual.
 `southamerica-west1-b`. Si se configura, el código admite `southamerica-west1-b`
 o `southamerica-west1-c`. `GCP_BASE_DOMAIN` es opcional; vacío usa `sslip.io`.
 `NEXORUTA_CACHE_ENABLED` es opcional y por defecto `true`. `WEBHOOK_ALLOWED_ORIGINS`
-es una lista opcional de orígenes HTTPS exactos, no URLs con rutas.
+es una lista opcional de orígenes HTTPS exactos, sin rutas. El despliegue agrega
+el origen HTTPS de Tracking para el receptor educativo.
 
 Variables adicionales de OPT-06 (`GCP_LOAD_*`) se generan mediante bootstrap y
 no se necesitan para `publish.yml` o el `start`/`update` normal. Consultar el

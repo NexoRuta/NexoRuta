@@ -71,7 +71,7 @@ resource "google_sql_database" "app" {
 }
 
 resource "random_password" "password" {
-  for_each    = toset(["migrator", "api", "worker", "bootstrap", "rabbit", "mongo", "mail", "keys_api", "keys_admin", "keys_backoffice", "keys_commerce", "keys_tracking", "monitor", "grafana"])
+  for_each    = toset(["migrator", "api", "worker", "bootstrap", "rabbit", "mongo", "mail", "keys_api", "keys_admin", "keys_backoffice", "keys_commerce", "keys_tracking", "monitor", "grafana", "commerce_receiver"])
   length      = 40
   special     = false
   min_lower   = 1
@@ -87,7 +87,7 @@ resource "random_password" "password" {
 }
 
 resource "random_bytes" "key" {
-  for_each = toset(["jwt", "tracking", "push", "evidence"])
+  for_each = toset(["jwt", "tracking", "push", "evidence", "commerce_receiver"])
   length   = 32
 }
 

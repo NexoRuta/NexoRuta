@@ -217,6 +217,21 @@ El APK usa una keystore de demo persistente en Secret Manager y un código de
 versión creciente, para poder actualizarlo entre sesiones sin cambiar de firma.
 No se suben la keystore ni su contraseña como artifacts.
 
+### Receptor de webhooks del comercio
+
+En GCP, **Comercio → Webhooks HTTP → Abrir receptor de prueba en otra pestaña**
+abre `https://tracking.<dominio>/comercio`. El destino de una suscripción
+educativa es `https://tracking.<dominio>/comercio/webhook`. Tracking corre en
+`Production`. El balanceador envía ambas rutas al nodo A, donde un volumen
+persistente guarda el historial y los modos de prueba del receptor.
+
+El workflow **Start** aplica las reglas del balanceador y genera las credenciales
+en `nexoruta-demo-runtime`. Los campos son `passwords.commerce_receiver` para
+ingresar a los controles y `keys.commerce_receiver` para firmar la suscripción
+con el prefijo `whsec_`. Ambas se consultan en Secret Manager. Probá el
+recorrido con un dato sintético y verificá que el envío figure como entregado
+en Comercio y recibido en el historial del receptor.
+
 ## CI/CD entre los cuatro repositorios
 
 El root fija por gitlink los SHAs de backend, frontend y mobile. La PR del root

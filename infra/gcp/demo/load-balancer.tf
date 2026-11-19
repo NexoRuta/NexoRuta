@@ -88,7 +88,34 @@ resource "google_compute_url_map" "web" {
     content {
       name            = path_matcher.key
       default_service = google_compute_backend_service.web[path_matcher.key].id
+      dynamic "path_rule" {
+        for_each = path_matcher.key == "tracking" ? [1] : []
+        content {
+          paths   = ["/comercio", "/comercio/*"]
+          service = google_compute_backend_service.commerce_receiver.id
+        }
+      }
     }
+  }
+}
+
+# Both the operator's browser and the webhook worker must use the same SQLite inbox.
+resource "google_compute_backend_service" "commerce_receiver" {
+  name                            = "${local.name}-commerce-receiver"
+  load_balancing_scheme           = "EXTERNAL_MANAGED"
+  protocol                        = "HTTP"
+  port_name                       = "tracking"
+  timeout_sec                     = 300
+  connection_draining_timeout_sec = 30
+  health_checks                   = [google_compute_health_check.web["tracking"].id]
+  backend {
+    group           = google_compute_instance_group.web["a"].self_link
+    balancing_mode  = "UTILIZATION"
+    capacity_scaler = 1
+    max_utilization = 0.8
+  }
+  log_config {
+    enable = false
   }
 }
 

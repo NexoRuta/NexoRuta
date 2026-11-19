@@ -579,6 +579,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       Api__BaseAddress: ${API_URL:?}/
+      Tracking__BaseAddress: ${TRACKING_URL:?}/
       Mapbox__PublicAccessToken: ${MAPBOX_COMMERCE_PUBLIC_TOKEN:-}
       OpenTelemetry__Enabled: 'true'
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
@@ -608,6 +609,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       Api__BaseAddress: ${API_URL:?}/
+      CommerceDemo__Enabled: ${COMMERCE_RECEIVER_ENABLED:?}
+      CommerceDemo__AdminPassword: ${COMMERCE_RECEIVER_ADMIN_PASSWORD:-}
+      CommerceDemo__SigningSecrets__0: ${COMMERCE_RECEIVER_SIGNING_SECRET:-}
+      CommerceDemo__DatabasePath: /var/nexoruta/commerce-demo/inbox.db
       OpenTelemetry__Enabled: 'true'
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
@@ -632,6 +637,7 @@ services:
     platform: linux/amd64
     volumes:
     - ./hosting.pfx:/data/hosting.pfx:ro
+    - tracking_commerce_demo_data:/var/nexoruta/commerce-demo
     ports:
     - ${NODE_PRIVATE_IP:?}:18084:8080
   proxy:
@@ -812,6 +818,7 @@ services:
       timeout: 5s
       retries: 24
 volumes:
+  tracking_commerce_demo_data: null
   rabbit: null
   kafka: null
   mongo: null

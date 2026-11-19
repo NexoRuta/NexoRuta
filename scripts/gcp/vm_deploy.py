@@ -450,7 +450,9 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
         "MAPBOX_COMMERCE_PUBLIC_TOKEN": integrations.get("mapbox_commerce_public_token", ""),
         "MAPBOX_GEOCODING_TOKEN": integrations.get("mapbox_geocoding_token", ""),
         "MAPBOX_GEOCODING_ENABLED": str(bool(integrations.get("mapbox_geocoding_token"))).lower(),
-        "WEBHOOK_ALLOWED_ORIGINS": ";".join(integrations.get("webhook_allowed_origins", [])),
+        "WEBHOOK_ALLOWED_ORIGINS": ";".join(dict.fromkeys([
+            *integrations.get("webhook_allowed_origins", []), endpoints["tracking"],
+        ])),
         "WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN": str(
             integrations.get("webhook_allow_any_public_https_origin", False)).lower(),
     }
@@ -470,6 +472,12 @@ def environment(runtime, integrations, images, mail_hash, hosting=None, node=Non
         actor_password = DEMO_SEED_PASSWORD
         if node not in ("a", "b") or not re.fullmatch(r"release-[a-f0-9]{32}", release or ""):
             raise ValueError("A shared deployment needs a valid node and release")
+        result["COMMERCE_RECEIVER_ENABLED"] = "true" if node == "a" else "false"
+        if node == "a":
+            if not passwords.get("commerce_receiver") or not keys.get("commerce_receiver"):
+                raise ValueError("The GCP runtime secret is missing the commerce receiver credentials")
+            result["COMMERCE_RECEIVER_ADMIN_PASSWORD"] = passwords["commerce_receiver"]
+            result["COMMERCE_RECEIVER_SIGNING_SECRET"] = "whsec_" + keys["commerce_receiver"]
         for address in (private_ip, runtime["frontend_ip"]):
             ipaddress.IPv4Address(address)
         if not re.fullmatch(r"[A-Za-z0-9.-]+", runtime["services_host"]):
@@ -1111,21 +1119,20 @@ def validate_authenticated_identity(identity, role, email, organization_ids):
 
 def smoke(runtime, check_accounts=True):
     endpoints = runtime["endpoints"]
-    for name in ("api", "admin", "backoffice", "commerce", "tracking", "monitor"):
-        path = "/ready" if name in ("api", "tracking") else "/ingresar"
-        if name == "monitor":
-            path = "/api/health"
+    for name, path in (("api", "/ready"), ("admin", "/ingresar"), ("backoffice", "/ingresar"),
+                       ("commerce", "/ingresar"), ("tracking", "/ready"),
+                       ("tracking", "/comercio/ingresar"), ("monitor", "/api/health")):
         url = endpoints[name] + path
         for attempt in range(60):
             try:
                 with urllib.request.urlopen(url, timeout=10) as response:
                     if response.status != 200:
-                        raise RuntimeError(f"Unexpected HTTP status for {name}")
+                        raise RuntimeError(f"Unexpected HTTP status for {name}{path}")
                 break
             except (urllib.error.URLError, TimeoutError):
                 time.sleep(5)
         else:
-            raise RuntimeError(f"HTTPS smoke test failed: {name}")
+            raise RuntimeError(f"HTTPS smoke test failed: {name}{path}")
     try:
         urllib.request.urlopen(endpoints["monitor"] + "/api/search?query=nexoruta", timeout=10)
     except urllib.error.HTTPError as error:
