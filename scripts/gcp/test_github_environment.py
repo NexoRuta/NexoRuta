@@ -28,13 +28,13 @@ class GitHubEnvironmentTests(unittest.TestCase):
         self.work = Path(temp)
         self.public = {
             "SMTP_HOST": "mailpit", "SMTP_PORT": "1025", "SMTP_SSL": "false",
-            "SMTP_FROM": "demo@nexoruta.test", "MAPBOX_PUBLIC_TOKEN": "",
+            "SMTP_FROM": "demo@nexoruta.test",
         }
         self.enterContext(patch.object(settings, "compose_model", return_value={"x-app-settings": self.public}))
 
     def test_compose_loads_public_values_literally_without_overwriting_cloud_or_secrets(self):
         self.public.update({
-            "SMTP_HOST": "smtp.example.uy", "MAPBOX_PUBLIC_TOKEN": "pk.$(literal-token)",
+            "SMTP_HOST": "smtp.example.uy", "MAPBOX_GEOCODING_TOKEN": "pk.compose.ignored",
             "GCP_PROJECT_ID": "wrong-project", "SMTP_PASSWORD": "wrong-secret",
         })
         exported = self.work / "github-env"
@@ -46,12 +46,12 @@ class GitHubEnvironmentTests(unittest.TestCase):
             self.assertEqual(config["SMTP_HOST"], "smtp.example.uy")
         values = dict(line.split("=", 1) for line in exported.read_text().splitlines())
         self.assertEqual(set(values), settings.APP_VARIABLES)
-        self.assertEqual(values["MAPBOX_PUBLIC_TOKEN"], "pk.$(literal-token)")
+        self.assertNotIn("MAPBOX_GEOCODING_TOKEN", values)
         self.assertNotIn("actual-secret", exported.read_text())
 
     def test_invalid_public_configuration_fails_before_exporting(self):
         exported = self.work / "github-env"
-        for name, value in (("SMTP_PORT", 70000), ("SMTP_SSL", "maybe"), ("MAPBOX_PUBLIC_TOKEN", "value\nSMTP_PASSWORD=injected")):
+        for name, value in (("SMTP_PORT", 70000), ("SMTP_SSL", "maybe"), ("SMTP_HOST", "value\nSMTP_PASSWORD=injected")):
             with self.subTest(name=name), patch.dict(self.public, {name: value}), patch.dict(os.environ, {"GITHUB_ENV": str(exported)}):
                 with self.assertRaises(ValueError):
                     settings.load_app_environment()
@@ -100,6 +100,8 @@ class GitHubEnvironmentTests(unittest.TestCase):
         self.assertEqual(defaults["firebase_project_id"], "nexoruta-mobile")
         self.assertEqual((defaults["smtp_host"], defaults["smtp_port"], defaults["smtp_ssl"]), ("mailpit", 1025, False))
         self.assertEqual(defaults["cache_enabled"], "true")
+        self.assertEqual(defaults["mapbox_commerce_public_token"], "")
+        self.assertEqual(defaults["mapbox_geocoding_token"], "")
         with patch.dict(os.environ, {"SMTP_USERNAME": "demo"}):
             with self.assertRaisesRegex(ValueError, "both SMTP_USERNAME and SMTP_PASSWORD"):
                 settings.integrations()
@@ -127,10 +129,15 @@ class GitHubEnvironmentTests(unittest.TestCase):
             data = json.loads(path.read_text())
             self.assertEqual(data["smtp_password"], "private-password")
             self.assertEqual(data["geoapify_api_key"], "private-geo-key")
+            self.assertEqual(data["mapbox_commerce_public_token"], "pk.commerce.signature")
+            self.assertEqual(data["mapbox_geocoding_token"], "pk.geocoding.signature")
             self.assertEqual(data["smtp_port"], 587)
 
         with (
-            patch.dict(os.environ, {"SMTP_USERNAME": "demo", "SMTP_PASSWORD": "private-password", "GEOAPIFY_API_KEY": "private-geo-key"}),
+            patch.dict(os.environ, {
+                "SMTP_USERNAME": "demo", "SMTP_PASSWORD": "private-password", "GEOAPIFY_API_KEY": "private-geo-key",
+                "MAPBOX_COMMERCE_PUBLIC_TOKEN": "pk.commerce.signature", "MAPBOX_GEOCODING_TOKEN": "pk.geocoding.signature",
+            }),
             patch.object(settings.session, "command", side_effect=upload) as command,
             patch("hosting_identity.ensure"),
             patch("redis_identity.ensure"),
@@ -140,6 +147,7 @@ class GitHubEnvironmentTests(unittest.TestCase):
             command.assert_called_once()
         self.assertNotIn("private-password", output.getvalue())
         self.assertNotIn("private-geo-key", output.getvalue())
+        self.assertNotIn("pk.geocoding.signature", output.getvalue())
         self.assertTrue(private_paths)
         self.assertTrue(all(not path.exists() for path in private_paths))
 

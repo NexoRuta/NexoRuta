@@ -49,6 +49,8 @@ runbook de carga y no copiar sus identidades al proyecto de reproducción.
 | `SUBMODULES_TOKEN` | Solo si un repositorio de componente pasa a privado; lectura `Contents` de los tres repos. |
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | Ambos juntos, solo si se habilita un proveedor SMTP autenticado. |
 | `GEOAPIFY_API_KEY` | Solo para habilitar y probar geocodificación Geoapify. |
+| `MAPBOX_COMMERCE_PUBLIC_TOKEN` | Token `pk.` para el mapa de Comercio, restringido al origen HTTPS activo de Comercio. |
+| `MAPBOX_GEOCODING_TOKEN` | Token `pk.` distinto para geocodificación temporal en la API. Las solicitudes de la API salen sin `Referer`, por lo que necesita un token sin restricción por URL. |
 
 El URI de redirect de OAuth debe corresponder al hostname activo de monitor,
 `https://monitor.<dominio>/login/google`. No fijar un IP histórico si el balanceador
@@ -68,7 +70,6 @@ configuración. No trasladarlas a GitHub:
 | `SMTP_PORT` | Puerto SMTP; por defecto `1025`. |
 | `SMTP_SSL` | `true`/`false`; por defecto `false`. |
 | `SMTP_FROM` | Remitente del correo sintético/de demo. |
-| `MAPBOX_PUBLIC_TOKEN` | Token público usado por mapas y APK si se configura. |
 
 Antes de `start`/`update`, `github_environment.py sync-integrations` combina
 Compose con secretos opcionales y los sincroniza al secreto privado de GCP

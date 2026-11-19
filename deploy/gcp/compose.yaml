@@ -388,6 +388,8 @@ services:
     restart: unless-stopped
     environment:
       <<: *id001
+      Mapbox__PublicAccessToken: ${MAPBOX_GEOCODING_TOKEN:-}
+      Geocoding__MapboxTemporal__Habilitado: ${MAPBOX_GEOCODING_ENABLED:-false}
       DemoData__ActorPassword: ${DEMO_DATA_ACTOR_PASSWORD:?}
     volumes:
     - ./hosting.pfx:/data/hosting.pfx:ro
@@ -577,6 +579,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       Api__BaseAddress: ${API_URL:?}/
+      Mapbox__PublicAccessToken: ${MAPBOX_COMMERCE_PUBLIC_TOKEN:-}
       OpenTelemetry__Enabled: 'true'
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc

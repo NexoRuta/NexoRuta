@@ -6,7 +6,6 @@ x-app-settings:
   SMTP_PORT: "1025"
   SMTP_SSL: "false"
   SMTP_FROM: demo@nexoruta.test
-  MAPBOX_PUBLIC_TOKEN: ""
 
 services:
   postgres:

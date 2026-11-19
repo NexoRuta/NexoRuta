@@ -65,10 +65,12 @@ usarlos como presupuesto disponible ni para aprobar una sesión o ensayo.
 - La configuración GCP de publicación y despliegue reside en variables del
   Environment `nexoruta-demo`. Actions se autentica mediante OIDC/WIF con tokens
   temporales; no se guarda una clave JSON de servicio.
-- Las variables públicas SMTP y Mapbox viven en `compose.yaml`, bloque
+- Las variables públicas SMTP viven en `compose.yaml`, bloque
   `x-app-settings`. `SMTP_USERNAME`, `SMTP_PASSWORD` y `GEOAPIFY_API_KEY` son
   opcionales según la integración que se habilite. Si se usa autenticación SMTP,
   se configuran ambos secretos de usuario y contraseña.
+- El mapa de Comercio y la geocodificación temporal de la API usan los secretos
+  separados `MAPBOX_COMMERCE_PUBLIC_TOKEN` y `MAPBOX_GEOCODING_TOKEN`.
 - El inventario de nombres consultado el 14/11/2026 encontró en `nexoruta-demo`
   las variables documentadas y los dos nombres de secretos OAuth de monitor.
   No se observaron secretos SMTP, Geoapify ni de submódulos; no se leyeron valores

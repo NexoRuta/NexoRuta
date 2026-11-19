@@ -201,11 +201,12 @@ Su interfaz HTTPS requiere usuario `demo` y la contraseña generada en el secret
 runtime. Para correo real, configurar un SMTP válido usando 587/465 según proveedor.
 
 ```powershell
-# Configurar SMTP_HOST, SMTP_PORT, SMTP_SSL, SMTP_FROM y MAPBOX_PUBLIC_TOKEN en
-# compose.yaml > x-app-settings. Solo los valores sensibles van en GitHub Secrets.
+# Configurar SMTP_HOST, SMTP_PORT, SMTP_SSL y SMTP_FROM en compose.yaml > x-app-settings.
 gh secret set SMTP_USERNAME --repo NexoRuta/NexoRuta --env nexoruta-demo
 gh secret set SMTP_PASSWORD --repo NexoRuta/NexoRuta --env nexoruta-demo
 gh secret set GEOAPIFY_API_KEY --repo NexoRuta/NexoRuta --env nexoruta-demo
+gh secret set MAPBOX_COMMERCE_PUBLIC_TOKEN --repo NexoRuta/NexoRuta --env nexoruta-demo
+gh secret set MAPBOX_GEOCODING_TOKEN --repo NexoRuta/NexoRuta --env nexoruta-demo
 ```
 
 Geoapify y Mapbox requieren cuentas/keys reales para probar sus integraciones.

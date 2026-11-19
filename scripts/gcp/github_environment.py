@@ -13,7 +13,7 @@ import urllib.parse
 import demo_session as session
 
 APP_COMPOSE_FILE = session.ROOT / "compose.yaml"
-APP_VARIABLES = {"SMTP_HOST", "SMTP_PORT", "SMTP_SSL", "SMTP_FROM", "MAPBOX_PUBLIC_TOKEN"}
+APP_VARIABLES = {"SMTP_HOST", "SMTP_PORT", "SMTP_SSL", "SMTP_FROM"}
 
 
 def compose_model():
@@ -182,7 +182,8 @@ def integrations():
         "webhook_allowed_origins": parse_webhook_allowed_origins(os.environ.get("WEBHOOK_ALLOWED_ORIGINS", "")),
         "webhook_allow_any_public_https_origin": str(parse_allow_any_public_https_origin(
             os.environ.get("WEBHOOK_ALLOW_ANY_PUBLIC_HTTPS_ORIGIN", "false"))).lower(),
-        "mapbox_public_token": public["MAPBOX_PUBLIC_TOKEN"],
+        "mapbox_commerce_public_token": os.environ.get("MAPBOX_COMMERCE_PUBLIC_TOKEN", ""),
+        "mapbox_geocoding_token": os.environ.get("MAPBOX_GEOCODING_TOKEN", ""),
         "cache_enabled": cache_enabled,
     }
     for name, value in result.items():
@@ -192,6 +193,12 @@ def integrations():
             raise ValueError(f"Invalid multiline application configuration: {name.upper()}")
     if bool(result["smtp_username"]) != bool(result["smtp_password"]):
         raise ValueError("Configure both SMTP_USERNAME and SMTP_PASSWORD secrets, or neither")
+    for name in ("mapbox_commerce_public_token", "mapbox_geocoding_token"):
+        token = result[name]
+        if token and not re.fullmatch(r"pk\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", token):
+            raise ValueError(f"{name.upper()} must be a public Mapbox token (pk.)")
+    if result["mapbox_geocoding_token"] and result["mapbox_geocoding_token"] == result["mapbox_commerce_public_token"]:
+        raise ValueError("Configure distinct Mapbox tokens for Commerce and API geocoding")
     result["smtp_port"] = int(result["smtp_port"])
     result["smtp_ssl"] = result["smtp_ssl"].lower() == "true"
     if os.environ.get("DEMO_OPERATION") in ("start", "update"):
